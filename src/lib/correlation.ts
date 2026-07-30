@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { injectCharts, type ChartDef } from './chart-injector';
 
 function colLetter(n: number): string {
   let s = '';
@@ -29,20 +30,32 @@ export async function generateCorrelation(
   const wb = new ExcelJS.Workbook();
   const total = c.angles.length * c.seatingCount;
   let idx = 0;
+  const chartRefs: ChartDef[] = [];
 
   for (const angle of c.angles) {
     for (let s = 1; s <= c.seatingCount; s++) {
       let name = `${angle}乘坐${s}`;
       if (name.length > 31) name = `${angle}坐${s}`;
-      createCorrSheet(wb, name, c);
+      createCorrSheet(wb, name, c, chartRefs);
       if (onProgress) onProgress(++idx, total, name);
     }
   }
 
-  return await wb.xlsx.writeBuffer();
+  const buffer = await wb.xlsx.writeBuffer();
+
+  // Inject charts if requested
+  if (c.includeChart && chartRefs.length > 0) {
+    try {
+      return await injectCharts(buffer, chartRefs);
+    } catch (_) {
+      // Fallback: return buffer without charts
+    }
+  }
+
+  return buffer;
 }
 
-function createCorrSheet(wb: ExcelJS.Workbook, name: string, c: CorrelationConfig) {
+function createCorrSheet(wb: ExcelJS.Workbook, name: string, c: CorrelationConfig, chartRefs: ChartDef[]) {
   const ws = wb.addWorksheet(name, {
     properties: { tabColor: { argb: 'FF00B050' } },
   });
@@ -114,9 +127,13 @@ function createCorrSheet(wb: ExcelJS.Workbook, name: string, c: CorrelationConfi
     }
 
     if (c.includeChart) {
-      const noteRow = de + 2 + (c.includeR2 ? 1 : 0) + 1;
-      ws.getCell(noteRow, off).value = `${num}# 图表数据已就绪：请在 Excel 中选中 QV/CCD+ 列插入折线图`;
-      ws.getCell(noteRow, off).font = { name: '等线', size: 9, italic: true, color: { argb: 'FF7F8C8D' } };
+      chartRefs.push({
+        sheetName: name,
+        chartTitle: `${num}# QV vs CCD+`,
+        qvRange: `${name}!${colLetter(qv)}${ds}:${colLetter(qv)}${de}`,
+        cpRange: `${name}!${colLetter(cp)}${ds}:${colLetter(cp)}${de}`,
+        catRange: `${name}!A${ds}:A${de}`,
+      });
     }
   }
 

@@ -1,8 +1,10 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { MeasurementProject } from '../../types';
+import type { ImportMode } from '../../lib/vpp-types';
 import { generateRepeatability } from '../../lib/repeatability';
 import { generateCorrelation } from '../../lib/correlation';
 import { CloseIcon } from '../Icons';
+import VppImportModal from './VppImportModal';
 
 interface Props {
   onClose: () => void;
@@ -43,6 +45,9 @@ export default function SheetGeneratorTool({ onClose }: Props) {
   const [status, setStatus] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const [fileName, setFileName] = useState('');
+
+  // VPP import state
+  const [showVppImport, setShowVppImport] = useState(false);
 
   const angles = useMemo(() => {
     const a: string[] = [];
@@ -107,6 +112,42 @@ export default function SheetGeneratorTool({ onClose }: Props) {
     setStatus(null);
     if (m === 'repeatability') { setProductCount(10); setDataRows(12); }
     else { setProductCount(5); }
+  }, []);
+
+  const handleVppImport = useCallback((vppProjects: Array<{ name: string; pointCount: number; color: string; tolerance: number }>, importMode: ImportMode) => {
+    if (vppProjects.length === 0) return;
+
+    if (importMode === 'replace') {
+      setProjects(vppProjects.map(p => ({
+        name: p.name,
+        pointCount: p.pointCount,
+        color: p.color,
+        tolerance: p.tolerance,
+      })));
+      // Auto-fill correlation data rows from total points
+      const totalPoints = vppProjects.reduce((sum, p) => sum + (p.pointCount || 0), 0);
+      if (totalPoints > 0) setCorrDataRows(totalPoints);
+      setStatus({ msg: `已替换为 ${vppProjects.length} 个测量项目`, type: 'success' });
+      return;
+    }
+
+    // 追加模式：合并到现有项目，跳过同名
+    setProjects(prev => {
+      const existingNames = new Set(prev.map(p => p.name.toLowerCase()));
+      const newProjects = vppProjects.filter(p => !existingNames.has(p.name.toLowerCase()));
+      if (newProjects.length === 0) return prev;
+      const merged = [...prev, ...newProjects.map(p => ({
+        name: p.name,
+        pointCount: p.pointCount,
+        color: p.color,
+        tolerance: p.tolerance,
+      }))];
+      // Auto-fill correlation data rows from total points
+      const totalPoints = merged.reduce((sum, p) => sum + (p.pointCount || 0), 0);
+      if (totalPoints > 0) setCorrDataRows(totalPoints);
+      return merged;
+    });
+    setStatus({ msg: `已追加 ${vppProjects.length} 个测量项目`, type: 'success' });
   }, []);
 
   const handleGenerate = useCallback(async () => {
@@ -261,6 +302,9 @@ export default function SheetGeneratorTool({ onClose }: Props) {
                 </div>
               </div>
               <button type="button" className="add-item" onClick={addProject}>＋ 添加测量项目</button>
+              <button type="button" className="add-item vpp-import-btn" onClick={() => setShowVppImport(true)}>
+                📂 从 VPP 导入
+              </button>
             </section>
           ) : (
             <section className="generator-section">
@@ -347,6 +391,16 @@ export default function SheetGeneratorTool({ onClose }: Props) {
           <p className="local-note"><span aria-hidden="true">✓</span> 仅在本地生成，不上传数据</p>
         </aside>
       </div>
+
+      {/* VPP Import Modal */}
+      {showVppImport && (
+        <VppImportModal
+          onImport={handleVppImport}
+          onClose={() => setShowVppImport(false)}
+          defaultColors={DEFAULT_COLORS}
+          existingProjectNames={projects.map(p => p.name)}
+        />
+      )}
     </div>
   );
 }
