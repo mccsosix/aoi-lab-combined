@@ -15,6 +15,7 @@
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # 生产构建 → dist/
+start.bat        # Windows: 自动装依赖并启动开发服务器 (依赖 WorkBuddy 托管 Node 路径)
 ```
 
 ## VPP 导入功能
@@ -27,7 +28,7 @@ npm run build    # 生产构建 → dist/
   - 从 C# 脚本解析 OutputItem 数组结构和点数
 - **名称匹配**：优先 OutputItem[0] 字面量，回退 NRBF 记录名
 - **公差计算**：`upper - lower`
-- **折线图注入** (`src/lib/chart-injector.ts`)：ZIP 后处理方式向 Excel 注入 OOXML 散点图
+- **折线图注入** (`src/lib/chart-injector.ts`)：ZIP 后处理方式向 Excel 注入 OOXML 折线图 (lineChart)
 
 ### 支持的文件
 

@@ -127,12 +127,19 @@ function createCorrSheet(wb: ExcelJS.Workbook, name: string, c: CorrelationConfi
     }
 
     if (c.includeChart) {
+      // Chart position: 2 rows below product data block, width 10.6cm, height 6cm
+      // Size is set explicitly in EMU by chart-injector.ts; here we only set position.
+      const lastContentRow = c.includeR2 ? de + 2 : de + 1;
+      const chartFromRow = lastContentRow + 2; // Excel 1-based, +2 blank rows below
+
       chartRefs.push({
         sheetName: name,
         chartTitle: `${num}# QV vs CCD+`,
         qvRange: `${name}!${colLetter(qv)}${ds}:${colLetter(qv)}${de}`,
         cpRange: `${name}!${colLetter(cp)}${ds}:${colLetter(cp)}${de}`,
         catRange: `${name}!A${ds}:A${de}`,
+        anchorFromCol: off - 1,
+        anchorFromRow: chartFromRow - 1,
       });
     }
   }

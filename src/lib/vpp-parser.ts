@@ -176,7 +176,7 @@ function extractAliases(block: string, aliases: Map<string, string>): void {
 
 function extractOutputItemMap(block: string): Map<string, Map<number, string>> {
   const map = new Map<string, Map<number, string>>();
-  const r = /(OutputItem_\d+|Output\d*_Item|Output_\w+)\[(\d+)\]\s*=\s*([^;]+);/g;
+  const r = /(OutputItem_\w+|Output\d*_Item|Output_\w+)\[(\d+)\]\s*=\s*([^;]+);/g;
   let m: RegExpExecArray | null;
   while ((m = r.exec(block)) !== null) {
     const vn = m[1], idx = parseInt(m[2], 10);
@@ -191,7 +191,7 @@ function extractOutputItemMap(block: string): Map<string, Map<number, string>> {
 function extractRootBindings(block: string): Map<string, string> {
   const b = new Map<string, string>();
   // this.Outputs.Terminal = OutputItem_var;
-  const r = /this\.Outputs\.(\w+)\s*=\s*(OutputItem_\d+|Output\d*_Item|Output_\w+)\s*;/g;
+  const r = /this\.Outputs\.(\w+)\s*=\s*(OutputItem_\w+|Output\d*_Item|Output_\w+)\s*;/g;
   let m: RegExpExecArray | null;
   while ((m = r.exec(block)) !== null) b.set(m[1], m[2]);
   return b;
@@ -280,7 +280,7 @@ function buildItems(
       } else if (sb) {
         name = sb.name; // matched spec block name
       } else {
-        name = oi.rootTerminal.replace(/^Output_Item\d+_|^OutputItem\d+_/, '').replace(/_/g, '').replace(/^[\d_]+/, '');
+        name = oi.rootTerminal.replace(/^Output_Item\w+_|^OutputItem\w+_/, '').replace(/_/g, '').replace(/^[\d_]+/, '');
         if (!name || name.length < 2) name = oi.rootTerminal;
       }
 

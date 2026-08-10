@@ -37,6 +37,10 @@ export interface VppDetectionItem {
   lowerTolerance?: number;
   /** 公差模式: symmetric | asymmetric */
   toleranceMode?: 'symmetric' | 'asymmetric';
+  /** 不对称公差: 正公差 (upper - nominal) */
+  tolerancePositive?: number;
+  /** 不对称公差: 负公差 (nominal - lower) */
+  toleranceNegative?: number;
   /** 公差显示文本 */
   toleranceDisplay?: string;
   /** @deprecated 使用 upperTolerance/lowerTolerance/toleranceDisplay */

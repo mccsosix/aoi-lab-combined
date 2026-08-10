@@ -178,17 +178,44 @@ export default function SheetGeneratorTool({ onClose }: Props) {
       }
 
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = (fileName.trim() || defaultFileName) + '.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const finalName = (fileName.trim() || defaultFileName) + '.xlsx';
 
-      setProgress(100); setProgressText('生成完成');
-      setStatus({ msg: '下载成功！', type: 'success' });
+      // prefer File System Access API for folder picker
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: finalName,
+            types: [{
+              description: 'Excel 工作簿',
+              accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setProgress(100); setProgressText('保存完成');
+          setStatus({ msg: '保存成功！', type: 'success' });
+        } catch (err) {
+          if ((err as DOMException).name === 'AbortError') {
+            setProgress(100); setProgressText('已取消');
+            setStatus({ msg: '已取消保存', type: 'success' });
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        // fallback: direct browser download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = finalName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setProgress(100); setProgressText('生成完成');
+        setStatus({ msg: '下载成功！', type: 'success' });
+      }
     } catch (e) {
       setStatus({ msg: `生成失败: ${e instanceof Error ? e.message : '未知错误'}`, type: 'error' });
     } finally { setGenerating(false); }
@@ -259,15 +286,21 @@ export default function SheetGeneratorTool({ onClose }: Props) {
               {mode === 'repeatability' ? (
                 <label className="generator-field">
                   <span>重复测量次数</span>
-                  <input type="number" min={2} max={100} value={dataRows}
-                    onChange={e => setDataRows(Math.max(2, parseInt(e.target.value) || 2))} />
+                  <input type="number" min={1} max={100} value={dataRows}
+                    onChange={e => {
+                      const v = parseInt(e.target.value);
+                      setDataRows(isNaN(v) || v < 1 ? 1 : v);
+                    }} />
                   <small>每个产品重复测量的行数</small>
                 </label>
               ) : (
                 <label className="generator-field">
                   <span>测量数据行数</span>
-                  <input type="number" min={2} max={20} value={corrDataRows}
-                    onChange={e => setCorrDataRows(Math.max(2, parseInt(e.target.value) || 2))} />
+                  <input type="number" min={1} max={20} value={corrDataRows}
+                    onChange={e => {
+                      const v = parseInt(e.target.value);
+                      setCorrDataRows(isNaN(v) || v < 1 ? 1 : v);
+                    }} />
                   <small>每个产品的测量点数</small>
                 </label>
               )}
