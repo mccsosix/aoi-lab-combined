@@ -1,0 +1,2505 @@
+{
+  "report_version": "1.1",
+  "generated_at": "2026-08-12",
+  "source_archive": "镜头.rar",
+  "source_inventory": {
+    "total_files": 82,
+    "brand_file_counts": {
+      "燦銳": 43,
+      "視清": 39
+    },
+    "file_type_counts": {
+      "jpg": 3,
+      "pdf": 78,
+      "pptx": 1
+    },
+    "pdf_text_extraction": {
+      "attempted": 78,
+      "succeeded": 78,
+      "failed": 0
+    },
+    "referenced_files": 82,
+    "coverage_pct": 100,
+    "unreferenced_files": []
+  },
+  "database_output": {
+    "file_name": "lenses.json",
+    "size_bytes": 571345,
+    "sha256": "ce0acf96b0e4b5178f633e3780029df9e7a900b9dccd11023d30350fbea43a81",
+    "valid": true,
+    "errors": [],
+    "lens_count": 623,
+    "brand_counts": {
+      "燦銳": 227,
+      "視清": 396
+    },
+    "status_counts": {
+      "manual-review": 212,
+      "verified": 411
+    },
+    "data_quality_counts": {
+      "catalog-table-extracted": 379,
+      "datasheet-extracted": 41,
+      "datasheet-ocr-verified": 4,
+      "image-ocr-verified": 2,
+      "official-datasheet-extracted": 8,
+      "official-web-detail-verified": 1,
+      "official-web-table-extracted": 188
+    },
+    "source_document_count": 103,
+    "conflict_count": 3
+  },
+  "quality_rules": [
+    "接口和最大像面只采用原始资料明确值，不依据型号后缀推断。",
+    "自动推荐要求倍率（或倍率范围）、最大像面和接口均存在，且无关键字段冲突。",
+    "重复资料按品牌与型号合并，保留全部 source_files；不同版本的关键参数差异进入 conflicts。",
+    "PDF 文字层缺失时使用页面图像 OCR，并在 data_quality/notes 中标记。"
+  ],
+  "manual_review": {
+    "count": 212,
+    "reason_counts": {
+      "conflict:aperture": 1,
+      "conflict:document_model": 1,
+      "conflict:lens_type": 1,
+      "missing:magnification": 1,
+      "missing:mount": 209
+    },
+    "models": [
+      {
+        "brand": "燦銳",
+        "model": "TWXF-110AF044C-NB",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/TWXF-110AF044C-NB-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "TWXF-110AF05C-NB",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/TWXF-110AF05C-NB.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "TWXF-110AF1C-NB",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/TWXF-110AF1C-NB-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "TWXF-110AMF05C-NB",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {
+          "document_model": [
+            "TWXF-110AMF05C-NB",
+            "TWXF-110AF05C-NB"
+          ]
+        },
+        "source_files": [
+          "燦銳/TWXF-110AMF05C-NB.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "TWXF-65AF074C-NB",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/TWXF-65AF074C-NB.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "TWXF-65AF1C-NB",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/TWXF-65AF1C-NB.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "TWXF-65AF2C-NB",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/TWXF-65AF2C-NB.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT03X178-1C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-10MDT03X178-1C.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT04X110-1C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-10MDT04X110-1C.pdf",
+          "燦銳/XF-10MDT04X110-1C實物與圖面不符.pptx"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT05X110-1.1C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-10MDT05X110-1.1C.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT06X80-1C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-10MDT06X80-1C-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT1.5X110-1C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-10MDT1.5X110-1C-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT1X110-1C",
+        "missing_fields": [],
+        "conflicts": {
+          "lens_type": [
+            "双远心",
+            "物方远心"
+          ]
+        },
+        "source_files": [
+          "燦銳/XF-10MDT1X110-1C V5.5.pdf",
+          "燦銳/XF-10MDT1X110-1C-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT1X178-1C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-10MDT1X178-1C-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT2X110-1.1C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/139.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT2X110DZM-1.1C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/139.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT3X110-1.1C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/139.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT3X110DZM-1.1C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/139.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT4X110-1.1C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/139.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT4X110DZM-1.1C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/139.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-5MDT04X110BD",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-5MDT04X110BD.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-HMDT0336X138B-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT04535-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT1.073X110-M58-11.48B-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT1.5X110-D38-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT1.5X110DZMC-D38-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT1X135-D38-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT1X135DZM-D38-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT2X110-D41-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT2X110DZM-D41-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT3X110-D41-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT3X110DZM-D41-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT4X110-D41-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MDT4X110DZM-D41-VI-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/151/id/140.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MH025X122B-1.1C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-MH025X122B-1.1C.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MH04X298-1.1C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-MH04X298-1.1C-.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MH04X531",
+        "missing_fields": [],
+        "conflicts": {
+          "aperture": [
+            "F7.5",
+            "F8"
+          ]
+        },
+        "source_files": [
+          "燦銳/XF-MH04X531-外形尺寸.pdf",
+          "燦銳/XF-MH04X531.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MT05X110",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-MT05X110-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MT1.5X110B",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-MT1.5X110B-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MT1X110",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-MT1X110-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MT1X110D",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-MT1X110D(XF-CMRT10110)-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MT2X110B",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "燦銳/XF-MT2X110B-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL03708-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL03711-C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL03719-C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL03729-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL03732-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL03735-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL03744-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL03762-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04508-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04511-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04519-C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04523-C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04529-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04532-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04535-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04544-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04562-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL04582-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05508-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05511-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05519-C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05523-C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05529-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05532-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05535-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05544-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05562-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL05582-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06508-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06511-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06519-C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06523-C-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06529-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06532-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06535-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06544-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06562-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL06582-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08008-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08011-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08019-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08023-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08029-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08032-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08035-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08044-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08062-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL08082-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09208-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09211-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09219-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09223-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09229-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09232-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09235-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09244-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09262-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL09282-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11008-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11011-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11019-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11023-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11029-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11032-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11035-F-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11044-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11062-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL11082-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12208-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12211-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12219-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12223-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12229-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12232-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12235-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12244-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12262-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL12282-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13708-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13711-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13719-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13723-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13729-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13732-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13735-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13744-M58-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13762-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL13782-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15208-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15211-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15219-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15223-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15229-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15232-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15235-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15244-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15262-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL15282-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18208-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18211-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18219-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18223-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18229-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18232-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18235-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18244-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18262-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL18282-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19508-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19511-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19519-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19523-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19529-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19532-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19535-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19544-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19562-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL19582-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23808-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23811-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23819-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23823-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23829-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23832-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23835-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23844-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23862-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL23882-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26808-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26811-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26819-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26823-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26829-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26832-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26835-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26844-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26862-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL26882-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL27867-M72-19.56B-VI-M102-20",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31008-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31011-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31019-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31023-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31029-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31032-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31035-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31044-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31062-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL31082-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35008-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35011-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35019-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35023-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35029-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35032-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35035-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35044-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35062-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL35082-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39008-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/106.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39011-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/105.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39019-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/103.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39023-C",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/102.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39029-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/101.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39032-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/100.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39035-F",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/99.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39044-M58-11.48",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/97.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39062-M72-11.48-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/95.html"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-PTL39082-M95-12-VI",
+        "missing_fields": [
+          "mount"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "https://www.canrill.com/List/product3/pid/38/id/94.html"
+        ]
+      },
+      {
+        "brand": "視清",
+        "model": "MFA110-H16",
+        "missing_fields": [
+          "magnification"
+        ],
+        "conflicts": {},
+        "source_files": [
+          "視清/MFA110-H16.pdf"
+        ]
+      }
+    ]
+  },
+  "conflicts": {
+    "count": 3,
+    "models": [
+      {
+        "brand": "燦銳",
+        "model": "TWXF-110AMF05C-NB",
+        "conflicts": {
+          "document_model": [
+            "TWXF-110AMF05C-NB",
+            "TWXF-110AF05C-NB"
+          ]
+        },
+        "source_files": [
+          "燦銳/TWXF-110AMF05C-NB.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-10MDT1X110-1C",
+        "conflicts": {
+          "lens_type": [
+            "双远心",
+            "物方远心"
+          ]
+        },
+        "source_files": [
+          "燦銳/XF-10MDT1X110-1C V5.5.pdf",
+          "燦銳/XF-10MDT1X110-1C-外形尺寸.pdf"
+        ]
+      },
+      {
+        "brand": "燦銳",
+        "model": "XF-MH04X531",
+        "conflicts": {
+          "aperture": [
+            "F7.5",
+            "F8"
+          ]
+        },
+        "source_files": [
+          "燦銳/XF-MH04X531-外形尺寸.pdf",
+          "燦銳/XF-MH04X531.pdf"
+        ]
+      }
+    ]
+  },
+  "checks": {
+    "database_validation": true,
+    "unique_ids": true,
+    "unique_brand_model_pairs": true,
+    "all_source_documents_referenced": true,
+    "verified_records_have_matching_prerequisites": true,
+    "fixed_lens_fov_ratio_check_count": 476,
+    "fixed_lens_fov_ratio_max_relative_error": 0.016842,
+    "fixed_lens_fov_ratio_all_below_5_percent": true,
+    "online_sources_referenced": true
+  },
+  "extraction_notes": [
+    "DTCM、WWH、WWK、DTCA 目录中的表格已拆分为型号级记录。",
+    "WWS 可调焦镜头保留倍率与工作距离的最小值、最大值及标称值。",
+    "WWS 页面中与尺寸图重叠且型号/标称参数互相矛盾的 OCR 片段未作为镜头记录导入。",
+    "manual-review 记录默认不应进入网页自动组合推荐。",
+    "本次增量仅使用视清和灿锐品牌官网；未使用经销商页反推关键参数。",
+    "灿锐官网分类表未显示接口的新增型号统一标记 manual-review，不参与自动组合推荐。",
+    "视清新增型号仅在官网规格书能明确核对倍率、像面和接口时标记 verified。",
+    "官网页面超时或字段缺失的型号未按命名规则猜测，后续可继续补采。"
+  ],
+  "online_source_inventory": {
+    "official_domains": [
+      "coolens.cn",
+      "www.canrill.com"
+    ],
+    "referenced_urls": 21,
+    "canrill": {
+      "fourth_generation_category_pages_attempted": 13,
+      "fourth_generation_category_pages_extracted": 10,
+      "semiconductor_category_pages_extracted": 2,
+      "detail_pages_extracted": 1,
+      "records_added": 189,
+      "note": "仅导入成功取得完整官网表格的页面；超时页面未按型号规律推测。"
+    },
+    "coolens": {
+      "download_center_pages_attempted": 20,
+      "download_center_pages_extracted": 7,
+      "datasheets_extracted": 8,
+      "records_added": 8,
+      "note": "仅把能从官网规格书明确核对关键参数的型号加入数据库。"
+    }
+  }
+}
