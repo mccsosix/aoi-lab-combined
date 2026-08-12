@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# WorkBuddy project data
+.workbuddy/
+
+# Sub-project (separate repo)
+AOI-LAB-local-project/
+
+
+# OS files
+.DS_Store
+Thumbs.db
