@@ -1,0 +1,32 @@
+{
+  "name": "aoi-lab-combined",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:offline": "vite build --config vite.offline.config.ts",
+    "preview": "vite preview",
+    "verify:repeatability": "node scripts/verify-repeatability-integration.mjs",
+    "verify:launcher": "node scripts/verify-launcher.mjs",
+    "verify:workspace": "node scripts/verify-workspace-navigation.mjs"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.4",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.6.0",
+    "tailwindcss": "^4.1.4",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.2",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
