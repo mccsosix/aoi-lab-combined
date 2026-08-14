@@ -109,33 +109,33 @@
 
 ## 7. 代码组织
 
+实际目录结构（Vite，无路由）：
+
 ```text
-app/
-  components/
-    tool-page-shell.tsx
-  tools/
-    sheet-generator/
-      page.tsx
-    new-tool/
-      page.tsx
+src/
+  components/        # 布局（Header/Footer/ToolCard/ToolWorkbenchNav…）+ case-query/ + sheet-generator/
+  fov/               # FOV 工作台、资料库、IndexedDB、默认数据
+  repeatability/     # 重复性分析 React 宿主 + Shadow DOM 隔离源码
+  lib/               # 纯逻辑（VPP 解析、Excel 生成、案件查询解析、繁简转换）
+  index.css          # 全局样式
+  App.tsx            # 主页工具卡 + 工作台状态切换
 ```
 
-- 新工具统一放在 `app/tools/<slug>/page.tsx`。
-- 复用页面骨架，不复制 `ToolPageShell`。
-- 每个工具负责自己的状态和业务逻辑。
+- 新工具在 `src/<slug>/` 下独立成目录，样式独立文件（如 `src/fov/fov.css`），避免改其它模块的业务样式。
+- 工具切换用 React `useState`，**不使用路由 / URL**，因此本地直接打开、Vite、GitHub Pages 子路径都不会产生 404。
+- 复用主页布局组件，不复制页面骨架；每个工具负责自己的状态和业务逻辑。
 - 主页卡片只负责导航，不承载工具业务。
 - 页面样式使用清晰前缀，避免与主页全局样式冲突。
 
 ## 8. 新增工具检查清单
 
-- [ ] 分配两位编号和稳定的英文 slug。
-- [ ] 在主页添加卡片并链接到 `/tools/<slug>`。
-- [ ] 使用 `ToolPageShell`，写清工具名和一句话说明。
-- [ ] 选择合适的主体模板。
+- [ ] 分配两位编号和稳定的英文 slug，加入 `src/types.ts` 的 `ToolId` 联合。
+- [ ] 在 `App.tsx` 主页添加 `ToolCard`，并在 `TOOL_META` 与工作台渲染分支注册。
+- [ ] 写清工具名和一句话说明，选择合适的主体模板。
 - [ ] 补齐空、加载、成功、错误状态。
 - [ ] 在 1440px、1024px、390px 宽度检查布局。
 - [ ] 用键盘完成主要流程。
-- [ ] 添加页面渲染测试和关键交互测试。
-- [ ] 更新 README 的功能列表。
-- [ ] 执行 `npm run lint` 与 `npm test`。
+- [ ] 更新 README 的功能列表与本文件。
+- [ ] 执行 `tsc -b`、`npm run build`，必要时补 `npm run verify:*` 脚本。
+  （本项目无 `lint` / `test` 脚本，自检以 `tsc -b` + `verify:*` 为准。）
 
