@@ -8,7 +8,8 @@ interface Props {
   showClose?: boolean;
 }
 
-const PRESET_PEOPLE = ['黄海波', '黄卓平', '张琳馨', '陈俊丽', '孙子文'];
+// 小组成员：置顶显示并高亮，方便快速查询。
+const TEAM_MEMBERS = ['黄卓平', '张琳馨', '莫海凌', '张柳庆'];
 const STATUS_ORDER: CaseStatus[] = ['overdue', 'in_transit', 'pending', 'arrived', 'cancelled'];
 
 export default function CaseQueryTool({ onClose, showClose = true }: Props) {
@@ -31,9 +32,9 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
     if (personSearch.trim()) {
       return data.people.filter(p => p.toLowerCase().includes(personSearch.toLowerCase()));
     }
-    const preset = data.people.filter(p => PRESET_PEOPLE.includes(p));
-    const others = data.people.filter(p => !PRESET_PEOPLE.includes(p));
-    return showAllPeople ? [...preset, ...others] : [...preset, ...others.slice(0, 5)];
+    const team = data.people.filter(p => TEAM_MEMBERS.includes(p));
+    const others = data.people.filter(p => !TEAM_MEMBERS.includes(p));
+    return showAllPeople ? [...team, ...others] : [...team, ...others.slice(0, 5)];
   }, [data, personSearch, showAllPeople]);
 
   const cases = useMemo(() => {
@@ -184,11 +185,16 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
               <div className="cq-recent">
                 <span>人员列表</span>
                 {visiblePeople.map(name => (
-                  <button key={name} data-person={name} onClick={() => selectPerson(name)}>
+                  <button
+                    key={name}
+                    data-person={name}
+                    className={TEAM_MEMBERS.includes(name) ? 'cq-team' : undefined}
+                    onClick={() => selectPerson(name)}
+                  >
                     {name}
                   </button>
                 ))}
-                {data.people.length > PRESET_PEOPLE.length + 5 && !personSearch && !showAllPeople && (
+                {data.people.length > TEAM_MEMBERS.length + 5 && !personSearch && !showAllPeople && (
                   <button className="more" onClick={() => setShowAllPeople(true)}>
                     展开全部 {data.people.length} 人
                   </button>

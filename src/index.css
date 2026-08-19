@@ -712,6 +712,12 @@ nav a:hover, nav a:focus-visible { color: var(--cyan); }
 .cq-recent { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .cq-recent span { font-size: .7rem; color: #557a8a; }
 .cq-recent button { padding: 4px 8px; border: 1px solid var(--ink); background: transparent; font-size: .74rem; }
+.cq-recent button.cq-team {
+  background: var(--cyan-soft);
+  border-color: var(--cyan);
+  font-weight: 900;
+  box-shadow: 0 0 0 1px var(--cyan);
+}
 .cq-recent .more { border: 0; color: #1399a3; background: transparent; font-weight: 700; }
 .cq-query-btn {
   height: 44px; padding: 0 26px; border: 2px solid var(--ink); background: var(--cyan);
