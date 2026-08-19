@@ -58,18 +58,61 @@ function parseSheet(ws: XLSX.WorkSheet): { headers: string[]; records: DataRecor
   return { headers, records };
 }
 
+// Tokens that appear in the 收货者 column but are locations, not people.
+const RECEIVER_LOCATION_TOKENS = new Set([
+  '宝科', '寶科', '鸿翼', '鴻翼', '收货', '收貨', '中心', '栋', '棟',
+]);
+
+// Extract candidate person names from a 收货者 cell, e.g.
+// 「寶科A2棟收貨中心,陳俊麗/張琳馨(IDS3)」→ 陈俊丽、张琳馨.
+function extractReceiverNames(receiverText: string): string[] {
+  const names: string[] = [];
+  const parts = receiverText.split(/[\/,，、;；]|---|\r?\n/);
+  for (let part of parts) {
+    let t = part.trim();
+    if (!t) continue;
+    // Strip a leading area/building prefix like 「A3」 or a trailing phone number.
+    t = t.replace(/^A\d+/i, '').replace(/^[A-Za-z0-9-]+/, '');
+    const m = t.match(/[㐀-鿿]{2,4}/);
+    if (m && !RECEIVER_LOCATION_TOKENS.has(m[0])) names.push(m[0]);
+  }
+  return names;
+}
+
 function extractPeople(records: DataRecord[]): string[] {
-  const nameCount = new Map<string, string>();
+  // Authoritative people: whoever appears in the 收货者 or 申请人 column.
+  // These cells are structured (unlike the free-text 采购单原由), so a name here
+  // is reliable even when the person never shows up in a case reason — e.g.
+  // 张琳馨 only ever appears as a receiver.
+  const authoritative = new Set<string>();
+  for (const r of records) {
+    const receiver = String(r.data['收货者'] ?? '');
+    if (receiver) {
+      for (const n of extractReceiverNames(receiver)) authoritative.add(n);
+    }
+    const applicant = String(r.data['申请人'] ?? '').trim();
+    if (applicant) authoritative.add(applicant);
+  }
+
+  // Names found in 采购单原由 as slash-pairs, e.g. 「A3刘文武/陈俊丽…」.
+  // The pattern also catches non-name pairs (手电筒/工作台), so a pair name is
+  // only trusted when it pairs with an authoritative person.
+  const pairCount = new Map<string, number>();
+  const pairPartners = new Map<string, Set<string>>();
   for (const r of records) {
     const reason = String(r.data['采购单原由'] ?? '');
     if (!reason) continue;
     const pairPattern = /([一-鿿]{2,3})\/([一-鿿]{2,3})/g;
     let match;
     while ((match = pairPattern.exec(reason)) !== null) {
-      const n1 = toSimplified(match[1]);
-      const n2 = toSimplified(match[2]);
-      nameCount.set(n1, (nameCount.get(n1) || '') + n1);
-      nameCount.set(n2, (nameCount.get(n2) || '') + n2);
+      const a = toSimplified(match[1]);
+      const b = toSimplified(match[2]);
+      pairCount.set(a, (pairCount.get(a) || 0) + 1);
+      pairCount.set(b, (pairCount.get(b) || 0) + 1);
+      if (!pairPartners.has(a)) pairPartners.set(a, new Set());
+      if (!pairPartners.has(b)) pairPartners.set(b, new Set());
+      pairPartners.get(a)!.add(b);
+      pairPartners.get(b)!.add(a);
     }
   }
 
@@ -79,17 +122,30 @@ function extractPeople(records: DataRecord[]): string[] {
   ]);
 
   const freq = new Map<string, number>();
-  for (const [name] of nameCount) {
-    if (denyList.has(name)) continue;
+  const countHits = (name: string) => {
+    let n = 0;
+    for (const r of records) {
+      if (String(r.data['采购单原由'] ?? '').includes(name)) n++;
+      else if (String(r.data['收货者'] ?? '').includes(name)) n++;
+      else if (String(r.data['申请人'] ?? '').includes(name)) n++;
+    }
+    return n;
+  };
+
+  for (const name of authoritative) freq.set(name, countHits(name));
+  for (const [name] of pairCount) {
+    if (denyList.has(name) || authoritative.has(name)) continue;
+    const partners = pairPartners.get(name)!;
+    const hasTrustedPartner = [...partners].some((p) => authoritative.has(p));
+    if (!hasTrustedPartner) continue;
     let count = 0;
     for (const r of records) {
       if (String(r.data['采购单原由'] ?? '').includes(name)) count++;
     }
-    freq.set(name, count);
+    if (count >= 2) freq.set(name, count);
   }
 
   return [...freq.entries()]
-    .filter(([, count]) => count >= 2)
     .sort((a, b) => b[1] - a[1])
     .map(([name]) => name);
 }
@@ -178,13 +234,30 @@ function extractCaseName(reason: string, personName: string, allPeople: string[]
   return name || reason;
 }
 
+// When a case has no 采购单原由 (so no descriptive name), fall back to the
+// distinct item names in that case, e.g. 「光源、工业用镜头」.
+function buildCaseFallbackName(items: ItemStatus[]): string {
+  const names = [
+    ...new Set(
+      items
+        .map((i) => String(i.record.data['品名'] ?? '').trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (names.length === 0) return '';
+  const shown = names.slice(0, 3).join('、');
+  return names.length > 3 ? shown + ' 等' : shown;
+}
+
 export function getPersonCasesGrouped(
   records: DataRecord[], personName: string, allPeople: string[], today: Date,
 ): CaseGroup[] {
   const caseMap = new Map<string, { items: ItemStatus[]; caseName: string }>();
   for (const r of records) {
     const reason = String(r.data['采购单原由'] ?? '');
-    if (!reason.includes(personName)) continue;
+    const receiver = String(r.data['收货者'] ?? '');
+    const applicant = String(r.data['申请人'] ?? '');
+    if (!reason.includes(personName) && !receiver.includes(personName) && !applicant.includes(personName)) continue;
     const caseNumber = String(r.data['请购单号'] ?? r.data['采购单号'] ?? '未知');
     const caseName = extractCaseName(reason, personName, allPeople);
     const status = getStatus(r, today);
@@ -197,7 +270,8 @@ export function getPersonCasesGrouped(
 
   const groups: CaseGroup[] = [];
   for (const [caseNumber, { items, caseName }] of caseMap) {
-    groups.push({ caseNumber, caseName, items, worstStatus: worstStatus(items.map((i) => i.status)), totalItems: items.length });
+    const name = caseName || buildCaseFallbackName(items);
+    groups.push({ caseNumber, caseName: name, items, worstStatus: worstStatus(items.map((i) => i.status)), totalItems: items.length });
   }
 
   groups.sort((a, b) => {
