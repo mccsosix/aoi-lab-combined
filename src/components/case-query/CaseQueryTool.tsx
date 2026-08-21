@@ -9,7 +9,7 @@ interface Props {
 }
 
 // 小组成员：置顶显示并高亮，方便快速查询。
-const TEAM_MEMBERS = ['黄卓平', '张琳馨', '莫海凌', '张柳庆'];
+const TEAM_MEMBERS = ['黄卓平', '张琳馨', '莫海凌', '张柳庆', '罗颖华'];
 const STATUS_ORDER: CaseStatus[] = ['overdue', 'in_transit', 'pending', 'arrived', 'cancelled'];
 
 export default function CaseQueryTool({ onClose, showClose = true }: Props) {
@@ -24,6 +24,7 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
   const [personSearch, setPersonSearch] = useState('');
   const [showAllPeople, setShowAllPeople] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLElement>(null);
 
   const today = useMemo(() => new Date(), []);
 
@@ -42,25 +43,39 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
     return getPersonCasesGrouped(data.records, selectedPerson, data.people, today);
   }, [data, selectedPerson, today]);
 
-  const filteredCases = useMemo(() => {
-    let list = filterStatus ? cases.filter(c => c.worstStatus === filterStatus) : cases;
-    if (caseSearch.trim()) {
-      const q = caseSearch.trim().toLowerCase();
-      list = list.filter(c =>
-        c.caseNumber.toLowerCase().includes(q) ||
-        c.caseName.toLowerCase().includes(q)
-      );
+  // 全量人员 × 案件分组：不选人员、直接按案号/关键词搜索时，跨所有人员查询。
+  const allCasesByPerson = useMemo(() => {
+    if (!data) return [];
+    return data.people.map(person => ({
+      person,
+      groups: getPersonCasesGrouped(data.records, person, data.people, today),
+    }));
+  }, [data, today]);
+
+  // 结果行：默认限定在选中人员；未选人员时按输入的关键词搜索全部人员。
+  const resultRows = useMemo(() => {
+    const q = caseSearch.trim().toLowerCase();
+    const sources = selectedPerson
+      ? [{ person: selectedPerson, groups: cases }]
+      : allCasesByPerson;
+    const rows: { person: string; group: CaseGroup }[] = [];
+    for (const { person, groups } of sources) {
+      for (const group of groups) {
+        if (filterStatus && group.worstStatus !== filterStatus) continue;
+        if (q && !(group.caseNumber.toLowerCase().includes(q) || group.caseName.toLowerCase().includes(q))) continue;
+        rows.push({ person, group });
+      }
     }
-    return list;
-  }, [cases, filterStatus, caseSearch]);
+    return rows;
+  }, [selectedPerson, cases, allCasesByPerson, filterStatus, caseSearch]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<CaseStatus, number> = { arrived: 0, in_transit: 0, overdue: 0, pending: 0, cancelled: 0 };
-    for (const c of cases) counts[c.worstStatus]++;
+    for (const { group } of resultRows) counts[group.worstStatus]++;
     return counts;
-  }, [cases]);
+  }, [resultRows]);
 
-  const totalItems = useMemo(() => cases.reduce((s, c) => s + c.totalItems, 0), [cases]);
+  const totalItems = useMemo(() => resultRows.reduce((s, r) => s + r.group.totalItems, 0), [resultRows]);
 
   const handleFile = useCallback(async (file: File) => {
     setLoading(true); setUploadError(null); setError(null); setSelectedPerson(null);
@@ -213,7 +228,11 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
                 <button className="cq-iconbtn" aria-label="搜索案件">⌕</button>
               </div>
             </div>
-            <button className="cq-query-btn" onClick={() => {}}>
+            <button
+              className="cq-query-btn"
+              disabled={!selectedPerson && !caseSearch.trim()}
+              onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
               开始查询
             </button>
           </div>
@@ -221,12 +240,16 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
       )}
 
       {/* Section 03: Results */}
-      {selectedPerson && (
-        <section className="cq-section">
+      {(selectedPerson || caseSearch.trim()) && (
+        <section className="cq-section" ref={resultsRef}>
           <div className="cq-sectionhead">
             <span className="cq-num">03</span>
             <h3>查询结果</h3>
-            <span className="cq-summary">{selectedPerson} · {cases.length} 个案子 · {totalItems} 件物品</span>
+            <span className="cq-summary">
+              {caseSearch.trim()
+                ? `搜索“${caseSearch.trim()}” · ${resultRows.length} 个案子 · ${totalItems} 件物品`
+                : `${selectedPerson} · ${resultRows.length} 个案子 · ${totalItems} 件物品`}
+            </span>
           </div>
 
           {/* Filters */}
@@ -235,7 +258,7 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
               className={`cq-filter ${!filterStatus ? 'active' : ''}`}
               onClick={() => setFilterStatus(null)}
             >
-              全部　{cases.length}
+              全部　{resultRows.length}
             </button>
             {STATUS_ORDER.map(s => (
               <button
@@ -250,13 +273,13 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
           </div>
 
           {/* Case Cards */}
-          {filteredCases.length === 0 ? (
+          {resultRows.length === 0 ? (
             <div className="cq-empty">无匹配记录</div>
           ) : (
             <div className="cq-cases">
-              {filteredCases.map(c => (
+              {resultRows.map(({ person, group: c }) => (
                 <article
-                  key={c.caseNumber}
+                  key={`${person}-${c.caseNumber}`}
                   className={`cq-case-card ${expandedCases.has(c.caseNumber) ? 'open' : ''}`}
                   data-status={c.worstStatus}
                 >
@@ -264,7 +287,7 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
                     <span className="cq-case-status">{STATUS_LABELS[c.worstStatus]}</span>
                     <div>
                       <div className="cq-case-title">{c.caseName}</div>
-                      <div className="cq-case-meta">{c.caseNumber}　·　{c.totalItems} 件物品</div>
+                      <div className="cq-case-meta">{person}　·　{c.caseNumber}　·　{c.totalItems} 件物品</div>
                     </div>
                     <button className="cq-toggle" aria-label={expandedCases.has(c.caseNumber) ? '收起案件' : '展开案件'}>
                       {expandedCases.has(c.caseNumber) ? '⌃' : '⌄'}
