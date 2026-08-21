@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import type { ParsedData, CaseGroup, CaseStatus } from '../../types';
 import { parseExcelFile, getPersonCasesGrouped, STATUS_LABELS } from '../../lib/parser';
+import { toSimplified } from '../../lib/utils';
 import { CloseIcon } from '../Icons';
 
 interface Props {
@@ -10,6 +11,12 @@ interface Props {
 
 // 小组成员：置顶显示并高亮，方便快速查询。
 const TEAM_MEMBERS = ['黄卓平', '张琳馨', '莫海凌', '张柳庆', '罗颖华'];
+
+// 名单比对统一走一遍繁→简，周报里的繁体人名（如「羅穎華」）也能匹配名单并高亮。
+function isTeamMember(name: string): boolean {
+  const n = toSimplified(name.trim());
+  return TEAM_MEMBERS.some(m => toSimplified(m) === n);
+}
 const STATUS_ORDER: CaseStatus[] = ['overdue', 'in_transit', 'pending', 'arrived', 'cancelled'];
 
 export default function CaseQueryTool({ onClose, showClose = true }: Props) {
@@ -33,8 +40,8 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
     if (personSearch.trim()) {
       return data.people.filter(p => p.toLowerCase().includes(personSearch.toLowerCase()));
     }
-    const team = data.people.filter(p => TEAM_MEMBERS.includes(p));
-    const others = data.people.filter(p => !TEAM_MEMBERS.includes(p));
+    const team = data.people.filter(p => isTeamMember(p));
+    const others = data.people.filter(p => !isTeamMember(p));
     return showAllPeople ? [...team, ...others] : [...team, ...others.slice(0, 5)];
   }, [data, personSearch, showAllPeople]);
 
@@ -203,7 +210,7 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
                   <button
                     key={name}
                     data-person={name}
-                    className={TEAM_MEMBERS.includes(name) ? 'cq-team' : undefined}
+                    className={isTeamMember(name) ? 'cq-team' : undefined}
                     onClick={() => selectPerson(name)}
                   >
                     {name}
