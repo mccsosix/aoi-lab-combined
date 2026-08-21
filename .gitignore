@@ -16,6 +16,7 @@ AOI-LAB-local-project/
 # Local tooling state
 .claude/settings.local.json
 .playwright-mcp/
+deck/.edge_profile/
 
 
 # OS files

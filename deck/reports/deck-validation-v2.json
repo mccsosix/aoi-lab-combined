@@ -1,0 +1,239 @@
+{
+  "ok": true,
+  "input": "C:\\Users\\IPC\\Downloads\\aoi-lab-combined-workbench-v3\\aoi-lab-combined\\deck\\deck.json",
+  "shell": "C:\\Users\\IPC\\.workbuddy\\skills\\qiaomu-bento-ppt\\assets\\bento\\Bento_Slides.bento.html",
+  "output": "C:\\Users\\IPC\\Downloads\\aoi-lab-combined-workbench-v3\\aoi-lab-combined\\deck\\AOI_LAB_vibecoding_v2.bento.html",
+  "identity": {
+    "mode": "new",
+    "input_doc_id": "495a114a-a959-49fc-b797-ec2636814e2f",
+    "identity_source": null,
+    "source_doc_id": "495a114a-a959-49fc-b797-ec2636814e2f",
+    "output_doc_id": "495a114a-a959-49fc-b797-ec2636814e2f",
+    "preserved": true,
+    "minted_once": false
+  },
+  "validation": {
+    "ok": true,
+    "format": "bento/slides",
+    "doc_id": "495a114a-a959-49fc-b797-ec2636814e2f",
+    "slide_count": 12,
+    "errors": [],
+    "warnings": [
+      {
+        "path": "slides[0].elements[2].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[0].elements[8].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[1].elements[6].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[1].elements[10].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[1].elements[14].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[1].elements[18].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[1].elements[19].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[2].elements[20].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[2].elements[21].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[3].elements[4].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[3].elements[6].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[3].elements[8].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[3].elements[10].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[3].elements[12].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[3].elements[14].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[3].elements[16].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[3].elements[18].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[4].elements[2].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[5].elements[3].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[5].elements[4].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[5].elements[6].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[5].elements[7].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[5].elements[9].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[6].elements[3].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[6].elements[5].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[6].elements[7].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[6].elements[9].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[6].elements[10].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[6].elements[11].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[7].elements[2].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[8].elements[4].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[8].elements[6].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[8].elements[7].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[8].elements[9].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[8].elements[10].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[8].elements[12].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[8].elements[13].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[9].elements[5].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[9].elements[9].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[9].elements[13].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[10].elements[2].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[10].elements[6].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[10].elements[11].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[10].elements[16].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[10].elements[18].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[11].elements[2].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[11].elements[7].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[11].elements[9].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[11].elements[11].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[11].elements[13].fontSize",
+        "message": "text below 18px may be hard to read"
+      },
+      {
+        "path": "slides[11].elements[15].fontSize",
+        "message": "text below 18px may be hard to read"
+      }
+    ]
+  },
+  "shell_gate": {
+    "internal": {
+      "ok": true,
+      "errors": []
+    },
+    "project": {
+      "ran": false,
+      "ok": null
+    }
+  },
+  "rollback_boundary": "source unchanged; output written separately"
+}
