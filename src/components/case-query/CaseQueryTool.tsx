@@ -313,7 +313,7 @@ export default function CaseQueryTool({ onClose, showClose = true }: Props) {
                             <td>{String(item.record.data['品名'] ?? '-')}</td>
                             <td>{String(item.record.data['规格'] ?? '-')}</td>
                             <td>{String(item.record.data['数量'] ?? '')}{String(item.record.data['单位'] ?? '')}</td>
-                            <td className={item.status === 'overdue' ? 'cq-bad' : ''}>
+                            <td data-status={item.status} className={item.status === 'overdue' ? 'cq-bad' : ''}>
                               {STATUS_LABELS[item.status]}
                               {item.daysRemaining !== null && (
                                 <span style={{ marginLeft: 4, fontWeight: 400, fontSize: '.72rem', color: item.status === 'overdue' ? 'var(--orange)' : '#65808d' }}>

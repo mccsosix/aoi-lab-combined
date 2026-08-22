@@ -741,13 +741,21 @@ nav a:hover, nav a:focus-visible { color: var(--cyan); }
   border: 2px solid var(--ink); background: var(--paper);
   border-left: 10px solid var(--cyan);
 }
+.cq-case-card[data-status="in_transit"] { border-left-color: #13999f; }
+.cq-case-card[data-status="arrived"] { border-left-color: #2f9e5f; }
+.cq-case-card[data-status="pending"] { border-left-color: #b08a2f; }
 .cq-case-card[data-status="overdue"] { border-left-color: var(--orange); }
+.cq-case-card[data-status="cancelled"] { border-left-color: #8a93a0; }
 .cq-case-top {
   display: grid; grid-template-columns: 70px 1fr 42px; gap: 12px;
   align-items: center; padding: 12px 14px; cursor: pointer;
 }
 .cq-case-status { font-size: .92rem; font-weight: 950; color: #13999f; }
+.cq-case-card[data-status="in_transit"] .cq-case-status { color: #13999f; }
+.cq-case-card[data-status="arrived"] .cq-case-status { color: #2f9e5f; }
+.cq-case-card[data-status="pending"] .cq-case-status { color: #b08a2f; }
 .cq-case-card[data-status="overdue"] .cq-case-status { color: var(--orange); }
+.cq-case-card[data-status="cancelled"] .cq-case-status { color: #8a93a0; }
 .cq-case-title { font-weight: 900; margin-bottom: 4px; font-size: .95rem; }
 .cq-case-meta { color: #65808d; font-family: var(--font-geist-mono); font-size: .72rem; }
 .cq-toggle {
@@ -762,6 +770,12 @@ nav a:hover, nav a:focus-visible { color: var(--cyan); }
   padding: 7px 10px; border-bottom: 1px dashed #bcc9cb; text-align: left; font-size: .8rem;
 }
 .cq-case-details th { background: #f2f0e6; font: 700 .74rem/1 var(--font-geist-mono); }
+.cq-case-details td[data-status] { font-weight: 800; }
+.cq-case-details td[data-status="arrived"] { color: #2f9e5f; }
+.cq-case-details td[data-status="in_transit"] { color: #13999f; }
+.cq-case-details td[data-status="pending"] { color: #b08a2f; }
+.cq-case-details td[data-status="overdue"] { color: var(--orange); }
+.cq-case-details td[data-status="cancelled"] { color: #8a93a0; }
 .cq-case-details .cq-bad { color: var(--orange); font-weight: 900; }
 
 .cq-empty { text-align: center; padding: 32px; color: #08304f80; font-size: .88rem; }
