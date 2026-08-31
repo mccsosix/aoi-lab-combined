@@ -42,7 +42,7 @@ body {
   line-height: 1.55;
 }
 
-/* ─── 顶部 AOI LAB 标识条 ─── */
+/* ─── 顶部 AOI LAB 标识条（嵌入工作台时由宿主隐藏） ─── */
 .lab-topbar {
   position: sticky; top: 0; z-index: 50;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -69,48 +69,6 @@ body {
   box-shadow: 9px 9px 0 rgba(1,20,34,.55);
   counter-reset: cardno;
 }
-.tool-head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
-  padding: 34px 36px 28px; border-bottom: 2px solid #08304f2e;
-}
-.tool-head-main { display: flex; gap: 22px; align-items: flex-start; }
-.tool-no {
-  flex: 0 0 auto; display: grid; width: 58px; height: 58px; place-items: center;
-  background: var(--cyan); color: var(--ink); border: 2px solid var(--ink);
-  box-shadow: 4px 4px 0 var(--ink); font: 900 1.3rem/1 var(--mono);
-}
-.tool-eyebrow { display: block; color: var(--cyan); font: 800 .78rem/1 var(--mono); letter-spacing: .14em; margin-bottom: 6px; }
-.tool-head h1 { margin: 0 0 8px; font-size: clamp(1.8rem, 3.2vw, 2.6rem); font-weight: 900; letter-spacing: -.01em; }
-.tool-head p { margin: 0; color: #4e6b7a; font-size: 13px; line-height: 1.7; max-width: 72ch; }
-.tool-head code { background: #08304f12; padding: 1px 6px; border-radius: 0; font-family: var(--mono); }
-
-/* 返回按钮（沿用 AOI LAB 工作区风格） */
-.workbench-back {
-  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px;
-  min-height: 46px; padding: 0 16px; color: var(--ink); background: #fffdf3;
-  border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--orange);
-  font: 850 .82rem/1 var(--mono); cursor: pointer;
-  transition: transform 160ms, box-shadow 160ms, background 160ms;
-}
-.workbench-back:hover, .workbench-back:focus-visible {
-  background: var(--cyan-soft); outline: 3px solid var(--orange); outline-offset: 2px;
-  transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--orange);
-}
-.workbench-back-arrow { font-size: 1.2rem; line-height: 1; }
-
-/* 主 Tab 切换（分段控件） */
-.main-tab-bar { display: flex; gap: 0; margin: 0; padding: 0 36px; border-bottom: 3px solid var(--ink); }
-.main-tab {
-  padding: 12px 22px; font: 800 .92rem/1 var(--mono); color: var(--sub); cursor: pointer;
-  border: 2px solid var(--ink); border-bottom: none; margin-bottom: -3px;
-  background: #fffdf5; user-select: none;
-}
-.main-tab:first-child { border-right: none; }
-.main-tab:hover { color: var(--ink); }
-.main-tab.active { background: var(--cyan); color: var(--ink); }
-
-#panelSingle, #panelMulti { padding: 28px 36px 36px; }
-
 /* ─── 卡片（分节面板，自动编号 01/02/03） ─── */
 .card {
   position: relative; background: #fffdf5; color: var(--ink);
@@ -138,8 +96,10 @@ body {
 /* ─── 结论条 ─── */
 .conclusion {
   border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--cyan);
-  padding: 16px 20px; background: #fffdf5;
+  padding: 16px 20px; background: #fffdf5; margin-top: 22px;
 }
+/* 去掉了工具标题头后，结论条作为页面首个元素顶到纸张顶部 */
+.conclusion:first-child { margin-top: 0; }
 .conclusion .main { font: 800 1.05rem/1.3 var(--sans); margin-bottom: 6px; color: var(--ink); }
 .conclusion .detail { font-size: 13px; color: #4e6b7a; line-height: 1.6; }
 .conclusion.pass { border-left: 8px solid var(--cyan); }
@@ -151,11 +111,6 @@ body {
 
 /* ─── 表单元素 ─── */
 label { display: block; font-size: 12.5px; color: var(--ink); margin-bottom: 6px; font-weight: 800; }
-textarea {
-  width: 100%; min-height: 120px; padding: 10px 12px; resize: vertical; outline: none;
-  font-family: var(--mono); font-size: 13px; color: var(--ink);
-  background: #fffdf5; border: 2px solid var(--ink); border-radius: 0;
-}
 input[type=number], input[type=text] {
   width: 100%; height: 46px; padding: 0 12px; outline: none;
   font-family: var(--mono); font-size: 13px; color: var(--ink);
@@ -164,8 +119,9 @@ input[type=number], input[type=text] {
 select {
   height: 46px; padding: 0 10px; border: 2px solid var(--ink); border-radius: 0;
   background: #fffdf5; color: var(--ink); font-family: var(--sans); font-size: 13px; cursor: pointer;
+  width: 100%;
 }
-textarea:focus, input:focus, select:focus {
+input:focus, select:focus {
   border-color: var(--cyan); outline: 3px solid var(--orange); outline-offset: 2px;
 }
 
@@ -186,11 +142,26 @@ button { font-family: var(--sans); }
 .btn-ghost:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
 .btn-ghost-sm { font-size: .78rem; padding: 6px 12px; }
 
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.param-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 16px; }
-.hint { font-size: 11.5px; color: var(--sub); margin-top: 5px; line-height: 1.5; }
-.btn-row { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+.param-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin-top: 18px; }
+.btn-row { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
 .muted { color: var(--sub); }
+
+/* ─── 拖拽导入区 ─── */
+.drop-hint {
+  border: 2px dashed var(--ink); padding: 30px 16px; text-align: center;
+  color: var(--sub); font-size: 14px; font-weight: 700; cursor: pointer;
+  background: #fffdf5; margin-top: 4px;
+  transition: background 160ms, border-color 160ms, transform 160ms;
+}
+.drop-hint .drop-icon { display: block; font-size: 34px; margin-bottom: 10px; line-height: 1; }
+.drop-hint .drop-sub { display: block; font-size: 11.5px; font-weight: 500; color: var(--sub); margin-top: 4px; }
+.drop-hint.dragover { border-color: var(--cyan); background: #dff9f3; color: var(--ink); transform: scale(1.01); }
+.file-info { margin-top: 12px; font-size: 13px; line-height: 1.6; }
+.scope-note {
+  margin-top: 14px; font-size: 12.5px; color: #4e6b7a;
+  background: #08304f0a; border-left: 4px solid var(--cyan);
+  padding: 9px 13px; line-height: 1.6;
+}
 
 /* ─── 图表 ─── */
 .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -198,7 +169,6 @@ button { font-family: var(--sans); }
 .chart-title { font: 800 .72rem/1 var(--mono); color: var(--ink); letter-spacing: .04em; text-align: center; padding: 8px 0 0; }
 
 /* ─── 表格 ─── */
-.table-wrap { max-height: 400px; overflow: auto; border: 2px solid var(--ink); }
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #08304f1f; }
 th {
@@ -206,15 +176,6 @@ th {
   border-bottom: 2px solid var(--ink); position: sticky; top: 0; z-index: 1; font-family: var(--mono);
 }
 td.mono { font-family: var(--mono); }
-.table-wrap tr.fail td { background: #f6d9d2; }
-.table-wrap tr.improved td { background: #ffe9c7; }
-tr.clickable { cursor: pointer; }
-tr.clickable:hover td { background: #eafaf6; }
-tr.selected td { background: #dff9f3 !important; }
-tr.row-pass td { background: #eafaf6; }
-tr.row-warn td { background: #ffe9c7; }
-tr.row-fail td { background: #f6d9d2; }
-tr.row-pass:hover td, tr.row-warn:hover td, tr.row-fail:hover td { background: #eafaf6 !important; }
 
 /* ─── 状态标签（不只靠颜色，加描边） ─── */
 .tag { display: inline-block; padding: 2px 9px; border-radius: 0; border: 1px solid var(--ink); font: 800 .72rem/1 var(--mono); white-space: nowrap; }
@@ -222,46 +183,10 @@ tr.row-pass:hover td, tr.row-warn:hover td, tr.row-fail:hover td { background: #
 .tag.bad { background: #f6d9d2; color: #a3331f; }
 .tag.warn { background: #ffe1ad; color: #b5640a; }
 
-/* ─── 内页 Tab ─── */
-.tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--ink); margin-bottom: 14px; }
-.tab {
-  padding: 8px 16px; font: 700 .85rem/1 var(--sans); color: var(--sub); cursor: pointer;
-  border: 2px solid var(--ink); border-bottom: none; margin-bottom: -2px; background: #fffdf5;
-}
-.tab:first-child { border-right: none; }
-.tab.active { color: var(--ink); background: var(--cyan); font-weight: 800; }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
-
-/* ─── 单点 / 批量校准结果 ─── */
-.single-result {
-  margin-top: 12px; padding: 12px 14px; background: #eafaf6; border: 2px solid var(--ink);
-  border-left: 6px solid var(--cyan); font-family: var(--mono); font-size: 14px; display: none;
-}
-.single-result.show { display: block; }
-.batch-out {
-  margin-top: 12px; max-height: 220px; overflow: auto; background: var(--navy); color: var(--cyan-soft);
-  border: 2px solid var(--ink); padding: 10px 12px; font-family: var(--mono); font-size: 12px;
-  line-height: 1.7; white-space: pre; display: none;
-}
-.batch-out.show { display: block; }
-
-.json-preview {
-  margin-top: 12px; background: var(--navy); color: var(--cyan-soft); padding: 12px 14px;
-  border: 2px solid var(--ink); font-family: var(--mono); font-size: 12px; overflow-x: auto; white-space: pre;
-}
-
-.err { color: #a3331f; font-size: 12.5px; margin-top: 10px; display: none; background: #f6d9d2; border: 2px solid var(--danger); border-left-width: 6px; padding: 8px 10px; }
+.err { color: #a3331f; font-size: 12.5px; margin-top: 12px; display: none; background: #f6d9d2; border: 2px solid var(--danger); border-left-width: 6px; padding: 8px 10px; }
 .err.show { display: block; }
 
 .footer { text-align: center; color: #557a8a; font: 700 .78rem/1.4 var(--mono); margin-top: 28px; padding-bottom: 8px; }
-
-.drop-hint {
-  border: 2px dashed var(--ink); padding: 14px; text-align: center; color: var(--sub);
-  font-size: 12.5px; margin-top: 12px; cursor: pointer; background: #fffdf5;
-  transition: background 160ms, border-color 160ms;
-}
-.drop-hint.dragover { border-color: var(--cyan); background: #dff9f3; color: var(--ink); }
 
 /* ─── 乘坐块 ─── */
 .seat-block { margin-bottom: 18px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 4px 4px 0 var(--cyan); overflow: hidden; }
@@ -271,15 +196,9 @@ tr.row-pass:hover td, tr.row-warn:hover td, tr.row-fail:hover td { background: #
 .seat-block table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .seat-block th { background: var(--cyan-soft); color: var(--ink); font-weight: 800; font-size: 11.5px; text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--ink); font-family: var(--mono); }
 .seat-block td { padding: 8px 12px; border-bottom: 1px solid #08304f1f; }
-.cell-pass td { background: #eafaf6; }
-.cell-warn td { background: #ffe9c7; }
-.cell-fail td { background: #f6d9d2; }
 .formula-chip { display: inline-block; background: var(--ink); color: var(--cream); font-family: var(--mono); font-size: 12px; padding: 3px 10px; border: 2px solid var(--ink); }
-.improve-badge { font-size: 11px; padding: 1px 6px; border-radius: 0; font-weight: 700; border: 1px solid var(--ink); }
-.improve-good { background: var(--cyan-soft); color: var(--ink); }
-.improve-bad { background: #f6d9d2; color: #a3331f; }
 
-/* ─── 产品块（每个产品展开 24 点明细） ─── */
+/* ─── 产品块（每个产品展开逐点明细） ─── */
 .prod-block { border-top: 2px solid var(--ink); }
 .prod-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; cursor: pointer; user-select: none; font-weight: 700; font-size: 13px; background: #fffdf5; }
 .prod-head:hover { background: var(--cyan-soft); }
@@ -308,21 +227,14 @@ tr.row-pass:hover td, tr.row-warn:hover td, tr.row-fail:hover td { background: #
 
 /* ─── 响应式 ─── */
 @media (max-width: 980px) {
-  .grid-2 { grid-template-columns: 1fr; }
   .charts { grid-template-columns: 1fr; }
   .param-row { grid-template-columns: 1fr 1fr; }
-  .main-tab-bar, #panelSingle, #panelMulti, .tool-head { padding-left: 20px; padding-right: 20px; }
-  .tool-head { flex-direction: column; align-items: stretch; gap: 16px; }
-  .workbench-back { width: 100%; justify-content: center; }
 }
 @media (max-width: 680px) {
   .lab-topbar { padding: 12px 16px; }
   .param-row { grid-template-columns: 1fr; }
   .container { margin: 16px 12px 40px; box-shadow: 6px 6px 0 rgba(1,20,34,.55); }
-  .tool-head { padding: 24px 16px 20px; }
-  .main-tab-bar, #panelSingle, #panelMulti { padding-left: 16px; padding-right: 16px; }
   .card { padding: 18px 16px; }
-  .tool-no { width: 46px; height: 46px; font-size: 1rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -342,225 +254,85 @@ tr.row-pass:hover td, tr.row-warn:hover td, tr.row-fail:hover td { background: #
 </div>
 
 <div class="container" id="top">
-  <header class="tool-head">
-    <div class="tool-head-main">
-      <span class="tool-no">05</span>
-      <div class="tool-head-copy">
-        <span class="tool-eyebrow">// 相关性评估</span>
-        <h1>测量数据相关性判断器</h1>
-        <p>判断测量值能否用 <code>y = ax + b</code> 对齐到 QV 值，每一位 gap &le; 容差 &middot; 数据不上传，全部在浏览器内计算</p>
-      </div>
-    </div>
-    <button class="workbench-back" id="backBtn" type="button"><span class="workbench-back-arrow" aria-hidden="true">&larr;</span> 返回工具箱</button>
-  </header>
-
-  <!-- 主 Tab 切换 -->
-  <div class="main-tab-bar">
-    <div class="main-tab active" data-panel="single">单产品比对</div>
-    <div class="main-tab" data-panel="multi">多产品批量比对</div>
+  <!-- 汇总统计条 -->
+  <div class="conclusion" id="multiSummaryBar">
+    <div class="main" id="multiSummaryMain">导入 Excel 文件后点击 [开始分析]</div>
+    <div class="detail" id="multiSummaryDetail">Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列</div>
   </div>
 
-  <!-- ==================== 单产品面板 ==================== -->
-  <div id="panelSingle">
-
-  <!-- 结论条 -->
-  <div class="conclusion" id="conclusionBar">
-    <div class="main" id="conclusionMain">导入两组数据后点击 [判断]，我会告诉你它们是否相关、能否对齐</div>
-    <div class="detail" id="conclusionDetail"></div>
-  </div>
-
-  <!-- 数据输入 -->
+  <!-- Excel 导入 -->
   <div class="card">
-    <h2><span class="dot"></span>数据输入 <span class="badge">支持粘贴两列 / 打开CSV / 拖拽文件</span></h2>
-    <div class="grid-2">
-      <div>
-        <label>测量值 X</label>
-        <textarea id="xInput" placeholder="例如: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"></textarea>
-      </div>
-      <div>
-        <label>实际值 Y</label>
-        <textarea id="yInput" placeholder="例如: 1.07, 2.12, 3.17, 4.22, 5.27, 6.32, 7.37, 8.42, 9.47, 10.52"></textarea>
-      </div>
+    <h2><span class="dot"></span>Excel 文件导入 <span class="badge">每个 sheet 一个乘坐</span></h2>
+    <div class="drop-hint" id="excelDropHint">
+      <span class="drop-icon" aria-hidden="true">📁</span>
+      拖拽 .xlsx 文件到这里，或点击选择文件
+      <span class="drop-sub">每个 sheet = 一个乘坐 · sheet 内 1#~10# = 10 个产品</span>
     </div>
+    <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none" />
+    <div id="excelFileInfo" class="file-info muted">未加载文件</div>
+
     <div class="param-row">
       <div>
-        <label for="tolerance">容差（每位差值上限）</label>
-        <input type="number" id="tolerance" value="0.015" min="0" step="0.001" />
-        <div class="hint">单位与数据量纲一致</div>
+        <label for="multiTolerance">容差（gap 上限）</label>
+        <input type="number" id="multiTolerance" value="0.015" min="0" step="0.001" />
       </div>
       <div>
-        <label for="maxRemove">离群点剔除上限 (%)</label>
-        <input type="number" id="maxRemove" value="20" min="0" max="100" step="1" />
-        <div class="hint">判断失败时尝试剔除的离群点比例</div>
+        <label for="multiTransformType">变换类型</label>
+        <select id="multiTransformType">
+          <option value="linear">线性拟合 y = ax + b（推荐）</option>
+          <option value="offset">固定 a=1（仅补偿 y = x + b）</option>
+          <option value="none">不变换（只看原始 gap）</option>
+        </select>
       </div>
       <div>
-        <label>阶数</label>
-        <input type="text" value="1 阶（y = ax + b）" disabled />
+        <label for="multiATol">分辨率缩放容差 |a−1|</label>
+        <input type="number" id="multiATol" value="0.1" min="0" step="0.001" />
+      </div>
+      <div>
+        <label for="multiCompTol">补偿值上限</label>
+        <input type="number" id="multiCompTol" value="0.03" min="0" step="0.001" />
       </div>
     </div>
-    <div class="err" id="err"></div>
+    <div class="scope-note">每个乘坐共用一个变换函数（该乘坐 10 个产品同一套 y = ax + b）；a 表示分辨率缩放（最好趋近 1），b 表示补偿值（尽量 ≤0.03）</div>
+
+    <div class="err" id="multiErr"></div>
     <div class="btn-row">
-      <button class="btn-primary" id="analyzeBtn">▶ 判断</button>
-      <button class="btn-ghost" id="pasteBtn">从剪贴板导入</button>
-      <button class="btn-ghost" id="fileBtn">打开 CSV/文本…</button>
-      <button class="btn-ghost" id="sampleBtn">示例</button>
-      <button class="btn-ghost" id="clearBtn">清空</button>
-      <input type="file" id="fileInput" accept=".csv,.txt" style="display:none" />
+      <button class="btn-primary" id="multiAnalyzeBtn">▶ 开始分析</button>
+      <button class="btn-ghost" id="multiClearBtn">清空</button>
     </div>
-    <div class="drop-hint" id="dropHint">💡 也可以把 .csv / .txt 文件拖到这里导入</div>
   </div>
 
-  <!-- 对齐对比 -->
+  <!-- 比对结果：每个乘坐一个表格 -->
   <div class="card">
-    <h2><span class="dot"></span>对齐对比 <span class="badge">左：原始 · 右：变换后，虚线为 y=x 理想线</span></h2>
-    <div class="charts">
-      <div>
-        <div class="chart-title">原始：测量值 → 实际值</div>
-        <div class="chart-box" id="chartRaw"></div>
+    <h2><span class="dot"></span>比对结果 <span class="badge" id="multiSummaryBadge">—</span></h2>
+    <div class="btn-row" style="margin:0 0 10px">
+      <button class="btn-ghost" id="multiExportCsv">导出 CSV</button>
+      <button class="btn-ghost" id="multiCopyTable">复制汇总表</button>
+      <button class="btn-ghost btn-ghost-sm" id="multiExpandAll">展开全部点位</button>
+      <button class="btn-ghost btn-ghost-sm" id="multiCollapseAll">收起全部点位</button>
+    </div>
+    <div id="multiResultContainer"></div>
+  </div>
+
+  <!-- 散点图弹窗 -->
+  <div class="modal-overlay" id="multiDetailCard">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>散点图 · <span id="multiDetailName">—</span></h3>
+        <button class="modal-close" id="multiModalClose" type="button">✕</button>
       </div>
-      <div>
-        <div class="chart-title">变换后：校准值 → 实际值</div>
-        <div class="chart-box" id="chartFit"></div>
+      <div class="charts">
+        <div>
+          <div class="chart-title">原始：测量值(CCD) → 标准值(QV)</div>
+          <div class="chart-box" id="multiChartRaw" style="height:340px"></div>
+        </div>
+        <div>
+          <div class="chart-title">变换后：校准值 → 标准值(QV)</div>
+          <div class="chart-box" id="multiChartFit" style="height:340px"></div>
+        </div>
       </div>
     </div>
   </div>
-
-  <!-- 报告 -->
-  <div class="card">
-    <h2><span class="dot"></span>逐位报告 <span class="badge" id="reportBadge">—</span></h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>序号</th><th>测量值</th><th>实际值</th><th>原始差值</th><th>变换后值</th><th>变换后差值</th><th>状态</th>
-          </tr>
-        </thead>
-        <tbody id="reportBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 校准工具 -->
-  <div class="card">
-    <h2><span class="dot"></span>校准工具 <span class="badge">对任意新测量值应用校准函数</span></h2>
-    <div class="tab-bar">
-      <div class="tab active" data-tab="single">单点校准</div>
-      <div class="tab" data-tab="batch">批量校准</div>
-    </div>
-    <div class="tab-content active" data-content="single">
-      <div style="display:flex;gap:8px">
-        <input type="text" id="singleInput" placeholder="输入一个测量值，如 2.535" style="flex:1" />
-        <button class="btn-primary" id="singleBtn">校准</button>
-      </div>
-      <div class="single-result" id="singleResult"></div>
-    </div>
-    <div class="tab-content" data-content="batch">
-      <label>多个测量值（每行一个，或用逗号/空格分隔）</label>
-      <textarea id="batchInput" style="min-height:80px" placeholder="例:&#10;2.535&#10;3.014&#10;2.998"></textarea>
-      <div class="btn-row" style="margin-top:8px">
-        <button class="btn-primary" id="batchBtn">批量校准</button>
-        <button class="btn-ghost" id="batchCopyBtn">复制结果</button>
-      </div>
-      <div class="batch-out" id="batchOutput"></div>
-    </div>
-  </div>
-
-  <!-- 导出 -->
-  <div class="card">
-    <h2><span class="dot"></span>导出校准函数</h2>
-    <div class="btn-row" style="margin-top:0">
-      <button class="btn-ghost" id="copyFormulaBtn">复制公式</button>
-      <button class="btn-ghost" id="copyExcelBtn">复制 Excel 公式</button>
-      <button class="btn-ghost" id="copyJsonBtn">复制 JSON</button>
-      <button class="btn-ghost" id="downloadBtn">下载 .json</button>
-    </div>
-    <pre class="json-preview" id="jsonPreview">— 请先完成判断 —</pre>
-  </div>
-
-  </div><!-- /panelSingle -->
-
-  <!-- ==================== 多产品批量面板 ==================== -->
-  <div id="panelMulti" style="display:none">
-
-    <!-- 汇总统计条 -->
-    <div class="conclusion" id="multiSummaryBar">
-      <div class="main" id="multiSummaryMain">导入 Excel 文件后点击 [开始分析]</div>
-      <div class="detail" id="multiSummaryDetail">Excel 每个 sheet 是一个乘坐；每个 sheet 内 CCD 列在前、QV 列在后（分组），第 k 个 CCD 配第 k 个 QV 为一个产品</div>
-    </div>
-
-    <!-- Excel 导入 -->
-    <div class="card">
-      <h2><span class="dot"></span>Excel 文件导入 <span class="badge">10 产品 × 4 乘坐</span></h2>
-      <div class="drop-hint" id="excelDropHint" style="cursor:pointer">📁 拖拽 .xlsx 文件到这里，或点击选择文件</div>
-      <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none" />
-      <div id="excelFileInfo" class="muted" style="margin-top:8px;font-size:13px">未加载文件</div>
-
-      <div class="param-row">
-        <div>
-          <label>容差（gap 上限）</label>
-          <input type="number" id="multiTolerance" value="0.015" min="0" step="0.001" />
-        </div>
-        <div>
-          <label>变换类型</label>
-          <select id="multiTransformType">
-            <option value="linear">线性拟合 y = ax + b（推荐）</option>
-            <option value="offset">固定 a=1（仅补偿 y = x + b）</option>
-            <option value="none">不变换（只看原始 gap）</option>
-          </select>
-        </div>
-        <div>
-          <label>分辨率缩放容差 |a−1| 上限</label>
-          <input type="number" id="multiATol" value="0.1" min="0" step="0.001" />
-        </div>
-        <div>
-          <label>补偿值上限</label>
-          <input type="number" id="multiCompTol" value="0.03" min="0" step="0.001" />
-        </div>
-        <div>
-          <label>函数作用范围</label>
-          <div class="muted" style="font-size:12px;padding-top:6px;line-height:1.5">每个乘坐共用一个函数<br/>（该乘坐 10 个产品同一套变换）</div>
-        </div>
-      </div>
-      <div class="err" id="multiErr"></div>
-      <div class="btn-row">
-        <button class="btn-primary" id="multiAnalyzeBtn">▶ 开始分析</button>
-        <button class="btn-ghost" id="multiClearBtn">清空</button>
-      </div>
-    </div>
-
-    <!-- 比对结果：每个乘坐一个表格 -->
-    <div class="card">
-      <h2><span class="dot"></span>比对结果 <span class="badge" id="multiSummaryBadge">—</span></h2>
-      <div class="btn-row" style="margin:0 0 10px">
-        <button class="btn-ghost" id="multiExportCsv">导出 CSV</button>
-        <button class="btn-ghost" id="multiCopyTable">复制汇总表</button>
-        <button class="btn-ghost btn-ghost-sm" id="multiExpandAll">展开全部点位</button>
-        <button class="btn-ghost btn-ghost-sm" id="multiCollapseAll">收起全部点位</button>
-      </div>
-      <div id="multiResultContainer"></div>
-    </div>
-
-    <!-- 散点图弹窗 -->
-    <div class="modal-overlay" id="multiDetailCard">
-      <div class="modal-box">
-        <div class="modal-head">
-          <h3>散点图 · <span id="multiDetailName">—</span></h3>
-          <button class="modal-close" id="multiModalClose" type="button">✕</button>
-        </div>
-        <div class="charts">
-          <div>
-            <div class="chart-title">原始：测量值(CCD) → 标准值(QV)</div>
-            <div class="chart-box" id="multiChartRaw" style="height:340px"></div>
-          </div>
-          <div>
-            <div class="chart-title">变换后：校准值 → 标准值(QV)</div>
-            <div class="chart-box" id="multiChartFit" style="height:340px"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div><!-- /panelMulti -->
 
   <div class="footer">相关性判断 · 偏移校准 + 内点分析 · 数据不上传</div>
 </div>
@@ -605,102 +377,6 @@ function theilSen(xs, ys) {
   return { a, b };
 }
 
-function pearson(xs, ys) {
-  const n = xs.length;
-  const mx = xs.reduce((s,v)=>s+v,0)/n, my = ys.reduce((s,v)=>s+v,0)/n;
-  let cov = 0, vx = 0, vy = 0;
-  for (let i = 0; i < n; i++) { const dx = xs[i]-mx, dy = ys[i]-my; cov += dx*dy; vx += dx*dx; vy += dy*dy; }
-  const d = Math.sqrt(vx*vy);
-  return d < 1e-15 ? 0 : cov/d;
-}
-
-function analyze(xs, ys, tol, maxRemovePct = 20) {
-  const n = xs.length;
-
-  // 1. 先算原始逐位差值（用户核心验收标准）
-  let rawPass = 0, rawMax = 0;
-  for (let i = 0; i < n; i++) {
-    const d = Math.abs(xs[i]-ys[i]);
-    if (d <= tol) rawPass++;
-    if (d > rawMax) rawMax = d;
-  }
-
-  // 2. 若原始已全部达标，直接返回恒等变换（无需拟合，
-  //    也避免两组小数本身无线性关系时，相关性在数值上无意义导致误判）
-  if (rawPass === n) {
-    return {
-      a: 1, b: 0,
-      R: 1, R2: 1, inlierRatio: 1, allR2: 1,
-      rawPass, rawMax,
-      fitPass: n, fitMax: rawMax,
-      fitErrs: xs.map((x, i) => x - ys[i]),
-      removedOk: false, removedIdx: [], a2: 1, b2: 0,
-      n
-    };
-  }
-
-  // 3. Theil-Sen 找内点
-  const ts = theilSen(xs, ys);
-  const allOls = fitLinear(xs, ys);
-  const inliers = [];
-  for (let i = 0; i < n; i++) {
-    if (Math.abs(ts.a*xs[i]+ts.b - ys[i]) <= tol) inliers.push(i);
-  }
-  const inlierRatio = inliers.length / n;
-
-  // 4. 内点上的相关性
-  let R = 0, R2 = 0;
-  if (inliers.length >= 2) {
-    const ix = inliers.map(i=>xs[i]), iy = inliers.map(i=>ys[i]);
-    R = pearson(ix, iy);
-    R2 = R*R;
-  }
-
-  // 5. 主拟合：内点 OLS
-  let a = ts.a, b = ts.b;
-  if (inliers.length >= 2) {
-    const ix = inliers.map(i=>xs[i]), iy = inliers.map(i=>ys[i]);
-    const f = fitLinear(ix, iy);
-    a = f.a; b = f.b;
-  }
-
-  // 6. 变换后对齐
-  const fitErrs = [];
-  let fitPass = 0, fitMax = 0;
-  for (let i = 0; i < n; i++) {
-    const err = (a*xs[i]+b) - ys[i];
-    fitErrs.push(err);
-    const d = Math.abs(err);
-    if (d <= tol) fitPass++;
-    if (d > fitMax) fitMax = d;
-  }
-
-  // 7. 剔除离群点
-  let removedOk = false, removedIdx = [], a2 = 0, b2 = 0;
-  if (fitPass < n && n >= 4) {
-    const maxRm = Math.min(Math.floor(n*maxRemovePct/100), n-3);
-    const errs = [];
-    for (let i = 0; i < n; i++) errs.push({ i, d: Math.abs(a*xs[i]+b-ys[i]) });
-    const over = errs.filter(e=>e.d>tol).sort((p,q)=>q.d-p.d);
-    const removed = new Set();
-    over.slice(0, maxRm).forEach(e => removed.add(e.i));
-    if (removed.size > 0) {
-      const kx = xs.filter((_,i)=>!removed.has(i));
-      const ky = ys.filter((_,i)=>!removed.has(i));
-      const f2 = fitLinear(kx, ky);
-      a2 = f2.a; b2 = f2.b;
-      let ok = true;
-      for (let i = 0; i < kx.length; i++) {
-        if (Math.abs(a2*kx[i]+b2-ky[i]) > tol) { ok = false; break; }
-      }
-      removedOk = ok;
-      removedIdx = [...removed].sort((p,q)=>p-q);
-    }
-  }
-
-  return { a, b, R, R2, inlierRatio, allR2: allOls.r2, rawPass, rawMax, fitPass, fitMax, fitErrs, removedOk, removedIdx, a2, b2, n };
-}
-
 function fmt(x) {
   if (!isFinite(x)) return '0';
   if (Math.abs(x) < 1e-10) return '0';
@@ -715,128 +391,9 @@ function fmtFunc(a, b) {
   return `y = ${aPart}${bSign}${Number(Math.abs(b).toFixed(4))}`;
 }
 
-function conclude(r) {
-  const n = r.n;
-  const tol = r.absTol;
-  const corr = r.R2 >= 0.99 ? '高度线性相关' : r.R2 >= 0.95 ? '强线性相关' : r.R2 >= 0.9 ? '较强线性相关' : r.R2 >= 0.7 ? '中等相关' : '弱相关';
+/* ==================== 图表 ==================== */
 
-  // 1. 最高优先级：原始逐位差值已全部达标（用户核心验收标准，不依赖相关性）
-  if (r.rawPass === n) {
-    return {
-      cls: 'pass',
-      main: '✅ 逐位差值全部满足容差，无需变换',
-      detail: `所有 ${n} 个位置的差值都 ≤ ${tol}（最大 ${r.rawMax.toFixed(6)}）。直接用原始数据即可，无需做函数变换。`
-    };
-  }
-
-  // 2. 用一次函数变换后可全部达标
-  if (r.fitPass === n) {
-    return {
-      cls: 'pass',
-      main: '✅ 用一次函数可全部对齐',
-      detail: `原始仅 ${r.rawPass}/${n} 位 ≤ ${tol}（最大差 ${r.rawMax.toFixed(6)}）→ 变换后 ${n}/${n} 位全达标。校准函数：y = ${fmt(r.a)}·x + ${fmt(r.b)}（R² = ${r.R2.toFixed(4)}）`
-    };
-  }
-
-  // 3. 剔除离群点后可全部达标
-  if (r.removedOk && r.removedIdx.length > 0) {
-    const idxs = r.removedIdx.slice(0, 8).map(i=>i+1).join(', ') + (r.removedIdx.length > 8 ? '…' : '');
-    return {
-      cls: 'warn',
-      main: `⚠️ 剔除 ${r.removedIdx.length} 个离群点后可全部对齐`,
-      detail: `变换后仍有 ${n - r.fitPass}/${n} 位超差（最大 ${r.fitMax.toFixed(6)}）。若剔除第 ${idxs} 号点，剩余 ${n - r.removedIdx.length} 位全部 ≤ ${tol}，校准函数变为 y = ${fmt(r.a2)}·x + ${fmt(r.b2)}。`
-    };
-  }
-
-  // 4. 以下都是"无法让所有位对齐"的原因解释
-  if (r.inlierRatio < 0.5) {
-    if (r.allR2 >= 0.9) {
-      return {
-        cls: 'fail',
-        main: '❌ 数据大致呈线性，但离散度过大，无法满足容差',
-        detail: `整体 R² = ${r.allR2.toFixed(4)}（有线性趋势），但只有 ${Math.max(0, r.fitPass)}/${n} 个点能落在容差 ${tol} 内。这不是校准能解决的——数据本身的噪声/离散度超过了容差要求。建议放宽容差，或检查测量过程稳定性。`
-      };
-    }
-    return {
-      cls: 'fail',
-      main: '❌ 两组数据不呈线性关系',
-      detail: `整体 R² = ${r.allR2.toFixed(4)}，过半数点无法落在同一条直线上。一次函数变换救不了。建议检查：两组数据是否来自同一对象 / 是否存在非线性（平方、对数）关系 / 数据是否对应错位。`
-    };
-  }
-  if (r.R2 < 0.9) {
-    return {
-      cls: 'fail',
-      main: `❌ 两组数据${corr}，一次函数变换无法对齐`,
-      detail: `R² = ${r.R2.toFixed(4)}（r = ${r.R.toFixed(4)}）。即使做 y = ax + b 变换，也无法让每一位差值 ≤ ${tol}。建议检查量纲、非线性关系或数据噪声。`
-    };
-  }
-  return {
-    cls: 'fail',
-    main: '❌ 即使变换也无法让所有位对齐',
-    detail: `相关性${corr}（R² = ${r.R2.toFixed(4)}），但变换后仍有 ${n - r.fitPass}/${n} 位差值 > ${tol}（最大 ${r.fitMax.toFixed(6)}）。数据可能存在分段/非线性问题。`
-  };
-}
-
-/* ==================== 数据解析 ==================== */
-
-function parseSeries(text) {
-  if (!text || !text.trim()) return [];
-  const norm = text.replace(/[，；;]/g, ',').replace(/[\t\r\n]+/g, ',').replace(/\s+/g, ',');
-  const parts = norm.split(',').map(s=>s.trim()).filter(s=>s.length>0);
-  const out = [];
-  for (const p of parts) {
-    const v = Number(p);
-    if (!isFinite(v)) throw new Error(`无法解析数值："${p}"`);
-    out.push(v);
-  }
-  return out;
-}
-
-function parseTwoColumns(text) {
-  const xs = [], ys = [];
-  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
-  for (const line of lines) {
-    let cells = line.split(/\t|,|;|，|；/).map(c=>c.trim()).filter(c=>c.length>0);
-    if (cells.length < 2) cells = line.split(/\s+/).filter(c=>c.length>0);
-    const nums = [];
-    for (const c of cells) {
-      const v = Number(c);
-      if (isFinite(v)) { nums.push(v); if (nums.length >= 2) break; }
-    }
-    if (nums.length >= 2) { xs.push(nums[0]); ys.push(nums[1]); }
-  }
-  return { xs, ys };
-}
-
-function decodeFileAuto(buffer) {
-  try { return new TextDecoder('utf-8', { fatal: true }).decode(buffer); }
-  catch (e) {
-    try { return new TextDecoder('gbk').decode(buffer); }
-    catch (e2) { return new TextDecoder('utf-8').decode(buffer); }
-  }
-}
-
-/* ==================== 状态 ==================== */
-
-let lastResult = null;
-let lastXs = null, lastYs = null;
-let chartsReady = false;
-let chartRaw = null, chartFit = null;
-let batchOut = null;
-
-function initCharts() {
-  if (typeof echarts === 'undefined') {
-    // echarts 由宿主从 npm 注入，此处仅作独立打开时的兜底重试。
-    setTimeout(initCharts, 100);
-    return;
-  }
-  chartRaw = echarts.init($('chartRaw'));
-  chartFit = echarts.init($('chartFit'));
-  chartsReady = true;
-  window.addEventListener('resize', () => { chartRaw && chartRaw.resize(); chartFit && chartFit.resize(); });
-}
-
-function renderAlignmentChart(el, xs, ys, tol, title) {
+function renderAlignmentChart(el, xs, ys, tol) {
   const lo = Math.min(...xs, ...ys), hi = Math.max(...xs, ...ys);
   const pad = (hi - lo) * 0.08 || 1;
   const L = lo - pad, H = hi + pad;
@@ -860,318 +417,12 @@ function renderAlignmentChart(el, xs, ys, tol, title) {
   el.setOption(option, true);
 }
 
-/* ==================== 渲染 ==================== */
-
-function renderResult(r) {
-  const c = conclude(r);
-  const bar = $('conclusionBar');
-  bar.className = 'conclusion ' + c.cls;
-  $('conclusionMain').textContent = c.main;
-  $('conclusionDetail').textContent = c.detail;
-
-  // 双图
-  if (chartsReady) {
-    renderAlignmentChart(chartRaw, lastXs, lastYs, r.absTol ?? (window._tol ?? 0.015), '原始');
-    renderAlignmentChart(chartFit, lastXs.map(x=>r.a*x+r.b), lastYs, r.absTol ?? (window._tol ?? 0.015), '变换后');
-  }
-
-  // 报告
-  const tbody = $('reportBody');
-  tbody.innerHTML = '';
-  let passCount = 0;
-  for (let i = 0; i < r.n; i++) {
-    const rawDiff = lastXs[i] - lastYs[i];
-    const yh = r.a * lastXs[i] + r.b;
-    const fitDiff = yh - lastYs[i];
-    const fitPass = Math.abs(fitDiff) <= r.absTol;
-    const rawPass = Math.abs(rawDiff) <= r.absTol;
-    if (fitPass) passCount++;
-    const tr = document.createElement('tr');
-    if (!fitPass) tr.className = 'fail';
-    else if (!rawPass) tr.className = 'improved';
-    tr.innerHTML = `
-      <td>${i+1}</td>
-      <td class="mono">${lastXs[i]}</td>
-      <td class="mono">${lastYs[i]}</td>
-      <td class="mono">${rawDiff.toFixed(6)}</td>
-      <td class="mono">${yh.toFixed(6)}</td>
-      <td class="mono">${fitDiff >= 0 ? '+' : ''}${fitDiff.toFixed(6)}</td>
-      <td>${fitPass ? '<span class="tag ok">✓ 对齐</span>' : '<span class="tag bad">✗ 超差</span>'}</td>`;
-    tbody.appendChild(tr);
-  }
-  $('reportBadge').textContent = `${passCount} 对齐 / ${r.n} 总数`;
-
-  // JSON
-  const json = {
-    correlation_r: Number(r.R.toFixed(6)),
-    r_squared: Number(r.R2.toFixed(6)),
-    inlier_ratio: Number(r.inlierRatio.toFixed(4)),
-    all_points_r2: Number(r.allR2.toFixed(6)),
-    slope_a: Number(fmt(r.a)),
-    intercept_b: Number(fmt(r.b)),
-    abs_tolerance: r.absTol,
-    total: r.n,
-    raw_pass: r.rawPass,
-    raw_max_err: Number(r.rawMax.toFixed(6)),
-    fit_pass: r.fitPass,
-    fit_max_err: Number(r.fitMax.toFixed(6)),
-    formula: `y = ${fmt(r.a)} * x + ${fmt(r.b)}`,
-    ...(r.removedOk ? { remove_outliers: r.removedIdx.map(i=>i+1), slope_a_after_remove: Number(fmt(r.a2)), intercept_b_after_remove: Number(fmt(r.b2)) } : {})
-  };
-  $('jsonPreview').textContent = JSON.stringify(json, null, 2);
-}
-
-/* ==================== 事件 ==================== */
-
-function showError(msg) { const el = $('err'); el.textContent = '⚠ ' + msg; el.classList.add('show'); }
-function clearError() { $('err').classList.remove('show'); }
-
-$('analyzeBtn').addEventListener('click', () => {
-  clearError();
-  try {
-    let xs, ys;
-    const xTxt = $('xInput').value.trim();
-    const yTxt = $('yInput').value.trim();
-    if (xTxt && !yTxt) {
-      // Y 为空，尝试把 X 解析成两列
-      const p = parseTwoColumns(xTxt);
-      if (p.xs.length >= 2) { xs = p.xs; ys = p.ys; }
-      else throw new Error('只填了 X，且无法解析成两列。请在 Y 框填入实际值，或用逗号/Tab 粘贴两列到 X 框。');
-    } else {
-      xs = parseSeries(xTxt);
-      ys = parseSeries(yTxt);
-    }
-    if (xs.length !== ys.length) throw new Error(`X 与 Y 长度不一致：X=${xs.length}, Y=${ys.length}`);
-    if (xs.length < 3) throw new Error('至少需要 3 个数据点（建议 ≥ 10）');
-    const tol = Number($('tolerance').value);
-    const maxRm = Number($('maxRemove').value);
-    if (!isFinite(tol) || tol < 0) throw new Error('容差需为非负数字');
-    if (!isFinite(maxRm) || maxRm < 0 || maxRm > 100) throw new Error('剔除比例需在 0-100 之间');
-
-    lastXs = xs; lastYs = ys;
-    window._tol = tol;
-    const r = analyze(xs, ys, tol, maxRm);
-    r.absTol = tol;
-    lastResult = r;
-    renderResult(r);
-  } catch (e) {
-    showError(e.message);
-  }
-});
-
-$('pasteBtn').addEventListener('click', async () => {
-  try {
-    let text = '';
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      text = await navigator.clipboard.readText();
-    }
-    if (!text) {
-      alert('无法自动读取剪贴板（浏览器权限限制）。请直接在 Excel 中复制两列数据，然后粘贴到 X 输入框（Tab 分隔的两列会自动识别）。');
-      return;
-    }
-    const p = parseTwoColumns(text);
-    if (p.xs.length < 2) throw new Error('剪贴板内容无法解析成两列数字');
-    $('xInput').value = p.xs.join(', ');
-    $('yInput').value = p.ys.join(', ');
-  } catch (e) {
-    showError(e.message);
-  }
-});
-
-$('fileBtn').addEventListener('click', () => $('fileInput').click());
-
-$('fileInput').addEventListener('change', (e) => {
-  const f = e.target.files[0];
-  if (!f) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const text = decodeFileAuto(reader.result);
-      const p = parseTwoColumns(text);
-      if (p.xs.length < 2) throw new Error('未能从文件中解析出两列数据');
-      $('xInput').value = p.xs.join(', ');
-      $('yInput').value = p.ys.join(', ');
-    } catch (err) { showError(err.message); }
-  };
-  reader.readAsArrayBuffer(f);
-  e.target.value = '';
-});
-
-// 拖拽导入
-const dropHint = $('dropHint');
-dropHint.addEventListener('dragover', (e) => { e.preventDefault(); dropHint.classList.add('dragover'); });
-dropHint.addEventListener('dragleave', () => dropHint.classList.remove('dragover'));
-dropHint.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropHint.classList.remove('dragover');
-  const f = e.dataTransfer.files[0];
-  if (!f) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const text = decodeFileAuto(reader.result);
-      const p = parseTwoColumns(text);
-      if (p.xs.length < 2) throw new Error('未能从文件中解析出两列数据');
-      $('xInput').value = p.xs.join(', ');
-      $('yInput').value = p.ys.join(', ');
-    } catch (err) { showError(err.message); }
-  };
-  reader.readAsArrayBuffer(f);
-});
-
-// 示例
-$('sampleBtn').addEventListener('click', () => {
-  const xs = [], ys = [];
-  let seed = 42;
-  const rnd = () => { seed = (seed*9301+49297)%233280; return seed/233280; };
-  for (let i = 0; i < 20; i++) {
-    const x = 1 + i*0.5;
-    const noise = (rnd()-0.5)*0.02;
-    xs.push(+x.toFixed(3));
-    ys.push(+(1.05*x + 0.02 + noise).toFixed(4));
-  }
-  xs.push(8.5); ys.push(15.2);
-  $('xInput').value = xs.join(', ');
-  $('yInput').value = ys.join(', ');
-  $('tolerance').value = 0.015;
-  $('maxRemove').value = 10;
-});
-
-// 清空
-$('clearBtn').addEventListener('click', () => {
-  $('xInput').value = ''; $('yInput').value = '';
-  $('singleInput').value = ''; $('batchInput').value = '';
-  $('singleResult').classList.remove('show');
-  $('batchOutput').classList.remove('show');
-  $('reportBody').innerHTML = '';
-  $('reportBadge').textContent = '—';
-  $('jsonPreview').textContent = '— 请先完成判断 —';
-  const bar = $('conclusionBar');
-  bar.className = 'conclusion';
-  $('conclusionMain').textContent = '导入两组数据后点击 [判断]，我会告诉你它们是否相关、能否对齐';
-  $('conclusionDetail').textContent = '';
-  if (chartRaw) { chartRaw.clear(); chartFit.clear(); }
-  clearError();
-  lastResult = null; lastXs = null; lastYs = null;
-});
-
-// Tab 切换
-document.querySelectorAll('.tab').forEach(t => {
-  t.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
-    document.querySelectorAll('.tab-content').forEach(x => x.classList.toggle('active', x.dataset.content === t.dataset.tab));
-  });
-});
-
-// 单点
-$('singleBtn').addEventListener('click', () => {
-  if (!lastResult) { alert('请先完成判断'); return; }
-  const x = Number($('singleInput').value);
-  if (!isFinite(x)) { alert('请输入有效测量值'); return; }
-  const y = lastResult.a*x + lastResult.b;
-  const el = $('singleResult');
-  el.classList.add('show');
-  el.innerHTML = `测量值 x = <b>${x}</b><br/>校准后 y = <b style="color:var(--primary)">${y.toFixed(8)}</b><br/><span style="font-size:11px;color:var(--sub)">使用 y = ${fmt(lastResult.a)}x + ${fmt(lastResult.b)}</span>`;
-});
-
-// 批量
-$('batchBtn').addEventListener('click', () => {
-  if (!lastResult) { alert('请先完成判断'); return; }
-  try {
-    const xs = parseSeries($('batchInput').value);
-    if (xs.length === 0) throw new Error('请输入测量值');
-    const lines = ['测量值\t校准后值'];
-    for (const x of xs) lines.push(`${x}\t${(lastResult.a*x + lastResult.b).toFixed(8)}`);
-    batchOut = lines.join('\n');
-    const el = $('batchOutput');
-    el.textContent = batchOut;
-    el.classList.add('show');
-  } catch (e) { showError(e.message); }
-});
-
-$('batchCopyBtn').addEventListener('click', () => {
-  if (!batchOut) { alert('请先点击 [批量校准]'); return; }
-  copyText(batchOut).then(() => flashBtn($('batchCopyBtn'), '已复制 ✓'));
-});
-
-function copyText(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
-  const ta = document.createElement('textarea');
-  ta.value = text; document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); } catch(e) {}
-  document.body.removeChild(ta);
-  return Promise.resolve();
-}
-
-function flashBtn(btn, txt) {
-  const o = btn.textContent;
-  btn.textContent = txt;
-  setTimeout(() => btn.textContent = o, 1500);
-}
-
-// 导出
-$('copyFormulaBtn').addEventListener('click', () => {
-  if (!lastResult) { alert('请先完成判断'); return; }
-  copyText(`y = ${fmt(lastResult.a)} * x + ${fmt(lastResult.b)}`).then(() => flashBtn($('copyFormulaBtn'), '已复制 ✓'));
-});
-$('copyExcelBtn').addEventListener('click', () => {
-  if (!lastResult) { alert('请先完成判断'); return; }
-  copyText(`=${fmt(lastResult.a)}*A1+${fmt(lastResult.b)}`).then(() => flashBtn($('copyExcelBtn'), '已复制 ✓'));
-});
-$('copyJsonBtn').addEventListener('click', () => {
-  if (!lastResult) { alert('请先完成判断'); return; }
-  copyText($('jsonPreview').textContent).then(() => flashBtn($('copyJsonBtn'), '已复制 ✓'));
-});
-$('downloadBtn').addEventListener('click', () => {
-  if (!lastResult) { alert('请先完成判断'); return; }
-  const blob = new Blob([$('jsonPreview').textContent], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `alignment_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-});
-
 /* ==================== 多产品批量比对 ==================== */
 
 let multiSeats = null;      // 解析后的乘坐 [{name, products:[{name,meas,qv}]}]
 let multiResult = null;     // analyzeSeats 结果
 let multiChartRaw = null, multiChartFit = null;
 let multiSelectedIdx = -1;
-
-// 解析文本（备选）：空行分段，每段两列（QV、测量值），识别产品名
-function parseMultiProducts(text) {
-  const blocks = text.split(/\n\s*\n/);
-  const products = [];
-  for (let b = 0; b < blocks.length; b++) {
-    const lines = blocks[b].split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-    if (lines.length === 0) continue;
-    let name = null;
-    const col1 = [], col2 = [];
-    let dataStart = 0;
-    const firstCells = lines[0].split(/[\t,，;；\s]+/).filter(c => c.length > 0);
-    const firstIsNum = firstCells.length > 0 && isFinite(Number(firstCells[0]));
-    if (!firstIsNum && firstCells.length > 0) {
-      const hasNum = firstCells.some(c => isFinite(Number(c)));
-      if (firstCells.length === 1 || hasNum) { name = firstCells[0]; dataStart = hasNum ? 0 : 1; }
-      else { dataStart = 1; }
-    }
-    for (let i = dataStart; i < lines.length; i++) {
-      const cells = lines[i].split(/[\t,，;；\s]+/).filter(c => c.length > 0);
-      const nums = [];
-      for (const c of cells) {
-        const v = Number(c);
-        if (isFinite(v)) { nums.push(v); if (nums.length >= 2) break; }
-      }
-      if (nums.length >= 2) { col1.push(nums[0]); col2.push(nums[1]); }
-    }
-    if (col1.length >= 2) {
-      products.push({ name: name || ('产品' + (products.length + 1)), meas: col2, qv: col1 });
-    }
-  }
-  return products;
-}
 
 // 解析 Excel workbook → 乘坐列表
 // 真实结构：每个 sheet 一个乘坐；sheet 内 10 个产品（1#~10#）横向 3 个并排、纵向多块。
@@ -1319,7 +570,7 @@ function renderMultiSummaryBar(result) {
   $('multiSummaryBadge').textContent = `${pass + warn} 达标 / ${seats.length} 乘坐`;
 }
 
-// 渲染：每个乘坐一个表格，逐点展开每个产品的 24 点明细
+// 渲染：每个乘坐一个表格，逐点展开每个产品的明细
 function renderMultiSummary(result) {
   const container = $('multiResultContainer');
   container.innerHTML = '';
@@ -1357,7 +608,7 @@ function renderMultiSummary(result) {
       html += `<div class="seat-func"><span class="tag ok">✅ 原始 ${seat.rawOkCount}/${nProds} 达标，无需变换</span>${aTag}${compTag}</div>`;
     }
 
-    // 每个产品展开成 24 点明细
+    // 每个产品展开成逐点明细
     seat.products.forEach((p, pi) => {
       const rawGaps = p.meas.map((m, i) => m - p.qv[i]);
       const rawMax = Math.max(...rawGaps.map(Math.abs));
@@ -1366,7 +617,6 @@ function renderMultiSummary(result) {
       let statusText, statusCls;
       if (p.rawPass) { statusText = '✅ 原始达标'; statusCls = 'ok'; }
       else if (needTransform && p.fitPass) { statusText = '⚠️ 变换后达标'; statusCls = 'warn'; }
-      else if (needTransform) { statusText = '❌ 不达标'; statusCls = 'bad'; }
       else { statusText = '❌ 不达标'; statusCls = 'bad'; }
 
       const rawTag = p.rawPass
@@ -1485,21 +735,6 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMulti
 function multiShowError(msg) { const el = $('multiErr'); el.textContent = '⚠ ' + msg; el.classList.add('show'); }
 function multiClearError() { $('multiErr').classList.remove('show'); }
 
-// 主 Tab 切换
-document.querySelectorAll('.main-tab').forEach(t => {
-  t.addEventListener('click', () => {
-    document.querySelectorAll('.main-tab').forEach(x => x.classList.toggle('active', x === t));
-    const panel = t.dataset.panel;
-    $('panelSingle').style.display = panel === 'single' ? 'block' : 'none';
-    $('panelMulti').style.display = panel === 'multi' ? 'block' : 'none';
-    if (panel === 'multi') {
-      setTimeout(() => {
-        [chartRaw, chartFit, multiChartRaw, multiChartFit].forEach(c => c && c.resize && c.resize());
-      }, 60);
-    }
-  });
-});
-
 // 展开/收起全部点位
 function setAllPoints(collapsed) {
   document.querySelectorAll('#multiResultContainer .prod-head').forEach(head => {
@@ -1575,7 +810,7 @@ $('multiClearBtn').addEventListener('click', () => {
   const bar = $('multiSummaryBar');
   bar.className = 'conclusion';
   $('multiSummaryMain').textContent = '导入 Excel 文件后点击 [开始分析]';
-  $('multiSummaryDetail').textContent = 'Excel 每个 sheet 一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列';
+  $('multiSummaryDetail').textContent = 'Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列';
   multiClearError();
   multiSeats = null; multiResult = null; multiSelectedIdx = -1;
 });
@@ -1621,7 +856,7 @@ $('multiExportCsv').addEventListener('click', () => {
     });
   });
   const csv = lines.join('\n');
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const aEl = document.createElement('a');
   aEl.href = url;
@@ -1658,10 +893,20 @@ $('multiCopyTable').addEventListener('click', () => {
   copyText(lines.join('\n')).then(() => flashBtn($('multiCopyTable'), '已复制 ✓'));
 });
 
-// 初始化
-const backBtn = document.getElementById('backBtn');
-if (backBtn) backBtn.addEventListener('click', () => { if (window.__AOI_CORRELATION_BACK__) window.__AOI_CORRELATION_BACK__(); else window.scrollTo({ top: 0, behavior: 'smooth' }); });
-if (window.requestAnimationFrame) { requestAnimationFrame(() => requestAnimationFrame(initCharts)); } else { setTimeout(initCharts, 60); }
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+  const ta = document.createElement('textarea');
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function flashBtn(btn, txt) {
+  const o = btn.textContent;
+  btn.textContent = txt;
+  setTimeout(() => btn.textContent = o, 1500);
+}
 </script>
 </body>
 </html>

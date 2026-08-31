@@ -67,7 +67,8 @@ const corrSourcePath = new URL('../src/correlation/correlation-v13.html', import
 assert.ok(fs.existsSync(corrSourcePath), 'correlation v13 source HTML must be bundled');
 const corrSource = fs.readFileSync(corrSourcePath, 'utf8');
 assert.ok(!corrSource.includes('loadCdn'), 'correlation source must not rely on CDN loader');
-assert.ok(corrSource.includes('__AOI_CORRELATION_BACK__'), 'correlation back button must bridge to React');
+assert.ok(!corrSource.includes('panelSingle'), 'correlation single-product panel must be removed');
+assert.ok(!corrSource.includes('main-tab-bar'), 'correlation must not keep single/multi tab bar');
 assert.ok(corrSource.includes('analyzeBySeat'), 'correlation judge core logic missing');
 
 console.log('verify-repeatability-integration: PASS');
