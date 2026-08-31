@@ -6,7 +6,7 @@ import cameraDefaultsJson from "../data/cameras.json";
 import lensDefaultsJson from "../data/lenses.json";
 import { checkCompatibility, isExplicitlyIncompatible } from "../domain/compatibility";
 import { calculateFov } from "../domain/fov";
-import { recommendCombinations, type Recommendation } from "../domain/recommend";
+import { recommendCombinations, type Recommendation, type ResolutionStatus } from "../domain/recommend";
 import type { Camera, CompatibilityResult, FovResult, Lens } from "../domain/types";
 import { useDeviceLibrary } from "../hooks/useDeviceLibrary";
 import { indexedDbDeviceRepository, type DefaultDeviceData, type DeviceRepository } from "../storage/db";
@@ -21,6 +21,7 @@ const bundledDefaults: DefaultDeviceData = {
 const number = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const percent = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const magnificationNumber = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+const formatMicron = (valueMm: number | null) => valueMm === null ? "—" : (valueMm * 1000).toFixed(1);
 
 export function FovWorkbench({
   onBack,
@@ -43,8 +44,11 @@ export function FovWorkbench({
   const [lensBrand, setLensBrand] = useState("");
   const [targetWidth, setTargetWidth] = useState("90");
   const [targetHeight, setTargetHeight] = useState("50");
+  const [marginMm, setMarginMm] = useState("8");
   const [allowRotate, setAllowRotate] = useState(false);
   const [includeReview, setIncludeReview] = useState(false);
+  const [toleranceEnabled, setToleranceEnabled] = useState(false);
+  const [toleranceMm, setToleranceMm] = useState("");
   const [showIncompatible, setShowIncompatible] = useState(false);
   const [recommendations, setRecommendations] = useState<ReturnType<typeof recommendCombinations> | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -100,10 +104,17 @@ export function FovWorkbench({
       setRecommendations(null);
       return;
     }
+    const margin = Number(marginMm) || 0;
+    const tolerance = toleranceEnabled ? Number(toleranceMm) : null;
     const cameras = visibleCameras.filter((item) => !cameraBrand || item.brand === cameraBrand);
     const lenses = visibleLenses.filter((item) => !lensBrand || item.brand === lensBrand);
     setRecommendations(
-      recommendCombinations(cameras, lenses, { widthMm, heightMm }, { allowRotate, includeReview, limit: 100 }),
+      recommendCombinations(
+        cameras,
+        lenses,
+        { widthMm: widthMm + margin, heightMm: heightMm + margin },
+        { allowRotate, includeReview, limit: 100, toleranceMm: tolerance && tolerance > 0 ? tolerance : null },
+      ),
     );
   };
 
@@ -235,28 +246,34 @@ export function FovWorkbench({
           <div className="target-layout">
             <section className="paper-panel target-input">
               <span className="panel-index">01 / TARGET</span>
-              <h2>输入必须拍全的尺寸</h2>
+              <h2>设定目标与拍摄余量</h2>
               <div className="dimension-grid">
                 <label>
                   目标宽度（mm）
-                  <input
-                    type="number"
-                    min="0.001"
-                    step="any"
-                    value={targetWidth}
-                    onChange={(event) => setTargetWidth(event.target.value)}
-                  />
+                  <span className="dimension-input">
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      value={targetWidth}
+                      onChange={(event) => setTargetWidth(event.target.value)}
+                    />
+                    <MarginStepper value={marginMm} onChange={setMarginMm} />
+                  </span>
                 </label>
-                <span>×</span>
+                <span className="dimension-times">×</span>
                 <label>
                   目标高度（mm）
-                  <input
-                    type="number"
-                    min="0.001"
-                    step="any"
-                    value={targetHeight}
-                    onChange={(event) => setTargetHeight(event.target.value)}
-                  />
+                  <span className="dimension-input">
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      value={targetHeight}
+                      onChange={(event) => setTargetHeight(event.target.value)}
+                    />
+                    <MarginStepper value={marginMm} onChange={setMarginMm} />
+                  </span>
                 </label>
               </div>
               <div className="filter-grid">
@@ -283,10 +300,30 @@ export function FovWorkbench({
                 <input type="checkbox" checked={includeReview} onChange={(event) => setIncludeReview(event.target.checked)} />
                 包含兼容性待确认组合
               </label>
+              <label className="check-row">
+                <input type="checkbox" checked={toleranceEnabled} onChange={(event) => setToleranceEnabled(event.target.checked)} />
+                按公差带筛选解析度（可选）
+              </label>
+              {toleranceEnabled && (
+                <label className="tolerance-field">
+                  <span>公差带 T（mm）</span>
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    value={toleranceMm}
+                    onChange={(event) => setToleranceMm(event.target.value)}
+                    placeholder="如 0.15"
+                  />
+                </label>
+              )}
               <button className="primary-button recommend-button" type="button" onClick={runRecommendations}>
                 查找完整覆盖组合
               </button>
-              <p className="formula-note">必须同时满足：FOV 宽 ≥ 目标宽，且 FOV 高 ≥ 目标高。</p>
+              <p className="formula-note">
+                按「宽 + 余量」×「高 + 余量」搜索覆盖组合，避免画面刚好顶满目标边缘。
+                {toleranceEnabled && " 并按 T/10 准则判定解析度。"}
+              </p>
             </section>
 
             <section className="paper-panel recommendation-panel">
@@ -301,6 +338,9 @@ export function FovWorkbench({
                 <>
                   <p className="match-summary">
                     找到 <b>{recommendations.totalMatches}</b> 个组合，显示最接近目标的前 {recommendations.items.length} 个。
+                    {toleranceEnabled && recommendations.exclusions.insufficientResolution > 0 && (
+                      <> 其中解析度不达标或无法判定的 <b>{recommendations.exclusions.insufficientResolution}</b> 个已排除。</>
+                    )}
                   </p>
                   <div className="recommendation-table-wrap">
                     <table>
@@ -310,6 +350,7 @@ export function FovWorkbench({
                           <th>FOV（mm）</th>
                           <th>超出目标</th>
                           <th>精度</th>
+                          {toleranceEnabled && <th>解析度判定</th>}
                           <th>状态</th>
                           <th>操作</th>
                         </tr>
@@ -319,16 +360,27 @@ export function FovWorkbench({
                           <tr key={item.id}>
                             <td>
                               <b>{item.camera.model}</b>
-                              <span>{item.lens.model} · {magnificationNumber.format(item.fov.magnification)}×</span>
+                              <span className="rec-sub">{item.lens.model} · {magnificationNumber.format(item.fov.magnification)}×</span>
                             </td>
                             <td>{number.format(item.fov.widthMm)} × {number.format(item.fov.heightMm)}</td>
                             <td>
                               +{number.format(item.widthOverMm)} / +{number.format(item.heightOverMm)}
-                              <span>{percent.format(item.widthOverRate * 100)}% / {percent.format(item.heightOverRate * 100)}%</span>
+                              <span className="rec-sub">{percent.format(item.widthOverRate * 100)}% / {percent.format(item.heightOverRate * 100)}%</span>
                             </td>
                             <td>{number.format(item.fov.umPerPixelX)} μm/px</td>
-                            <td><StatusBadge status={item.compatibility.status} rotated={item.rotated} /></td>
-                            <td>
+                            {toleranceEnabled && (
+                              <td className="resolution-cell">
+                                <div className="resolution-value">
+                                  <b>{item.lensResolutionMm === null ? "—" : `${formatMicron(item.effectiveResolutionMm)} μm`}</b>
+                                  <ResolutionBadge status={item.resolutionStatus} />
+                                </div>
+                                {item.lensResolutionMm !== null && (
+                                  <span className="rec-sub">像元 {formatMicron(item.pixelMm)} μm · 镜头 {formatMicron(item.lensResolutionMm)} μm</span>
+                                )}
+                              </td>
+                            )}
+                            <td className="status-cell"><StatusBadge status={item.compatibility.status} rotated={item.rotated} /></td>
+                            <td className="action-cell">
                               <button
                                 type="button"
                                 aria-label={`查看 ${item.camera.model} 与 ${item.lens.model}`}
@@ -437,6 +489,32 @@ function StatusBadge({
     <span className={`status-badge status-badge--${status}`}>
       {status === "compatible" ? "兼容" : status === "review" ? "待确认" : "不兼容"}
       {rotated ? " · 已旋转" : ""}
+    </span>
+  );
+}
+
+function ResolutionBadge({ status }: { status: ResolutionStatus }) {
+  const label = status === "pass" ? "达标" : status === "fail" ? "不足" : "未知";
+  return <span className={`resolution-badge resolution-badge--${status}`}>{label}</span>;
+}
+
+function MarginStepper({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const step = (delta: number) => {
+    const next = (Number(value) || 0) + delta;
+    onChange(String(Math.max(0, next)));
+  };
+  return (
+    <span className="margin-stepper" aria-label="容错余量">
+      <button type="button" onClick={() => step(-1)} aria-label="容错余量减 1 mm">−</button>
+      <input
+        type="number"
+        min="0"
+        step="any"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label="容错余量数值（mm）"
+      />
+      <button type="button" onClick={() => step(1)} aria-label="容错余量加 1 mm">+</button>
     </span>
   );
 }

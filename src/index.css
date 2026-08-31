@@ -203,7 +203,8 @@ nav a:hover, nav a:focus-visible { color: var(--cyan); }
 .workbench-content { min-width: 0; }
 .workbench-content > .tool-panel,
 .workbench-content > .fov-shell,
-.workbench-content > .repeatability-tool-host { margin-top: 22px; }
+.workbench-content > .repeatability-tool-host,
+.workbench-content > .correlation-tool-host { margin-top: 22px; }
 
 /* ─── Tool Card ─── */
 .tool-card {
@@ -271,6 +272,12 @@ nav a:hover, nav a:focus-visible { color: var(--cyan); }
   box-shadow: 9px 9px 0 var(--orange); font-weight: 700; line-height: 1.6;
 }
 .repeatability-load-error strong { display: block; margin-bottom: 8px; font-size: 1.2rem; }
+.correlation-tool-host { margin-top: 28px; min-width: 0; }
+.correlation-load-error {
+  padding: 28px; color: var(--ink); background: var(--paper); border: 3px solid var(--ink);
+  box-shadow: 9px 9px 0 var(--orange); font-weight: 700; line-height: 1.6;
+}
+.correlation-load-error strong { display: block; margin-bottom: 8px; font-size: 1.2rem; }
 
 /* ─── Future Cards ─── */
 .future-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin-top: 64px; }

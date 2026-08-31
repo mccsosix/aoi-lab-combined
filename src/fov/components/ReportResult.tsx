@@ -68,7 +68,14 @@ export function ReportResult({
           <DetailRow label="像元尺寸" value={camera.pixelSizeXUm ? `${compact(camera.pixelSizeXUm)} μm` : "—"} />
           <DetailRow label="景深（DOF）" value={report.dofMm === null ? "—" : `${dofSign}${fixed(report.dofMm, 2)} mm`} />
           <DetailRow label="镜头（Lens）" value={report.lensModel} />
-          <DetailRow label="镜头分辨率" value={report.lensResolutionMm === null ? "—" : `${fixed(report.lensResolutionMm, 3)} mm/pixel`} />
+          <DetailRow
+            label="镜头分辨率"
+            value={
+              report.lensResolutionMm === null
+                ? "—"
+                : `${fixed(report.lensResolutionMm, 3)} mm/pixel${report.lensResolutionSource === "diffraction" ? "（估算）" : ""}`
+            }
+          />
         </div>
       </section>
 
@@ -94,11 +101,12 @@ export function ReportResult({
           <Detail label="工作距离" value={lens.workingDistanceMm ? `${compact(lens.workingDistanceMm)} mm` : "—"} />
           <Detail label="镜头原始 DOF" value={lens.depthOfFieldMm ? `${compact(lens.depthOfFieldMm)} mm${lens.depthOfFieldAperture ? ` @ ${lens.depthOfFieldAperture}` : ""}` : "—"} />
           <Detail label="镜头 MTF" value={lens.imageMtfLpMmMin ? `≥ ${compact(lens.imageMtfLpMmMin)} lp/mm` : "—"} />
+          <Detail label="镜头光圈" value={lens.aperture ?? "—"} />
           <Detail label="镜头像圈" value={lens.maxSensorDiagonalMm ? `${compact(lens.maxSensorDiagonalMm)} mm` : "—"} />
           <Detail label="镜头接口" value={lens.mount ?? "—"} />
         </div>
         <p className="calculation-note">
-          DOF 按项目约定使用“镜头资料值 × 实际倍率”；Lens Resolution 为基于镜头图像侧 MTF 的半周期估算值。
+          DOF 按项目约定使用“镜头资料值 × 实际倍率”；Lens Resolution 优先由镜头图像侧 MTF 换算（1 ÷ 2·MTF·倍率），缺 MTF 时按光圈 F# 的衍射极限估算（1.22·λ·F# ÷ 倍率，λ=0.55 µm）。
         </p>
       </details>
     </>

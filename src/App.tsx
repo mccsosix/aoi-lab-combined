@@ -10,6 +10,7 @@ import CaseQueryTool from './components/case-query/CaseQueryTool';
 import SheetGeneratorTool from './components/sheet-generator/SheetGeneratorTool';
 import { FovWorkbench } from './fov/components/FovWorkbench';
 import RepeatabilityWorkbench from './repeatability/RepeatabilityWorkbench';
+import CorrelationWorkbench from './correlation/CorrelationWorkbench';
 
 type OpenToolId = Exclude<ToolId, null>;
 
@@ -33,6 +34,11 @@ const TOOL_META: Record<OpenToolId, { index: string; title: string; description:
     index: '04',
     title: '重复性分析',
     description: '导入重复性 Excel，自动重算 6σ，定位异常并辅助调机判断',
+  },
+  correlation: {
+    index: '05',
+    title: '相关性判断',
+    description: '导入对样表格，判断 CCD 能否对齐 QV，批量评估多产品多乘坐',
   },
 };
 
@@ -138,13 +144,12 @@ export default function App() {
                 />
                 <ToolCard
                   index="05" id="correlation"
-                  title="相关性分析"
-                  description="用于后续 QV / CCD 等相关性评估"
-                  tags={['相关性', '预留模块']}
+                  title="相关性判断"
+                  description="导入对样表格，判断 CCD 与 QV 能否对齐"
+                  tags={['QV/CCD', '批量比对', 'Excel']}
                   icon={<CorrelationIcon />}
                   isActive={false}
-                  disabled
-                  statusText="开发中"
+                  onOpen={() => handleOpen('correlation')}
                 />
               </div>
             </section>
@@ -175,6 +180,7 @@ export default function App() {
               {activeTool === 'sheet-generator' && <SheetGeneratorTool onClose={handleClose} showClose={false} />}
               {activeTool === 'fov' && <FovWorkbench onBack={handleClose} showBackAction={false} />}
               {activeTool === 'repeatability' && <RepeatabilityWorkbench onBack={handleClose} />}
+              {activeTool === 'correlation' && <CorrelationWorkbench onBack={handleClose} />}
             </div>
           </section>
         )}

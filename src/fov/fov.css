@@ -285,6 +285,16 @@
 .fov-shell .check-row input { width: 20px; min-height: 20px; margin: 0; }
 .fov-shell .lens-compat-toggle { margin-top: -4px; }
 
+.fov-shell .tolerance-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 14px;
+  font-size: .78rem;
+  font-weight: 750;
+}
+
 .selection-note {
   display: flex;
   min-height: 74px;
@@ -396,6 +406,28 @@
 .fov-shell .status-badge--review { background: #ffd6a0; border-color: #c9822f; }
 .fov-shell .status-badge--incompatible { color: #fff; background: var(--fov-error); border-color: var(--fov-error); }
 
+.fov-shell .resolution-cell .resolution-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.fov-shell .resolution-cell b { font: 750 .82rem/1.3 var(--font-geist-mono); }
+.fov-shell .resolution-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 21px;
+  padding: 0 7px;
+  color: #08304f;
+  background: #b9ece3;
+  border: 1px solid #4a9f95;
+  font: 800 .6rem/1 var(--font-geist-mono);
+  white-space: nowrap;
+}
+.fov-shell .resolution-badge--fail { color: #fff; background: var(--fov-error); border-color: var(--fov-error); }
+.fov-shell .resolution-badge--unknown { color: #6b4e1e; background: #f3e4c8; border-color: #c8a45f; }
+
 .fov-shell .result-details { margin-top: 14px; border: 1px solid rgba(4, 43, 73, .55); }
 .fov-shell .result-details summary { padding: 12px 14px; background: #fffef7; font-size: .8rem; font-weight: 800; cursor: pointer; }
 .fov-shell .result-details[open] summary { border-bottom: 1px solid rgba(4, 43, 73, .55); background: #e5f5f2; }
@@ -414,10 +446,53 @@
   align-items: end;
   gap: 8px;
 }
-.fov-shell .dimension-grid > span { padding-bottom: 13px; font-weight: 900; }
+.fov-shell .dimension-grid > .dimension-times { padding-bottom: 13px; font-weight: 900; }
 .fov-shell .dimension-grid label,
 .fov-shell .filter-grid label,
 .fov-shell .form-grid label { display: flex; min-width: 0; flex-direction: column; gap: 7px; font-size: .78rem; font-weight: 750; }
+
+.fov-shell .dimension-input {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.fov-shell .dimension-input > input { flex: 1; min-width: 0; }
+.fov-shell .margin-stepper {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 43px;
+  background: #fffef7;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.fov-shell .margin-stepper button {
+  width: 27px;
+  min-height: 41px;
+  padding: 0;
+  color: var(--ink);
+  background: #eef5f3;
+  border: 0;
+  font: 800 1rem/1 var(--font-geist-mono);
+  cursor: pointer;
+}
+.fov-shell .margin-stepper button:hover { background: var(--cyan); }
+.fov-shell .margin-stepper button + input { border-left: 1px solid rgba(4, 43, 73, .22); }
+.fov-shell .margin-stepper input {
+  width: 34px;
+  min-height: 41px;
+  padding: 0 4px;
+  text-align: center;
+  background: transparent;
+  border: 0;
+  font: 700 .82rem/1 var(--font-geist-mono);
+  -moz-appearance: textfield;
+}
+.fov-shell .margin-stepper input::-webkit-outer-spin-button,
+.fov-shell .margin-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.fov-shell .margin-stepper input:focus { outline: none; box-shadow: none; }
 .fov-shell .filter-grid { margin-top: 18px; }
 .fov-shell .primary-button { color: var(--ink); background: var(--cyan); border: 1px solid var(--ink) !important; box-shadow: 3px 3px 0 var(--ink); }
 .fov-shell .primary-button:hover,
@@ -434,10 +509,12 @@
   border: 1px solid var(--ink);
 }
 .fov-shell .recommendation-panel table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: .76rem; }
-.fov-shell .recommendation-panel th { position: sticky; top: 0; z-index: 1; padding: 10px; text-align: left; background: #c9eeea; border-bottom: 1px solid var(--ink); }
-.fov-shell .recommendation-panel td { padding: 10px; vertical-align: top; border-bottom: 1px solid rgba(4, 43, 73, .17); }
-.fov-shell .recommendation-panel td span { display: block; margin-top: 4px; color: rgba(4, 43, 73, .58); }
-.fov-shell .recommendation-panel td button { min-height: 32px; padding: 0 10px; color: var(--ink); background: transparent; }
+.fov-shell .recommendation-panel th { position: sticky; top: 0; z-index: 1; padding: 10px; text-align: left; background: #c9eeea; border-bottom: 1px solid var(--ink); white-space: nowrap; }
+.fov-shell .recommendation-panel td { padding: 10px; vertical-align: middle; border-bottom: 1px solid rgba(4, 43, 73, .17); }
+.fov-shell .recommendation-panel td .rec-sub { display: block; margin-top: 4px; color: rgba(4, 43, 73, .58); }
+.fov-shell .recommendation-panel .status-cell,
+.fov-shell .recommendation-panel .action-cell { white-space: nowrap; }
+.fov-shell .recommendation-panel td button { min-height: 32px; padding: 0 12px; color: var(--ink); background: transparent; }
 .fov-shell .recommendation-panel td button:hover { background: var(--cyan); }
 .fov-shell .empty-state { padding: 22px; line-height: 1.65; text-align: center; border: 1px dashed rgba(4, 43, 73, .48); }
 .fov-shell .target-empty-state { display: grid; min-height: 240px; place-content: center; gap: 5px; }

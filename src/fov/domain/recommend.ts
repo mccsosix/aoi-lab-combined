@@ -1,6 +1,9 @@
 import { checkCompatibility } from "./compatibility";
 import { calculateFov, checkCoverage, selectMagnificationForTarget } from "./fov";
+import { lensResolutionMm, type LensResolutionSource } from "./lens-resolution";
 import type { Camera, CompatibilityResult, FovResult, Lens, TargetFov } from "./types";
+
+export type ResolutionStatus = "pass" | "fail" | "unknown";
 
 export type Recommendation = {
   id: string;
@@ -14,6 +17,11 @@ export type Recommendation = {
   heightOverMm: number;
   widthOverRate: number;
   heightOverRate: number;
+  pixelMm: number;
+  lensResolutionMm: number | null;
+  lensResolutionSource: LensResolutionSource;
+  effectiveResolutionMm: number | null;
+  resolutionStatus: ResolutionStatus;
 };
 
 export type Exclusions = {
@@ -21,15 +29,18 @@ export type Exclusions = {
   missingData: number;
   mountOrCircle: number;
   insufficientFov: number;
+  insufficientResolution: number;
 };
 
 export function recommendCombinations(
   cameras: Camera[],
   lenses: Lens[],
   target: TargetFov,
-  options: { allowRotate?: boolean; includeReview?: boolean; limit?: number } = {},
+  options: { allowRotate?: boolean; includeReview?: boolean; limit?: number; toleranceMm?: number | null } = {},
 ) {
-  const exclusions: Exclusions = { disabled: 0, missingData: 0, mountOrCircle: 0, insufficientFov: 0 };
+  const exclusions: Exclusions = { disabled: 0, missingData: 0, mountOrCircle: 0, insufficientFov: 0, insufficientResolution: 0 };
+  // 公差带 T 存在时，目标系统解析度按最严端 R = T/10 作为达标线
+  const requiredR = options.toleranceMm && options.toleranceMm > 0 ? options.toleranceMm / 10 : null;
   const items: Recommendation[] = [];
   for (const camera of cameras) {
     for (const lens of lenses) {
@@ -43,6 +54,21 @@ export function recommendCombinations(
       try { fov = calculateFov(camera, lens, magnification); } catch { exclusions.missingData++; continue; }
       const coverage = checkCoverage(fov, target, Boolean(options.allowRotate));
       if (!coverage.covered) { exclusions.insufficientFov++; continue; }
+
+      const pixelMm = fov.mmPerPixelX;
+      const lensResolution = lensResolutionMm(lens, fov.magnification);
+      const lensResolutionMmValue = lensResolution.valueMm;
+      const effectiveResolutionMm = lensResolutionMmValue === null ? pixelMm : Math.max(pixelMm, lensResolutionMmValue);
+      const resolutionStatus: ResolutionStatus =
+        lensResolutionMmValue === null
+          ? "unknown"
+          : requiredR === null
+            ? "pass"
+            : effectiveResolutionMm <= requiredR
+              ? "pass"
+              : "fail";
+      if (requiredR !== null && resolutionStatus !== "pass") { exclusions.insufficientResolution++; continue; }
+
       const widthOverMm = fov.widthMm - coverage.usedTarget.widthMm;
       const heightOverMm = fov.heightMm - coverage.usedTarget.heightMm;
       const widthOverRate = widthOverMm / coverage.usedTarget.widthMm;
@@ -52,6 +78,11 @@ export function recommendCombinations(
         camera, lens, fov, compatibility, rotated: coverage.rotated,
         score: Math.hypot(widthOverRate, heightOverRate),
         widthOverMm, heightOverMm, widthOverRate, heightOverRate,
+        pixelMm,
+        lensResolutionMm: lensResolutionMmValue,
+        lensResolutionSource: lensResolution.source,
+        effectiveResolutionMm,
+        resolutionStatus,
       });
     }
   }

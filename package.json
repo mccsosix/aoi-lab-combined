@@ -13,6 +13,7 @@
     "verify:workspace": "node scripts/verify-workspace-navigation.mjs"
   },
   "dependencies": {
+    "echarts": "^5.6.0",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "react": "^19.2.7",

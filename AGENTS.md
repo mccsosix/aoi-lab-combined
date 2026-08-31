@@ -16,14 +16,16 @@
 | 02 | sheet-generator 表格生成器 | 可用 |
 | 03 | fov FOV 选型工具 | 可用 |
 | 04 | repeatability 重复性分析 | 可用 |
-| 05 | correlation 相关性分析 | 占位，`disabled`，底层 `src/lib/correlation.ts` 存在但未暴露前端 |
+| 05 | correlation 相关性判断 | 可用 |
 
-工具切换用 React `useState`，**无路由 / 无 URL**（本地打开、GitHub Pages 子路径都不会 404）。`src/types.ts` 的 `ToolId` 联合目前不含 `'correlation'`。
+工具切换用 React `useState`，**无路由 / 无 URL**（本地打开、GitHub Pages 子路径都不会 404）。`src/types.ts` 的 `ToolId` 联合包含全部五个 slug。
 
 ## 技术栈与关键依赖
 - `exceljs` 生成 Excel；`xlsx` 解析上传；`jszip` 做 XLSX 的 ZIP 后处理
+- `echarts` 渲染相关性判断的散点图（经 `src/correlation/` 宿主注入 Shadow DOM 隔离脚本）
 - 图表（折线图 lineChart）通过 `src/lib/chart-injector.ts` 向 Excel 注入 OOXML
 - 重复性分析 V1.6 通过 React 宿主 + Shadow DOM 隔离运行（`src/repeatability/repeatability-v1.6.html`），避免其全局 CSS/DOM 影响其它模块
+- 相关性判断 v13 同样用 React 宿主 + Shadow DOM 隔离（`src/correlation/correlation-v13.html`），依赖（echarts/xlsx）由宿主从 npm 注入，不再走 CDN
 - FOV 设备资料库用浏览器 IndexedDB 本地保存
 
 ## 目录与约定
@@ -31,6 +33,7 @@
 - `src/components/`：布局（Header/Footer/ToolCard/ToolWorkbenchNav/HelpModal/Icons）+ `case-query/` + `sheet-generator/`
 - `src/fov/`：FOV 工作台、设备资料库、IndexedDB 存储、默认数据 `data/`（cameras.json 1,147 台 / lenses.json 426 款）
 - `src/repeatability/`：重复性分析 React 宿主 + 隔离源码
+- `src/correlation/`：相关性判断 React 宿主 + 隔离源码（`correlation-v13.html`）
 - **样式前缀规范**：按功能命名（`generator-*`、`cq-*`、`vpp-*`、`fov-*`），全局样式集中在 `src/index.css`，FOV 样式独立放 `src/fov/fov.css`
 - **设计规范（强制）**：开发前先读 `SUBPAGE_DESIGN_GUIDELINES.md` 与 `FRONTEND_DESIGN_GUIDELINES.md`
   - 配色：navy #072F50 背景 / paper #FFFAEA 纸张 / cyan #24D4D3 强调 / orange #FF9D2E 操作
@@ -42,5 +45,5 @@
 - 历次合并/导入的一次性记录（根目录 `INTEGRATION_NOTES.md`、`REPEATABILITY_INTEGRATION_NOTES.md`、`docs/FOV_CAMERA_IMPORT_NOTES.md`、`docs/superpowers/` 等）已在 2026-08-14 收尾中删除，内容保留在 git 历史里，不再维护；权威文档以本文件 + README + 代码为准。
 
 ## 下一步
-- 05 相关性分析仍为占位，开放前需补前端界面并决定是否把 `src/lib/correlation.ts` 接入。
 - 改动 FOV 默认数据（`src/fov/data/*.json`）后需重跑 `npm run build:offline` 更新离线版。
+- `src/lib/correlation.ts` 仍是表格生成器侧的「相关性评估 Excel」生成逻辑（供 02 表格生成器用），与 05 相关性判断器（读对样表做对齐判断）职责不同，勿混淆。

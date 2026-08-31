@@ -1,3 +1,4 @@
+import { lensResolutionMm, type LensResolutionSource } from "./lens-resolution";
 import type { Camera, FovResult, Lens } from "./types";
 
 export type ReportResult = {
@@ -15,11 +16,12 @@ export type ReportResult = {
   dofAperture: string | null;
   resolutionMmPerPixel: number;
   lensResolutionMm: number | null;
+  lensResolutionSource: LensResolutionSource;
 };
 
 export function buildReportResult(camera: Camera, lens: Lens, fov: FovResult): ReportResult {
   const dofSourceMm = lens.depthOfFieldMm && lens.depthOfFieldMm > 0 ? lens.depthOfFieldMm : null;
-  const mtf = lens.imageMtfLpMmMin && lens.imageMtfLpMmMin > 0 ? lens.imageMtfLpMmMin : null;
+  const lensResolution = lensResolutionMm(lens, fov.magnification);
   return {
     cameraModel: camera.model,
     lensModel: lens.model,
@@ -34,7 +36,8 @@ export function buildReportResult(camera: Camera, lens: Lens, fov: FovResult): R
     dofSymmetric: Boolean(lens.depthOfFieldSymmetric),
     dofAperture: lens.depthOfFieldAperture ?? null,
     resolutionMmPerPixel: fov.mmPerPixelX,
-    lensResolutionMm: mtf === null ? null : 1 / (2 * mtf * fov.magnification),
+    lensResolutionMm: lensResolution.valueMm,
+    lensResolutionSource: lensResolution.source,
   };
 }
 
@@ -59,6 +62,6 @@ export function formatReportText(result: ReportResult): string {
     `FOV：${fixed(result.fovWidthMm, 2)} × ${fixed(result.fovHeightMm, 2)} mm`,
     `DOF：${dof}`,
     `Resolution：${fixed(result.resolutionMmPerPixel, 5)} mm/pixel`,
-    `Lens Resolution：${result.lensResolutionMm === null ? "—" : `${fixed(result.lensResolutionMm, 3)} mm/pixel`}`,
+    `Lens Resolution：${result.lensResolutionMm === null ? "—" : `${fixed(result.lensResolutionMm, 3)} mm/pixel${result.lensResolutionSource === "diffraction" ? "（衍射极限估算）" : ""}`}`,
   ].join("\n");
 }
