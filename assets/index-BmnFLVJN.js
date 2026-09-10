@@ -1570,13 +1570,14 @@ const CAUSES={
 };
 
 function median(a){const x=[...a].sort((p,q)=>p-q); if(!x.length)return 0; const m=Math.floor(x.length/2); return x.length%2?x[m]:(x[m-1]+x[m])/2;}
-function robustRun(item){
+function outlierStats(item){
   const v=(item.measurements||[]).map(Number).filter(Number.isFinite); if(v.length<4)return null;
   const med=median(v); const dev=v.map(x=>Math.abs(x-med)); const mad=median(dev) || (sampleStdev(v)/2) || 1e-12;
   let idx=0,max=-1; dev.forEach((d,i)=>{if(d>max){max=d;idx=i;}});
   const score=max/(mad+1e-12);
-  return score>=5?{index:idx,score,value:v[idx],median:med}:null;
+  return {index:idx,score,value:v[idx],median:med,mad};
 }
+function robustRun(item){ const s=outlierStats(item); return s && s.score>=5 ? {index:s.index,score:s.score,value:s.value,median:s.median} : null; }
 function sameContext(a,b){return a.angle===b.angle&&a.station===b.station&&a.category===b.category&&a.product===b.product;}
 function groupRunEvidence(target,all){
   const peers=all.filter(x=>sameContext(x,target));
@@ -1640,7 +1641,17 @@ function diagnoseItem(target, allItems, experience={}){
       '同上下文其他 Item 未形成足够的同步异常覆盖率'
     ],'measurement_tool', [['measurement_tool',100],['template_match',62],['image_processing',58],['mechanism_fixture',35]],experience);
   }
-  return result('unstable_unspecified','low',['测量波动偏高，但当前数据未形成足够明确的单点、同 Item、同图像组或跨图像组模式'],'measurement_tool', [['measurement_tool',60],['image_processing',58],['shared_positioning',52],['mechanism_fixture',45]],experience);
+  const stats=outlierStats(target);
+  if(stats && stats.score>=2.5){
+    return result('mild_outlier','medium',[
+      \`Run \${stats.index+1} 略偏离其余测量（偏离指数 \${stats.score.toFixed(1)}，未达强离群标准 5）\`,
+      '整体波动仍偏高，但无法确认是单点偶发还是系统性分散'
+    ],'measurement_tool', [['measurement_tool',100],['template_match',70],['image_processing',60],['mechanism_fixture',40]],experience);
+  }
+  return result('systematic_spread','low',[
+    '整体 σ 偏高，且没有单一离群 Run，波动呈系统性分散',
+    '建议从定位稳定性、图像处理一致性、机构重复定位三个方向排查'
+  ],'image_processing', [['image_processing',100],['shared_positioning',82],['mechanism_fixture',70],['measurement_tool',55]],experience);
 }
 
 Object.assign(AOI,{diagnoseItem});
@@ -1760,6 +1771,15 @@ const fmt=(v,d=2)=>Number.isFinite(Number(v))?Number(v).toFixed(d):'—';
 const statusLabel={accepted:'完全认可',conditional:'条件认可',rejected:'不认可',pending:'待确认'};
 const statusClass={accepted:'accepted',conditional:'conditional',rejected:'rejected',pending:'pending'};
 const causeOptions={measurement_tool:'抓点 / 测量工具异常',item_vision_scheme:'Item 视觉方案稳定性偏弱',shared_positioning:'同图像组共用定位 / 基准异常',mechanism_fixture:'机构重复定位 / 产品姿态异常',template_match:'模板匹配偶发偏移',baseline:'基准线 / 基准点不稳定',image_processing:'图像处理参数敏感'};
+const patternMeta={
+  global_run_sync:{label:'跨图像组同步漂移',explain:'同一 Run 在多个独立 Image Group 同步偏移，指向放料 / 机构层面的共性因素'},
+  image_group_sync:{label:'同图像组同步漂移',explain:'同一 Run 在同一 Image Group 内多个 Item 同步偏移，指向共用定位 / 基准'},
+  item_scheme_instability:{label:'跨产品复现',explain:'同一 Item 在多个产品中重复性都偏高，指向该 Item 共用的视觉测量方案'},
+  single_outlier:{label:'单点离群',explain:'某个 Run 明显偏离其余测量值，指向偶发的抓点 / 匹配异常'},
+  mild_outlier:{label:'疑似单点离群',explain:'某个 Run 略偏离，但未达到强离群标准，需结合趋势图与现场判断'},
+  systematic_spread:{label:'系统性分散',explain:'整体波动偏高且无单一离群点，指向定位 / 图像处理 / 机构稳定性'},
+  unstable_unspecified:{label:'暂未形成明确模式',explain:'数据不足以形成明确模式，建议结合趋势图与现场观察'}
+};
 
 const state={
   records:[],experience:[],recordCenterTab:'records',recordScope:'all',validationExpanded:false,before:null,after:null,beforeBuffer:null,afterBuffer:null,
@@ -1916,7 +1936,8 @@ function riskDistributionRow(label,count,total,kind=''){const width=total?Math.m
 
 function anomalyCards(items){
   if(!items.length)return \`<div class="anomaly-list"><div class="anomaly-head">没有 ≥10% 的异常 Item</div></div>\`;
-  return \`<div class="anomaly-list"><div class="anomaly-head">重点异常项（按 6σ 降序）</div>\${items.slice(0,3).map((x,i)=>\`<div class="anomaly-item" data-select-key="\${esc(buildItemKey(x))}"><div class="rank \${i===1?'secondary':i===2?'third':''}">\${i+1}</div><div><div class="item-name">\${esc(x.item)}</div><div class="item-sub">\${esc([x.product,x.angle,x.station,x.category].filter(Boolean).join(' · '))}</div></div><div class="item-value">\${fmt(x.metrics?.sixSigmaPercent)}%</div><div class="bar"><span style="width:\${Math.min(100,(x.metrics?.sixSigmaPercent||0)*4)}%"></span></div></div>\`).join('')}</div>\`;
+  const badge=x=>\`<span class="status-text \${statusClass[x.status]}" style="font-size:12px;margin-left:8px">\${statusLabel[x.status]}</span>\`;
+  return \`<div class="anomaly-list"><div class="anomaly-head">重点异常 · 按严重度降序（前 \${Math.min(8,items.length)} / \${items.length}）</div>\${items.slice(0,8).map((x,i)=>\`<div class="anomaly-item" data-select-key="\${esc(buildItemKey(x))}"><div class="rank \${i===1?'secondary':i===2?'third':''}">\${i+1}</div><div><div class="item-name">\${esc(x.item)}\${badge(x)}</div><div class="item-sub">\${esc([x.product,x.angle,x.station,x.category].filter(Boolean).join(' · '))}</div></div><div class="item-value">\${fmt(x.metrics?.sixSigmaPercent)}%</div><div class="bar"><span style="width:\${Math.min(100,(x.metrics?.sixSigmaPercent||0)*4)}%"></span></div></div>\`).join('')}</div>\`;
 }
 function renderOverview(){
   const el=$('#overviewContent');if(!state.before){el.innerHTML=emptyImport();bindDynamic();return;}
@@ -1939,7 +1960,7 @@ function renderOverview(){
   \${overviewValidationHtml()}
   <div class="overview-grid"><div>
     \${anomalyCards(sum.anomalies)}
-    <div class="hero-actions"><button class="btn primary" data-jump="locate">去定位异常 →</button><button class="linklike" data-jump="locate">查看完整异常列表 ›</button></div>
+    <div class="hero-actions"><button class="btn primary" id="btnDiagnoseWorst">诊断最严重项 →</button><button class="btn cyan" data-jump="locate">去定位异常 →</button><button class="linklike" data-jump="locate">查看完整异常列表 ›</button></div>
   </div><div class="card soft risk-box">
     <div class="risk-section"><div class="risk-section-title">风险分布</div>
       \${riskDistributionRow('&lt;10%',r.acceptedCount,r.total,'accepted')}
@@ -1992,7 +2013,7 @@ async function renderDiagnose(){
   const el=$('#diagnoseContent');const item=selectedItem();if(!item){el.innerHTML=emptyImport();bindDynamic();return;}const exp=await experienceCounts(currentAnalysisId()).catch(()=>({}));const d=diagnoseItem(item,state.before.items,exp);item._diagnostic=d;const m=item.metrics;
   const projectExperienceCount=Object.values(exp?.projectCounts||{}).reduce((a,b)=>a+Number(b||0),0);const globalExperienceCount=Object.values(exp?.globalCounts||{}).reduce((a,b)=>a+Number(b||0),0);
   const causeSelect=\`<select id="actualCause">\${Object.entries(causeOptions).map(([k,v])=>\`<option value="\${k}" \${k===d.causes[0]?.code?'selected':''}>\${esc(v)}</option>\`).join('')}</select>\`;
-  el.innerHTML=\`<div style="font-size:20px;font-weight:900;margin-bottom:14px">\${esc(item.item)} · \${esc([item.product,item.angle,item.station,item.category,item.imageGroup].filter(Boolean).join(' · '))}</div><div class="metric-strip">\${[['AVG',m?.avg],['MAX',m?.max],['MIN',m?.min],['GAP',m?.gap],['σ',m?.sigma],['6σ',m?.sixSigmaPercent]].map(([k,v],i)=>\`<div class="metric \${i===5&&item.status==='rejected'?'bad':''}"><div class="m-k">\${k}</div><div class="m-v">\${v==null?'—':fmt(v,i===5?2:4)}\${i===5&&v!=null?'%':''}</div></div>\`).join('')}</div><div class="diag-layout"><div class="panel-box diag-chart-card"><div class="diag-chart-head"><h3>重复测量趋势（Run 1 ~ Run \${item.measurements.length}）</h3><span class="diag-chart-hint">鼠标悬停 / 键盘聚焦查看数据</span></div>\${trendSvg(item)}\${trendRunTable(item)}<div class="small-note" style="margin-top:10px">蓝线：实测值；Cyan：AVG；橙色虚线：AVG ± 3σ。原始 Run 数据不会被自动删除。</div></div><div class="panel-box diag-result-card"><div class="diag-title"><h3 style="margin:0">诊断结果（本地规则）</h3><div class="diag-badge">置信度：\${d.confidence==='high'?'高':d.confidence==='medium'?'中':'低'}</div></div><div style="font-size:28px;font-weight:900;margin-bottom:10px">\${esc(d.causes[0]?.label||'暂无法明确分类')}</div><div style="font-weight:900">判断依据</div><ul class="diagnosis-evidence">\${d.evidence.map(x=>\`<li>\${esc(x)}</li>\`).join('')}</ul><div style="font-weight:900;margin-top:16px">疑似原因 TOP \${Math.min(3,d.causes.length)}</div><div>\${d.causes.slice(0,3).map((c,i)=>\`<span class="cause-chip">\${i+1}. \${esc(c.label)}</span>\`).join('')}</div><div style="font-weight:900;margin-top:16px">优先检查</div><ol class="check-list">\${d.checks.slice(0,5).map(x=>\`<li>\${esc(x)}</li>\`).join('')}</ol></div></div><div class="panel-box experience-panel"><div class="experience-panel-head"><div><h3>现场确认 / 经验记录</h3><div class="small-note" style="margin-top:5px">确认系统判断或修正实际原因，保存后会写入本机工程经验数据，用于后续诊断候选原因排序。</div></div><div class="experience-meta">当前文件 \${projectExperienceCount} 条经验<br>本机累计 \${globalExperienceCount} 条经验</div></div><div class="experience-grid"><div class="field"><label>现场确认的实际原因</label>\${causeSelect}</div><div class="field"><label>处理备注</label><textarea id="experienceNote" maxlength="500" placeholder="例如：PMAlign 正常，实际是基准线 ROI 抓到旁边结构…"></textarea></div><div class="experience-buttons"><button class="btn cyan" id="btnCorrect" type="button">✓ 判断正确</button><button class="btn primary" id="btnSaveExperience" type="button">保存经验</button></div></div><div class="small-note experience-footnote">“判断正确”会直接记录系统第一判断；“保存经验”会记录你选择的实际原因与备注。</div></div>\`;bindDynamic();
+  el.innerHTML=\`<div style="font-size:20px;font-weight:900;margin-bottom:14px">\${esc(item.item)} · \${esc([item.product,item.angle,item.station,item.category,item.imageGroup].filter(Boolean).join(' · '))}</div><div class="metric-strip">\${[['AVG',m?.avg],['MAX',m?.max],['MIN',m?.min],['GAP',m?.gap],['σ',m?.sigma],['6σ',m?.sixSigmaPercent]].map(([k,v],i)=>\`<div class="metric \${i===5&&item.status==='rejected'?'bad':''}"><div class="m-k">\${k}</div><div class="m-v">\${v==null?'—':fmt(v,i===5?2:4)}\${i===5&&v!=null?'%':''}</div></div>\`).join('')}</div><div class="diag-layout"><div class="panel-box diag-chart-card"><div class="diag-chart-head"><h3>重复测量趋势（Run 1 ~ Run \${item.measurements.length}）</h3><span class="diag-chart-hint">鼠标悬停 / 键盘聚焦查看数据</span></div>\${trendSvg(item)}\${trendRunTable(item)}<div class="small-note" style="margin-top:10px">蓝线：实测值；Cyan：AVG；橙色虚线：AVG ± 3σ。原始 Run 数据不会被自动删除。</div></div><div class="panel-box diag-result-card"><div class="diag-title"><h3 style="margin:0">数据呈现的模式</h3><div class="diag-badge">证据强度：\${d.confidence==='high'?'强':d.confidence==='medium'?'中':'弱'}</div></div><div style="font-size:26px;font-weight:900;margin-bottom:6px">\${esc(patternMeta[d.symptom]?.label||'暂未形成明确模式')}</div><div class="small-note" style="margin-bottom:12px">\${esc(patternMeta[d.symptom]?.explain||'')}</div><div style="font-weight:900">证据</div><ul class="diagnosis-evidence">\${d.evidence.map(x=>\`<li>\${esc(x)}</li>\`).join('')}</ul><div style="font-weight:900;margin-top:16px">建议排查方向</div><div>\${d.causes.slice(0,3).map((c,i)=>\`<span class="cause-chip">\${i+1}. \${esc(c.label)}</span>\`).join('')}</div><div style="font-weight:900;margin-top:16px">优先检查</div><ol class="check-list">\${d.checks.slice(0,5).map(x=>\`<li>\${esc(x)}</li>\`).join('')}</ol></div></div><div class="panel-box experience-panel"><div class="experience-panel-head"><div><h3>现场确认 / 经验记录</h3><div class="small-note" style="margin-top:5px">确认系统判断或修正实际原因，保存后会写入本机工程经验数据，用于后续诊断候选原因排序。</div></div><div class="experience-meta">当前文件 \${projectExperienceCount} 条经验<br>本机累计 \${globalExperienceCount} 条经验</div></div><div class="experience-grid"><div class="field"><label>现场确认的实际原因</label>\${causeSelect}</div><div class="field"><label>处理备注</label><textarea id="experienceNote" maxlength="500" placeholder="例如：PMAlign 正常，实际是基准线 ROI 抓到旁边结构…"></textarea></div><div class="experience-buttons"><button class="btn cyan" id="btnCorrect" type="button">✓ 判断正确</button><button class="btn primary" id="btnSaveExperience" type="button">保存经验</button></div></div><div class="small-note experience-footnote">“判断正确”会直接记录系统第一判断；“保存经验”会记录你选择的实际原因与备注。</div></div>\`;bindDynamic();
 }
 
 function compareHtml(cmp){
@@ -2107,6 +2128,7 @@ function bindDynamic(){
   $$('[data-filter]').forEach(s=>s.addEventListener('change',()=>{state.filters[s.dataset.filter]=s.value;renderLocate();}));
   $('#btnHeatMode')?.addEventListener('click',()=>{state.onlyAnomalyHeatmap=!state.onlyAnomalyHeatmap;renderLocate();});
   $('#btnDiagnoseSelected')?.addEventListener('click',()=>activate('diagnose'));
+  $('#btnDiagnoseWorst')?.addEventListener('click',()=>{const top=state.before?.summary?.anomalies?.[0];if(top){state.selectedKey=buildItemKey(top);}activate('diagnose');});
   $('#btnShowAllAbnormal')?.addEventListener('click',()=>{state.onlyAnomalyHeatmap=false;renderLocate();toast('已展开全部 Item；可结合状态筛选继续缩小范围');});
   $('#btnAfterFile')?.addEventListener('click',()=>$('#afterFileInput').click());
   const afterDrop=$('#afterDrop');if(afterDrop){afterDrop.addEventListener('dragover',e=>{e.preventDefault();afterDrop.classList.add('drag')});afterDrop.addEventListener('dragleave',()=>afterDrop.classList.remove('drag'));afterDrop.addEventListener('drop',e=>{e.preventDefault();afterDrop.classList.remove('drag');loadFile(e.dataTransfer.files[0],'after')});}
@@ -2240,918 +2262,1240 @@ yyyy`);var n=$a(t),i=e?"getUTC":"get",a=n[i+"FullYear"](),s=n[i+"Month"]()+1,o=n
 
 `:"<br/>",v=c.join(g);this._showOrMove(o,function(){this._updateContentNotChangedOnAxis(e,u)?this._updatePosition(o,h,s[0],s[1],this._tooltipContent,u):this._showTooltipContent(o,v,u,Math.random()+"",s[0],s[1],h,null,f)})},t.prototype._showSeriesItemTooltip=function(e,n,i){var a=this._ecModel,s=Pt(n),o=s.seriesIndex,l=a.getSeriesByIndex(o),u=s.dataModel||l,d=s.dataIndex,c=s.dataType,f=u.getData(c),h=this._renderMode,m=e.positionDefault,p=Vm([f.getItemModel(d),u,l&&(l.coordinateSystem||{}).model],this._tooltipModel,m?{position:m}:null),g=p.get("trigger");if(!(g!=null&&g!=="item")){var v=u.getDataParams(d,c),x=new zw;v.marker=x.makeTooltipMarker("item",Gc(v.color),h);var y=gF(u.formatTooltip(d,!1,c)),w=p.get("order"),_=p.get("valueFormatter"),D=y.frag,P=D?wF(_?We({valueFormatter:_},D):D,x,h,w,a.get("useUTC"),p.get("textStyle")):y.text,O="item_"+u.name+"_"+d;this._showOrMove(p,function(){this._showTooltipContent(p,P,v,O,e.offsetX,e.offsetY,e.position,e.target,x)}),i({type:"showTip",dataIndexInside:d,dataIndex:f.getRawIndex(d),seriesIndex:o,from:this.uid})}},t.prototype._showComponentItemTooltip=function(e,n,i){var a=this._renderMode==="html",s=Pt(n),o=s.tooltipConfig,l=o.option||{},u=l.encodeHTMLContent;if(ct(l)){var d=l;l={content:d,formatter:d},u=!0}u&&a&&l.content&&(l=kt(l),l.content=Hi(l.content));var c=[l],f=this._ecModel.getComponent(s.componentMainType,s.componentIndex);f&&c.push(f),c.push({formatter:l.content});var h=e.positionDefault,m=Vm(c,this._tooltipModel,h?{position:h}:null),p=m.get("content"),g=Math.random()+"",v=new zw;this._showOrMove(m,function(){var x=kt(m.get("formatterParams")||{});this._showTooltipContent(m,p,x,g,e.offsetX,e.offsetY,e.position,n,v)}),i({type:"showTip",from:this.uid})},t.prototype._showTooltipContent=function(e,n,i,a,s,o,l,u,d){if(this._ticket="",!(!e.get("showContent")||!e.get("show"))){var c=this._tooltipContent;c.setEnterable(e.get("enterable"));var f=e.get("formatter");l=l||e.get("position");var h=n,m=this._getNearestPoint([s,o],i,e.get("trigger"),e.get("borderColor")),p=m.color;if(f)if(ct(f)){var g=e.ecModel.get("useUTC"),v=Ge(i)?i[0]:i,x=v&&v.axisType&&v.axisType.indexOf("time")>=0;h=f,x&&(h=Z1(v.axisValue,h,g)),h=GS(h,i,!0)}else if(Tt(f)){var y=ht(function(w,_){w===this._ticket&&(c.setContent(_,d,e,p,l),this._updatePosition(e,l,s,o,c,i,u))},this);this._ticket=a,h=f(i,a,y)}else h=f;c.setContent(h,d,e,p,l),c.show(e,p),this._updatePosition(e,l,s,o,c,i,u)}},t.prototype._getNearestPoint=function(e,n,i,a){if(i==="axis"||Ge(n))return{color:a||(this._renderMode==="html"?"#fff":"none")};if(!Ge(n))return{color:a||n.color||n.borderColor}},t.prototype._updatePosition=function(e,n,i,a,s,o,l){var u=this._api.getWidth(),d=this._api.getHeight();n=n||e.get("position");var c=s.getSize(),f=e.get("align"),h=e.get("verticalAlign"),m=l&&l.getBoundingRect().clone();if(l&&m.applyTransform(l.transform),Tt(n)&&(n=n([i,a],o,s.el,m,{viewSize:[u,d],contentSize:c.slice()})),Ge(n))i=ut(n[0],u),a=ut(n[1],d);else if(At(n)){var p=n;p.width=c[0],p.height=c[1];var g=Hn(p,{width:u,height:d});i=g.x,a=g.y,f=null,h=null}else if(ct(n)&&l){var v=Cwe(n,m,c,e.get("borderWidth"));i=v[0],a=v[1]}else{var v=_we(i,a,s,u,d,f?null:20,h?null:20);i=v[0],a=v[1]}if(f&&(i-=FO(f)?c[0]/2:f==="right"?c[0]:0),h&&(a-=FO(h)?c[1]/2:h==="bottom"?c[1]:0),yj(e)){var v=Twe(i,a,s,u,d);i=v[0],a=v[1]}s.moveTo(i,a)},t.prototype._updateContentNotChangedOnAxis=function(e,n){var i=this._lastDataByCoordSys,a=this._cbParamsList,s=!!i&&i.length===e.length;return s&&oe(i,function(o,l){var u=o.dataByAxis||[],d=e[l]||{},c=d.dataByAxis||[];s=s&&u.length===c.length,s&&oe(u,function(f,h){var m=c[h]||{},p=f.seriesDataIndices||[],g=m.seriesDataIndices||[];s=s&&f.value===m.value&&f.axisType===m.axisType&&f.axisId===m.axisId&&p.length===g.length,s&&oe(p,function(v,x){var y=g[x];s=s&&v.seriesIndex===y.seriesIndex&&v.dataIndex===y.dataIndex}),a&&oe(f.seriesDataIndices,function(v){var x=v.seriesIndex,y=n[x],w=a[x];y&&w&&w.data!==y.data&&(s=!1)})})}),this._lastDataByCoordSys=e,this._cbParamsList=n,!!s},t.prototype._hide=function(e){this._lastDataByCoordSys=null,e({type:"hideTip",from:this.uid})},t.prototype.dispose=function(e,n){rr.node||!n.getDom()||(c1(this,"_updatePosition"),this._tooltipContent.dispose(),$6("itemTooltip",n))},t.type="tooltip",t})(ln);function Vm(r,t,e){var n=t.ecModel,i;e?(i=new Ar(e,n,n),i=new Ar(t.option,i,n)):i=t;for(var a=r.length-1;a>=0;a--){var s=r[a];s&&(s instanceof Ar&&(s=s.get("tooltip",!0)),ct(s)&&(s={formatter:s}),s&&(i=new Ar(s,i,n)))}return i}function DO(r,t){return r.dispatchAction||ht(t.dispatchAction,t)}function _we(r,t,e,n,i,a,s){var o=e.getSize(),l=o[0],u=o[1];return a!=null&&(r+l+a+2>n?r-=l+a:r+=a),s!=null&&(t+u+s>i?t-=u+s:t+=s),[r,t]}function Twe(r,t,e,n,i){var a=e.getSize(),s=a[0],o=a[1];return r=Math.min(r+s,n)-s,t=Math.min(t+o,i)-o,r=Math.max(r,0),t=Math.max(t,0),[r,t]}function Cwe(r,t,e,n){var i=e[0],a=e[1],s=Math.ceil(Math.SQRT2*n)+8,o=0,l=0,u=t.width,d=t.height;switch(r){case"inside":o=t.x+u/2-i/2,l=t.y+d/2-a/2;break;case"top":o=t.x+u/2-i/2,l=t.y-a-s;break;case"bottom":o=t.x+u/2-i/2,l=t.y+d+s;break;case"left":o=t.x-i-s,l=t.y+d/2-a/2;break;case"right":o=t.x+u+s,l=t.y+d/2-a/2}return[o,l]}function FO(r){return r==="center"||r==="middle"}function Awe(r,t,e){var n=wS(r).queryOptionMap,i=n.keys()[0];if(!(!i||i==="series")){var a=H1(t,i,n.get(i),{useDefault:!1,enableAll:!1,enableNone:!1}),s=a.models[0];if(s){var o=e.getViewOfComponentModel(s),l;if(o.group.traverse(function(u){var d=Pt(u).tooltipConfig;if(d&&d.name===r.name)return l=u,!0}),l)return{componentMainType:i,componentIndex:s.componentIndex,el:l}}}}function kwe(r){Qt(ig),r.registerComponentModel(dwe),r.registerComponentView(Swe),r.registerAction({type:"showTip",event:"showTip",update:"tooltip:manuallyShowTip"},Tn),r.registerAction({type:"hideTip",event:"hideTip",update:"tooltip:manuallyHideTip"},Tn)}var Dwe=["rect","polygon","keep","clear"];function Fwe(r,t){var e=qr(r?r.brush:[]);if(e.length){var n=[];oe(e,function(l){var u=l.hasOwnProperty("toolbox")?l.toolbox:[];u instanceof Array&&(n=n.concat(u))});var i=r&&r.toolbox;Ge(i)&&(i=i[0]),i||(i={feature:{}},r.toolbox=[i]);var a=i.feature||(i.feature={}),s=a.brush||(a.brush={}),o=s.type||(s.type=[]);o.push.apply(o,n),Ewe(o),t&&!o.length&&o.push.apply(o,Dwe)}}function Ewe(r){var t={};oe(r,function(e){t[e]=1}),r.length=0,oe(t,function(e,n){r.push(n)})}var EO=oe;function zO(r){if(r){for(var t in r)if(r.hasOwnProperty(t))return!0}}function t8(r,t,e){var n={};return EO(t,function(a){var s=n[a]=i();EO(r[a],function(o,l){if(ai.isValidType(l)){var u={type:l,visual:o};e&&e(u,a),s[l]=new ai(u),l==="opacity"&&(u=kt(u),u.type="colorAlpha",s.__hidden.__alphaForOpacity=new ai(u))}})}),n;function i(){var a=function(){};a.prototype.__hidden=a.prototype;var s=new a;return s}}function _j(r,t,e){var n;oe(e,function(i){t.hasOwnProperty(i)&&zO(t[i])&&(n=!0)}),n&&oe(e,function(i){t.hasOwnProperty(i)&&zO(t[i])?r[i]=kt(t[i]):delete r[i]})}function zwe(r,t,e,n,i,a){var s={};oe(r,function(c){var f=ai.prepareVisualTypes(t[c]);s[c]=f});var o;function l(c){return r_(e,o,c)}function u(c,f){WN(e,o,c,f)}e.each(d);function d(c,f){o=c;var h=e.getRawDataItem(o);if(!(h&&h.visualMap===!1))for(var m=n.call(i,c),p=t[m],g=s[m],v=0,x=g.length;v<x;v++){var y=g[v];p[y]&&p[y].applyVisual(c,l,u)}}}function Pwe(r,t,e,n){var i={};return oe(r,function(a){var s=ai.prepareVisualTypes(t[a]);i[a]=s}),{progress:function(s,o){var l;n!=null&&(l=o.getDimensionIndex(n));function u(_){return r_(o,c,_)}function d(_,D){WN(o,c,_,D)}for(var c,f=o.getStore();(c=s.next())!=null;){var h=o.getRawDataItem(c);if(!(h&&h.visualMap===!1))for(var m=n!=null?f.get(l,c):c,p=e(m),g=t[p],v=i[p],x=0,y=v.length;x<y;x++){var w=v[x];g[w]&&g[w].applyVisual(m,u,d)}}}}}function Owe(r){var t=r.brushType,e={point:function(n){return PO[t].point(n,e,r)},rect:function(n){return PO[t].rect(n,e,r)}};return e}var PO={lineX:OO(0),lineY:OO(1),rect:{point:function(r,t,e){return r&&e.boundingRect.contain(r[0],r[1])},rect:function(r,t,e){return r&&e.boundingRect.intersect(r)}},polygon:{point:function(r,t,e){return r&&e.boundingRect.contain(r[0],r[1])&&cc(e.range,r[0],r[1])},rect:function(r,t,e){var n=e.range;if(!r||n.length<=1)return!1;var i=r.x,a=r.y,s=r.width,o=r.height,l=n[0];if(cc(n,i,a)||cc(n,i+s,a)||cc(n,i,a+o)||cc(n,i+s,a+o)||jt.create(r).contain(l[0],l[1])||np(i,a,i+s,a,n)||np(i,a,i,a+o,n)||np(i+s,a,i+s,a+o,n)||np(i,a+o,i+s,a+o,n))return!0}}};function OO(r){var t=["x","y"],e=["width","height"];return{point:function(n,i,a){if(n){var s=a.range,o=n[r];return Gm(o,s)}},rect:function(n,i,a){if(n){var s=a.range,o=[n[t[r]],n[t[r]]+n[e[r]]];return o[1]<o[0]&&o.reverse(),Gm(o[0],s)||Gm(o[1],s)||Gm(s[0],o)||Gm(s[1],o)}}}}function Gm(r,t){return t[0]<=r&&r<=t[1]}var UO=["inBrush","outOfBrush"],Y3="__ecBrushSelect",r8="__ecInBrushSelectEvent";function Tj(r){r.eachComponent({mainType:"brush"},function(t){var e=t.brushTargetManager=new vT(t.option,r);e.setInputRanges(t.areas,r)})}function Uwe(r,t,e){var n=[],i,a;r.eachComponent({mainType:"brush"},function(s){e&&e.type==="takeGlobalCursor"&&s.setBrushOption(e.key==="brush"?e.brushOption:{brushType:!1})}),Tj(r),r.eachComponent({mainType:"brush"},function(s,o){var l={brushId:s.id,brushIndex:o,brushName:s.name,areas:kt(s.areas),selected:[]};n.push(l);var u=s.option,d=u.brushLink,c=[],f=[],h=[],m=!1;o||(i=u.throttleType,a=u.throttleDelay);var p=Ze(s.areas,function(_){var D=Bwe[_.brushType],P=Ct({boundingRect:D?D(_):void 0},_);return P.selectors=Owe(P),P}),g=t8(s.option,UO,function(_){_.mappingMethod="fixed"});Ge(d)&&oe(d,function(_){c[_]=1});function v(_){return d==="all"||!!c[_]}function x(_){return!!_.length}r.eachSeries(function(_,D){var P=h[D]=[];_.subType==="parallel"?y(_,D):w(_,D,P)});function y(_,D){var P=_.coordinateSystem;m=m||P.hasAxisBrushed(),v(D)&&P.eachActiveState(_.getData(),function(O,U){O==="active"&&(f[U]=1)})}function w(_,D,P){if(!(!_.brushSelector||Lwe(s,D))&&(oe(p,function(U){s.brushTargetManager.controlSeries(U,_,r)&&P.push(U),m=m||x(P)}),v(D)&&x(P))){var O=_.getData();O.each(function(U){IO(_,P,O,U)&&(f[U]=1)})}}r.eachSeries(function(_,D){var P={seriesId:_.id,seriesIndex:D,seriesName:_.name,dataIndex:[]};l.selected.push(P);var O=h[D],U=_.getData(),L=v(D)?function(W){return f[W]?(P.dataIndex.push(U.getRawIndex(W)),"inBrush"):"outOfBrush"}:function(W){return IO(_,O,U,W)?(P.dataIndex.push(U.getRawIndex(W)),"inBrush"):"outOfBrush"};(v(D)?m:x(O))&&zwe(UO,g,U,L)})}),Iwe(t,i,a,n,e)}function Iwe(r,t,e,n,i){if(i){var a=r.getZr();if(!a[r8]){a[Y3]||(a[Y3]=Rwe);var s=yh(a,Y3,e,t);s(r,n)}}}function Rwe(r,t){if(!r.isDisposed()){var e=r.getZr();e[r8]=!0,r.dispatchAction({type:"brushSelect",batch:t}),e[r8]=!1}}function IO(r,t,e,n){for(var i=0,a=t.length;i<a;i++){var s=t[i];if(r.brushSelector(n,e,s.selectors,s))return!0}}function Lwe(r,t){var e=r.option.seriesIndex;return e!=null&&e!=="all"&&(Ge(e)?Vt(e,t)<0:t!==e)}var Bwe={rect:function(r){return RO(r.range)},polygon:function(r){for(var t,e=r.range,n=0,i=e.length;n<i;n++){t=t||[[1/0,-1/0],[1/0,-1/0]];var a=e[n];a[0]<t[0][0]&&(t[0][0]=a[0]),a[0]>t[0][1]&&(t[0][1]=a[0]),a[1]<t[1][0]&&(t[1][0]=a[1]),a[1]>t[1][1]&&(t[1][1]=a[1])}return t&&RO(t)}};function RO(r){return new jt(r[0][0],r[1][0],r[0][1]-r[0][0],r[1][1]-r[1][0])}var Nwe=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.init=function(e,n){this.ecModel=e,this.api=n,this.model,(this._brushController=new j_(n.getZr())).on("brush",ht(this._onBrush,this)).mount()},t.prototype.render=function(e,n,i,a){this.model=e,this._updateController(e,n,i,a)},t.prototype.updateTransform=function(e,n,i,a){Tj(n),this._updateController(e,n,i,a)},t.prototype.updateVisual=function(e,n,i,a){this.updateTransform(e,n,i,a)},t.prototype.updateView=function(e,n,i,a){this._updateController(e,n,i,a)},t.prototype._updateController=function(e,n,i,a){(!a||a.$from!==e.id)&&this._brushController.setPanels(e.brushTargetManager.makePanelOpts(i)).enableBrush(e.brushOption).updateCovers(e.areas.slice())},t.prototype.dispose=function(){this._brushController.dispose()},t.prototype._onBrush=function(e){var n=this.model.id,i=this.model.brushTargetManager.setOutputRanges(e.areas,this.ecModel);(!e.isEnd||e.removeOnClick)&&this.api.dispatchAction({type:"brush",brushId:n,areas:kt(i),$from:n}),e.isEnd&&this.api.dispatchAction({type:"brushEnd",brushId:n,areas:kt(i),$from:n})},t.type="brush",t})(ln),Hwe="#ddd",Wwe=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.areas=[],e.brushOption={},e}return t.prototype.optionUpdated=function(e,n){var i=this.option;!n&&_j(i,e,["inBrush","outOfBrush"]);var a=i.inBrush=i.inBrush||{};i.outOfBrush=i.outOfBrush||{color:Hwe},a.hasOwnProperty("liftZ")||(a.liftZ=5)},t.prototype.setAreas=function(e){e&&(this.areas=Ze(e,function(n){return LO(this.option,n)},this))},t.prototype.setBrushOption=function(e){this.brushOption=LO(this.option,e),this.brushType=this.brushOption.brushType},t.type="brush",t.dependencies=["geo","grid","xAxis","yAxis","parallel","series"],t.defaultOption={seriesIndex:"all",brushType:"rect",brushMode:"single",transformable:!0,brushStyle:{borderWidth:1,color:"rgba(210,219,238,0.3)",borderColor:"#D2DBEE"},throttleType:"fixRate",throttleDelay:0,removeOnClick:!0,z:1e4},t})(tr);function LO(r,t){return Bt({brushType:r.brushType,brushMode:r.brushMode,transformable:r.transformable,brushStyle:new Ar(r.brushStyle).getItemStyle(),removeOnClick:r.removeOnClick,z:r.z},t,!0)}var Xwe=["rect","polygon","lineX","lineY","keep","clear"],jwe=(function(r){ke(t,r);function t(){return r!==null&&r.apply(this,arguments)||this}return t.prototype.render=function(e,n,i){var a,s,o;n.eachComponent({mainType:"brush"},function(l){a=l.brushType,s=l.brushOption.brushMode||"single",o=o||!!l.areas.length}),this._brushType=a,this._brushMode=s,oe(e.get("type",!0),function(l){e.setIconStatus(l,(l==="keep"?s==="multiple":l==="clear"?o:l===a)?"emphasis":"normal")})},t.prototype.updateView=function(e,n,i){this.render(e,n,i)},t.prototype.getIcons=function(){var e=this.model,n=e.get("icon",!0),i={};return oe(e.get("type",!0),function(a){n[a]&&(i[a]=n[a])}),i},t.prototype.onclick=function(e,n,i){var a=this._brushType,s=this._brushMode;i==="clear"?(n.dispatchAction({type:"axisAreaSelect",intervals:[]}),n.dispatchAction({type:"brush",command:"clear",areas:[]})):n.dispatchAction({type:"takeGlobalCursor",key:"brush",brushOption:{brushType:i==="keep"?a:a===i?!1:i,brushMode:i==="keep"?s==="multiple"?"single":"multiple":s}})},t.getDefaultOption=function(e){var n={show:!0,type:Xwe.slice(),icon:{rect:"M7.3,34.7 M0.4,10V-0.2h9.8 M89.6,10V-0.2h-9.8 M0.4,60v10.2h9.8 M89.6,60v10.2h-9.8 M12.3,22.4V10.5h13.1 M33.6,10.5h7.8 M49.1,10.5h7.8 M77.5,22.4V10.5h-13 M12.3,31.1v8.2 M77.7,31.1v8.2 M12.3,47.6v11.9h13.1 M33.6,59.5h7.6 M49.1,59.5 h7.7 M77.5,47.6v11.9h-13",polygon:"M55.2,34.9c1.7,0,3.1,1.4,3.1,3.1s-1.4,3.1-3.1,3.1 s-3.1-1.4-3.1-3.1S53.5,34.9,55.2,34.9z M50.4,51c1.7,0,3.1,1.4,3.1,3.1c0,1.7-1.4,3.1-3.1,3.1c-1.7,0-3.1-1.4-3.1-3.1 C47.3,52.4,48.7,51,50.4,51z M55.6,37.1l1.5-7.8 M60.1,13.5l1.6-8.7l-7.8,4 M59,19l-1,5.3 M24,16.1l6.4,4.9l6.4-3.3 M48.5,11.6 l-5.9,3.1 M19.1,12.8L9.7,5.1l1.1,7.7 M13.4,29.8l1,7.3l6.6,1.6 M11.6,18.4l1,6.1 M32.8,41.9 M26.6,40.4 M27.3,40.2l6.1,1.6 M49.9,52.1l-5.6-7.6l-4.9-1.2",lineX:"M15.2,30 M19.7,15.6V1.9H29 M34.8,1.9H40.4 M55.3,15.6V1.9H45.9 M19.7,44.4V58.1H29 M34.8,58.1H40.4 M55.3,44.4 V58.1H45.9 M12.5,20.3l-9.4,9.6l9.6,9.8 M3.1,29.9h16.5 M62.5,20.3l9.4,9.6L62.3,39.7 M71.9,29.9H55.4",lineY:"M38.8,7.7 M52.7,12h13.2v9 M65.9,26.6V32 M52.7,46.3h13.2v-9 M24.9,12H11.8v9 M11.8,26.6V32 M24.9,46.3H11.8v-9 M48.2,5.1l-9.3-9l-9.4,9.2 M38.9-3.9V12 M48.2,53.3l-9.3,9l-9.4-9.2 M38.9,62.3V46.4",keep:"M4,10.5V1h10.3 M20.7,1h6.1 M33,1h6.1 M55.4,10.5V1H45.2 M4,17.3v6.6 M55.6,17.3v6.6 M4,30.5V40h10.3 M20.7,40 h6.1 M33,40h6.1 M55.4,30.5V40H45.2 M21,18.9h62.9v48.6H21V18.9z",clear:"M22,14.7l30.9,31 M52.9,14.7L22,45.7 M4.7,16.8V4.2h13.1 M26,4.2h7.8 M41.6,4.2h7.8 M70.3,16.8V4.2H57.2 M4.7,25.9v8.6 M70.3,25.9v8.6 M4.7,43.2v12.6h13.1 M26,55.8h7.8 M41.6,55.8h7.8 M70.3,43.2v12.6H57.2"},title:e.getLocaleModel().get(["toolbox","brush","title"])};return n},t})(Ms);function Vwe(r){r.registerComponentView(Nwe),r.registerComponentModel(Wwe),r.registerPreprocessor(Fwe),r.registerVisual(r.PRIORITY.VISUAL.BRUSH,Uwe),r.registerAction({type:"brush",event:"brush",update:"updateVisual"},function(t,e){e.eachComponent({mainType:"brush",query:t},function(n){n.setAreas(t.areas)})}),r.registerAction({type:"brushSelect",event:"brushSelected",update:"none"},Tn),r.registerAction({type:"brushEnd",event:"brushEnd",update:"none"},Tn),M0("brush",jwe)}var Gwe=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.layoutMode={type:"box",ignoreSize:!0},e}return t.type="title",t.defaultOption={z:6,show:!0,text:"",target:"blank",subtext:"",subtarget:"blank",left:0,top:0,backgroundColor:"rgba(0,0,0,0)",borderColor:"#ccc",borderWidth:0,padding:5,itemGap:10,textStyle:{fontSize:18,fontWeight:"bold",color:"#464646"},subtextStyle:{fontSize:12,color:"#6E7079"}},t})(tr),Zwe=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.render=function(e,n,i){if(this.group.removeAll(),!!e.get("show")){var a=this.group,s=e.getModel("textStyle"),o=e.getModel("subtextStyle"),l=e.get("textAlign"),u=Ut(e.get("textBaseline"),e.get("textVerticalAlign")),d=new dr({style:en(s,{text:e.get("text"),fill:s.getTextColor()},{disableBox:!0}),z2:10}),c=d.getBoundingRect(),f=e.get("subtext"),h=new dr({style:en(o,{text:f,fill:o.getTextColor(),y:c.height+e.get("itemGap"),verticalAlign:"top"},{disableBox:!0}),z2:10}),m=e.get("link"),p=e.get("sublink"),g=e.get("triggerEvent",!0);d.silent=!m&&!g,h.silent=!p&&!g,m&&d.on("click",function(){kx(m,"_"+e.get("target"))}),p&&h.on("click",function(){kx(p,"_"+e.get("subtarget"))}),Pt(d).eventData=Pt(h).eventData=g?{componentType:"title",componentIndex:e.componentIndex}:null,a.add(d),f&&a.add(h);var v=a.getBoundingRect(),x=e.getBoxLayoutParams();x.width=v.width,x.height=v.height;var y=Hn(x,{width:i.getWidth(),height:i.getHeight()},e.get("padding"));l||(l=e.get("left")||e.get("right"),l==="middle"&&(l="center"),l==="right"?y.x+=y.width:l==="center"&&(y.x+=y.width/2)),u||(u=e.get("top")||e.get("bottom"),u==="center"&&(u="middle"),u==="bottom"?y.y+=y.height:u==="middle"&&(y.y+=y.height/2),u=u||"top"),a.x=y.x,a.y=y.y,a.markRedraw();var w={align:l,verticalAlign:u};d.setStyle(w),h.setStyle(w),v=a.getBoundingRect();var _=y.margin,D=e.getItemStyle(["color","opacity"]);D.fill=e.get("backgroundColor");var P=new cr({shape:{x:v.x-_[3],y:v.y-_[0],width:v.width+_[1]+_[3],height:v.height+_[0]+_[2],r:e.get("borderRadius")},style:D,subPixelOptimize:!0,silent:!0});a.add(P)}},t.type="title",t})(ln);function Ywe(r){r.registerComponentModel(Gwe),r.registerComponentView(Zwe)}var BO=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.layoutMode="box",e}return t.prototype.init=function(e,n,i){this.mergeDefaultAndTheme(e,i),this._initData()},t.prototype.mergeOption=function(e){r.prototype.mergeOption.apply(this,arguments),this._initData()},t.prototype.setCurrentIndex=function(e){e==null&&(e=this.option.currentIndex);var n=this._data.count();this.option.loop?e=(e%n+n)%n:(e>=n&&(e=n-1),e<0&&(e=0)),this.option.currentIndex=e},t.prototype.getCurrentIndex=function(){return this.option.currentIndex},t.prototype.isIndexMax=function(){return this.getCurrentIndex()>=this._data.count()-1},t.prototype.setPlayState=function(e){this.option.autoPlay=!!e},t.prototype.getPlayState=function(){return!!this.option.autoPlay},t.prototype._initData=function(){var e=this.option,n=e.data||[],i=e.axisType,a=this._names=[],s;i==="category"?(s=[],oe(n,function(u,d){var c=Kn(oh(u),""),f;At(u)?(f=kt(u),f.value=d):f=d,s.push(f),a.push(c)})):s=n;var o={category:"ordinal",time:"time",value:"number"}[i]||"number",l=this._data=new Vi([{name:"value",type:o}],this);l.initData(s,a)},t.prototype.getData=function(){return this._data},t.prototype.getCategories=function(){if(this.get("axisType")==="category")return this._names.slice()},t.type="timeline",t.defaultOption={z:4,show:!0,axisType:"time",realtime:!0,left:"20%",top:null,right:"20%",bottom:0,width:null,height:40,padding:5,controlPosition:"left",autoPlay:!1,rewind:!1,loop:!0,playInterval:2e3,currentIndex:0,itemStyle:{},label:{color:"#000"},data:[]},t})(tr),Cj=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.type="timeline.slider",t.defaultOption=cd(BO.defaultOption,{backgroundColor:"rgba(0,0,0,0)",borderColor:"#ccc",borderWidth:0,orient:"horizontal",inverse:!1,tooltip:{trigger:"item"},symbol:"circle",symbolSize:12,lineStyle:{show:!0,width:2,color:"#DAE1F5"},label:{position:"auto",show:!0,interval:"auto",rotate:0,color:"#A4B1D7"},itemStyle:{color:"#A4B1D7",borderWidth:1},checkpointStyle:{symbol:"circle",symbolSize:15,color:"#316bf3",borderColor:"#fff",borderWidth:2,shadowBlur:2,shadowOffsetX:1,shadowOffsetY:1,shadowColor:"rgba(0, 0, 0, 0.3)",animation:!0,animationDuration:300,animationEasing:"quinticInOut"},controlStyle:{show:!0,showPlayBtn:!0,showPrevBtn:!0,showNextBtn:!0,itemSize:24,itemGap:12,position:"left",playIcon:"path://M31.6,53C17.5,53,6,41.5,6,27.4S17.5,1.8,31.6,1.8C45.7,1.8,57.2,13.3,57.2,27.4S45.7,53,31.6,53z M31.6,3.3 C18.4,3.3,7.5,14.1,7.5,27.4c0,13.3,10.8,24.1,24.1,24.1C44.9,51.5,55.7,40.7,55.7,27.4C55.7,14.1,44.9,3.3,31.6,3.3z M24.9,21.3 c0-2.2,1.6-3.1,3.5-2l10.5,6.1c1.899,1.1,1.899,2.9,0,4l-10.5,6.1c-1.9,1.1-3.5,0.2-3.5-2V21.3z",stopIcon:"path://M30.9,53.2C16.8,53.2,5.3,41.7,5.3,27.6S16.8,2,30.9,2C45,2,56.4,13.5,56.4,27.6S45,53.2,30.9,53.2z M30.9,3.5C17.6,3.5,6.8,14.4,6.8,27.6c0,13.3,10.8,24.1,24.101,24.1C44.2,51.7,55,40.9,55,27.6C54.9,14.4,44.1,3.5,30.9,3.5z M36.9,35.8c0,0.601-0.4,1-0.9,1h-1.3c-0.5,0-0.9-0.399-0.9-1V19.5c0-0.6,0.4-1,0.9-1H36c0.5,0,0.9,0.4,0.9,1V35.8z M27.8,35.8 c0,0.601-0.4,1-0.9,1h-1.3c-0.5,0-0.9-0.399-0.9-1V19.5c0-0.6,0.4-1,0.9-1H27c0.5,0,0.9,0.4,0.9,1L27.8,35.8L27.8,35.8z",nextIcon:"M2,18.5A1.52,1.52,0,0,1,.92,18a1.49,1.49,0,0,1,0-2.12L7.81,9.36,1,3.11A1.5,1.5,0,1,1,3,.89l8,7.34a1.48,1.48,0,0,1,.49,1.09,1.51,1.51,0,0,1-.46,1.1L3,18.08A1.5,1.5,0,0,1,2,18.5Z",prevIcon:"M10,.5A1.52,1.52,0,0,1,11.08,1a1.49,1.49,0,0,1,0,2.12L4.19,9.64,11,15.89a1.5,1.5,0,1,1-2,2.22L1,10.77A1.48,1.48,0,0,1,.5,9.68,1.51,1.51,0,0,1,1,8.58L9,.92A1.5,1.5,0,0,1,10,.5Z",prevBtnSize:18,nextBtnSize:18,color:"#A4B1D7",borderColor:"#A4B1D7",borderWidth:1},emphasis:{label:{show:!0,color:"#6f778d"},itemStyle:{color:"#316BF3"},controlStyle:{color:"#316BF3",borderColor:"#316BF3",borderWidth:2}},progress:{lineStyle:{color:"#316BF3"},itemStyle:{color:"#316BF3"},label:{color:"#6f778d"}},data:[]}),t})(BO);Cn(Cj,Zb.prototype);var $we=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.type="timeline",t})(ln),qwe=(function(r){ke(t,r);function t(e,n,i,a){var s=r.call(this,e,n,i)||this;return s.type=a||"value",s}return t.prototype.getLabelModel=function(){return this.model.getModel("label")},t.prototype.isHorizontal=function(){return this.model.get("orient")==="horizontal"},t})(Os),$3=Math.PI,NO=mr(),Kwe=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.init=function(e,n){this.api=n},t.prototype.render=function(e,n,i){if(this.model=e,this.api=i,this.ecModel=n,this.group.removeAll(),e.get("show",!0)){var a=this._layout(e,i),s=this._createGroup("_mainGroup"),o=this._createGroup("_labelGroup"),l=this._axis=this._createAxis(a,e);e.formatTooltip=function(u){var d=l.scale.getLabel({value:u});return li("nameValue",{noName:!0,value:d})},oe(["AxisLine","AxisTick","Control","CurrentPointer"],function(u){this["_render"+u](a,s,l,e)},this),this._renderAxisLabel(a,o,l,e),this._position(a,e)}this._doPlayStop(),this._updateTicksStatus()},t.prototype.remove=function(){this._clearTimer(),this.group.removeAll()},t.prototype.dispose=function(){this._clearTimer()},t.prototype._layout=function(e,n){var i=e.get(["label","position"]),a=e.get("orient"),s=Jwe(e,n),o;i==null||i==="auto"?o=a==="horizontal"?s.y+s.height/2<n.getHeight()/2?"-":"+":s.x+s.width/2<n.getWidth()/2?"+":"-":ct(i)?o={horizontal:{top:"-",bottom:"+"},vertical:{left:"-",right:"+"}}[a][i]:o=i;var l={horizontal:"center",vertical:o>=0||o==="+"?"left":"right"},u={horizontal:o>=0||o==="+"?"top":"bottom",vertical:"middle"},d={horizontal:0,vertical:$3/2},c=a==="vertical"?s.height:s.width,f=e.getModel("controlStyle"),h=f.get("show",!0),m=h?f.get("itemSize"):0,p=h?f.get("itemGap"):0,g=m+p,v=e.get(["label","rotate"])||0;v=v*$3/180;var x,y,w,_=f.get("position",!0),D=h&&f.get("showPlayBtn",!0),P=h&&f.get("showPrevBtn",!0),O=h&&f.get("showNextBtn",!0),U=0,L=c;_==="left"||_==="bottom"?(D&&(x=[0,0],U+=g),P&&(y=[U,0],U+=g),O&&(w=[L-m,0],L-=g)):(D&&(x=[L-m,0],L-=g),P&&(y=[0,0],U+=g),O&&(w=[L-m,0],L-=g));var W=[U,L];return e.get("inverse")&&W.reverse(),{viewRect:s,mainLength:c,orient:a,rotation:d[a],labelRotation:v,labelPosOpt:o,labelAlign:e.get(["label","align"])||l[a],labelBaseline:e.get(["label","verticalAlign"])||e.get(["label","baseline"])||u[a],playPosition:x,prevBtnPosition:y,nextBtnPosition:w,axisExtent:W,controlSize:m,controlGap:p}},t.prototype._position=function(e,n){var i=this._mainGroup,a=this._labelGroup,s=e.viewRect;if(e.orient==="vertical"){var o=ka(),l=s.x,u=s.y+s.height;no(o,o,[-l,-u]),ud(o,o,-$3/2),no(o,o,[l,u]),s=s.clone(),s.applyTransform(o)}var d=x(s),c=x(i.getBoundingRect()),f=x(a.getBoundingRect()),h=[i.x,i.y],m=[a.x,a.y];m[0]=h[0]=d[0][0];var p=e.labelPosOpt;if(p==null||ct(p)){var g=p==="+"?0:1;y(h,c,d,1,g),y(m,f,d,1,1-g)}else{var g=p>=0?0:1;y(h,c,d,1,g),m[1]=h[1]+p}i.setPosition(h),a.setPosition(m),i.rotation=a.rotation=e.rotation,v(i),v(a);function v(w){w.originX=d[0][0]-w.x,w.originY=d[1][0]-w.y}function x(w){return[[w.x,w.x+w.width],[w.y,w.y+w.height]]}function y(w,_,D,P,O){w[P]+=D[P][O]-_[P][O]}},t.prototype._createAxis=function(e,n){var i=n.getData(),a=n.get("axisType"),s=Qwe(n,a);s.getTicks=function(){return i.mapArray(["value"],function(u){return{value:u}})};var o=i.getDataExtent("value");s.setExtent(o[0],o[1]),s.calcNiceTicks();var l=new qwe("value",s,e.axisExtent,a);return l.model=n,l},t.prototype._createGroup=function(e){var n=this[e]=new zt;return this.group.add(n),n},t.prototype._renderAxisLine=function(e,n,i,a){var s=i.getExtent();if(a.get(["lineStyle","show"])){var o=new Qn({shape:{x1:s[0],y1:0,x2:s[1],y2:0},style:We({lineCap:"round"},a.getModel("lineStyle").getLineStyle()),silent:!0,z2:1});n.add(o);var l=this._progressLine=new Qn({shape:{x1:s[0],x2:this._currentPointer?this._currentPointer.x:s[0],y1:0,y2:0},style:Ct({lineCap:"round",lineWidth:o.style.lineWidth},a.getModel(["progress","lineStyle"]).getLineStyle()),silent:!0,z2:1});n.add(l)}},t.prototype._renderAxisTick=function(e,n,i,a){var s=this,o=a.getData(),l=i.scale.getTicks();this._tickSymbols=[],oe(l,function(u){var d=i.dataToCoord(u.value),c=o.getItemModel(u.value),f=c.getModel("itemStyle"),h=c.getModel(["emphasis","itemStyle"]),m=c.getModel(["progress","itemStyle"]),p={x:d,y:0,onclick:ht(s._changeTimeline,s,u.value)},g=HO(c,f,n,p);g.ensureState("emphasis").style=h.getItemStyle(),g.ensureState("progress").style=m.getItemStyle(),ju(g);var v=Pt(g);c.get("tooltip")?(v.dataIndex=u.value,v.dataModel=a):v.dataIndex=v.dataModel=null,s._tickSymbols.push(g)})},t.prototype._renderAxisLabel=function(e,n,i,a){var s=this,o=i.getLabelModel();if(o.get("show")){var l=a.getData(),u=i.getViewLabels();this._tickLabels=[],oe(u,function(d){var c=d.tickValue,f=l.getItemModel(c),h=f.getModel("label"),m=f.getModel(["emphasis","label"]),p=f.getModel(["progress","label"]),g=i.dataToCoord(d.tickValue),v=new dr({x:g,y:0,rotation:e.labelRotation-e.rotation,onclick:ht(s._changeTimeline,s,c),silent:!1,style:en(h,{text:d.formattedLabel,align:e.labelAlign,verticalAlign:e.labelBaseline})});v.ensureState("emphasis").style=en(m),v.ensureState("progress").style=en(p),n.add(v),ju(v),NO(v).dataIndex=c,s._tickLabels.push(v)})}},t.prototype._renderControl=function(e,n,i,a){var s=e.controlSize,o=e.rotation,l=a.getModel("controlStyle").getItemStyle(),u=a.getModel(["emphasis","controlStyle"]).getItemStyle(),d=a.getPlayState(),c=a.get("inverse",!0);f(e.nextBtnPosition,"next",ht(this._changeTimeline,this,c?"-":"+")),f(e.prevBtnPosition,"prev",ht(this._changeTimeline,this,c?"+":"-")),f(e.playPosition,d?"stop":"play",ht(this._handlePlayClick,this,!d),!0);function f(h,m,p,g){if(h){var v=io(Ut(a.get(["controlStyle",m+"BtnSize"]),s),s),x=[0,-v/2,v,v],y=e3e(a,m+"Icon",x,{x:h[0],y:h[1],originX:s/2,originY:0,rotation:g?-o:0,rectHover:!0,style:l,onclick:p});y.ensureState("emphasis").style=u,n.add(y),ju(y)}}},t.prototype._renderCurrentPointer=function(e,n,i,a){var s=a.getData(),o=a.getCurrentIndex(),l=s.getItemModel(o).getModel("checkpointStyle"),u=this,d={onCreate:function(c){c.draggable=!0,c.drift=ht(u._handlePointerDrag,u),c.ondragend=ht(u._handlePointerDragend,u),WO(c,u._progressLine,o,i,a,!0)},onUpdate:function(c){WO(c,u._progressLine,o,i,a)}};this._currentPointer=HO(l,l,this._mainGroup,{},this._currentPointer,d)},t.prototype._handlePlayClick=function(e){this._clearTimer(),this.api.dispatchAction({type:"timelinePlayChange",playState:e,from:this.uid})},t.prototype._handlePointerDrag=function(e,n,i){this._clearTimer(),this._pointerChangeTimeline([i.offsetX,i.offsetY])},t.prototype._handlePointerDragend=function(e){this._pointerChangeTimeline([e.offsetX,e.offsetY],!0)},t.prototype._pointerChangeTimeline=function(e,n){var i=this._toAxisCoord(e)[0],a=this._axis,s=Xa(a.getExtent().slice());i>s[1]&&(i=s[1]),i<s[0]&&(i=s[0]),this._currentPointer.x=i,this._currentPointer.markRedraw();var o=this._progressLine;o&&(o.shape.x2=i,o.dirty());var l=this._findNearestTick(i),u=this.model;(n||l!==u.getCurrentIndex()&&u.get("realtime"))&&this._changeTimeline(l)},t.prototype._doPlayStop=function(){var e=this;this._clearTimer(),this.model.getPlayState()&&(this._timer=setTimeout(function(){var n=e.model;e._changeTimeline(n.getCurrentIndex()+(n.get("rewind",!0)?-1:1))},this.model.get("playInterval")))},t.prototype._toAxisCoord=function(e){var n=this._mainGroup.getLocalTransform();return to(e,n,!0)},t.prototype._findNearestTick=function(e){var n=this.model.getData(),i=1/0,a,s=this._axis;return n.each(["value"],function(o,l){var u=s.dataToCoord(o),d=Math.abs(u-e);d<i&&(i=d,a=l)}),a},t.prototype._clearTimer=function(){this._timer&&(clearTimeout(this._timer),this._timer=null)},t.prototype._changeTimeline=function(e){var n=this.model.getCurrentIndex();e==="+"?e=n+1:e==="-"&&(e=n-1),this.api.dispatchAction({type:"timelineChange",currentIndex:e,from:this.uid})},t.prototype._updateTicksStatus=function(){var e=this.model.getCurrentIndex(),n=this._tickSymbols,i=this._tickLabels;if(n)for(var a=0;a<n.length;a++)n&&n[a]&&n[a].toggleState("progress",a<e);if(i)for(var a=0;a<i.length;a++)i&&i[a]&&i[a].toggleState("progress",NO(i[a]).dataIndex<=e)},t.type="timeline.slider",t})($we);function Qwe(r,t){if(t=t||r.get("type"),t)switch(t){case"category":return new ty({ordinalMeta:r.getCategories(),extent:[1/0,-1/0]});case"time":return new g_({locale:r.ecModel.getLocaleModel(),useUTC:r.ecModel.get("useUTC")});default:return new Pl}}function Jwe(r,t){return Hn(r.getBoxLayoutParams(),{width:t.getWidth(),height:t.getHeight()},r.get("padding"))}function e3e(r,t,e,n){var i=n.style,a=hh(r.get(["controlStyle",t]),n||{},new jt(e[0],e[1],e[2],e[3]));return i&&a.setStyle(i),a}function HO(r,t,e,n,i,a){var s=t.get("color");if(i)i.setColor(s),e.add(i),a&&a.onUpdate(i);else{var o=r.get("symbol");i=On(o,-1,-1,2,2,s),i.setStyle("strokeNoScale",!0),e.add(i),a&&a.onCreate(i)}var l=t.getItemStyle(["color"]);i.setStyle(l),n=Bt({rectHover:!0,z2:100},n,!0);var u=Mh(r.get("symbolSize"));n.scaleX=u[0]/2,n.scaleY=u[1]/2;var d=uf(r.get("symbolOffset"),u);d&&(n.x=(n.x||0)+d[0],n.y=(n.y||0)+d[1]);var c=r.get("symbolRotate");return n.rotation=(c||0)*Math.PI/180||0,i.attr(n),i.updateTransform(),i}function WO(r,t,e,n,i,a){if(!r.dragging){var s=i.getModel("checkpointStyle"),o=n.dataToCoord(i.getData().get("value",e));if(a||!s.get("animation",!0))r.attr({x:o,y:0}),t&&t.attr({shape:{x2:o}});else{var l={duration:s.get("animationDuration",!0),easing:s.get("animationEasing",!0)};r.stopAnimation(null,!0),r.animateTo({x:o,y:0},l),t&&t.animateTo({shape:{x2:o}},l)}}}function t3e(r){r.registerAction({type:"timelineChange",event:"timelineChanged",update:"prepareAndUpdate"},function(t,e,n){var i=e.getComponent("timeline");return i&&t.currentIndex!=null&&(i.setCurrentIndex(t.currentIndex),!i.get("loop",!0)&&i.isIndexMax()&&i.getPlayState()&&(i.setPlayState(!1),n.dispatchAction({type:"timelinePlayChange",playState:!1,from:t.from}))),e.resetOption("timeline",{replaceMerge:i.get("replaceMerge",!0)}),Ct({currentIndex:i.option.currentIndex},t)}),r.registerAction({type:"timelinePlayChange",event:"timelinePlayChanged",update:"update"},function(t,e){var n=e.getComponent("timeline");n&&t.playState!=null&&n.setPlayState(t.playState)})}function r3e(r){var t=r&&r.timeline;Ge(t)||(t=t?[t]:[]),oe(t,function(e){e&&n3e(e)})}function n3e(r){var t=r.type,e={number:"value",time:"time"};if(e[t]&&(r.axisType=e[t],delete r.type),XO(r),mc(r,"controlPosition")){var n=r.controlStyle||(r.controlStyle={});mc(n,"position")||(n.position=r.controlPosition),n.position==="none"&&!mc(n,"show")&&(n.show=!1,delete n.position),delete r.controlPosition}oe(r.data||[],function(i){At(i)&&!Ge(i)&&(!mc(i,"value")&&mc(i,"name")&&(i.value=i.name),XO(i))})}function XO(r){var t=r.itemStyle||(r.itemStyle={}),e=t.emphasis||(t.emphasis={}),n=r.label||r.label||{},i=n.normal||(n.normal={}),a={normal:1,emphasis:1};oe(n,function(s,o){!a[o]&&!mc(i,o)&&(i[o]=s)}),e.label&&!mc(n,"emphasis")&&(n.emphasis=e.label,delete e.label)}function mc(r,t){return r.hasOwnProperty(t)}function i3e(r){r.registerComponentModel(Cj),r.registerComponentView(Kwe),r.registerSubTypeDefaulter("timeline",function(){return"slider"}),t3e(r),r.registerPreprocessor(r3e)}function yT(r,t){if(!r)return!1;for(var e=Ge(r)?r:[r],n=0;n<e.length;n++)if(e[n]&&e[n][t])return!0;return!1}function w2(r){Wc(r,"label",["show"])}var S2=mr(),Ul=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.createdBySelf=!1,e}return t.prototype.init=function(e,n,i){this.mergeDefaultAndTheme(e,i),this._mergeOption(e,i,!1,!0)},t.prototype.isAnimationEnabled=function(){if(rr.node)return!1;var e=this.__hostSeries;return this.getShallow("animation")&&e&&e.isAnimationEnabled()},t.prototype.mergeOption=function(e,n){this._mergeOption(e,n,!1,!1)},t.prototype._mergeOption=function(e,n,i,a){var s=this.mainType;i||n.eachSeries(function(o){var l=o.get(this.mainType,!0),u=S2(o)[s];if(!l||!l.data){S2(o)[s]=null;return}u?u._mergeOption(l,n,!0):(a&&w2(l),oe(l.data,function(d){d instanceof Array?(w2(d[0]),w2(d[1])):w2(d)}),u=this.createMarkerModelFromSeries(l,this,n),We(u,{mainType:this.mainType,seriesIndex:o.seriesIndex,name:o.name,createdBySelf:!0}),u.__hostSeries=o),S2(o)[s]=u},this)},t.prototype.formatTooltip=function(e,n,i){var a=this.getData(),s=this.getRawValue(e),o=a.getName(e);return li("section",{header:this.name,blocks:[li("nameValue",{name:o,value:s,noName:!o,noValue:s==null})]})},t.prototype.getData=function(){return this._data},t.prototype.setData=function(e){this._data=e},t.prototype.getDataParams=function(e,n){var i=Zb.prototype.getDataParams.call(this,e,n),a=this.__hostSeries;return a&&(i.seriesId=a.id,i.seriesName=a.name,i.seriesType=a.subType),i},t.getMarkerModelFromSeries=function(e,n){return S2(e)[n]},t.type="marker",t.dependencies=["series","grid","polar","geo"],t})(tr);Cn(Ul,Zb.prototype);var a3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.createMarkerModelFromSeries=function(e,n,i){return new t(e,n,i)},t.type="markPoint",t.defaultOption={z:5,symbol:"pin",symbolSize:50,tooltip:{trigger:"item"},label:{show:!0,position:"inside"},itemStyle:{borderWidth:2},emphasis:{label:{show:!0}}},t})(Ul);function n8(r){return!(isNaN(parseFloat(r.x))&&isNaN(parseFloat(r.y)))}function s3e(r){return!isNaN(parseFloat(r.x))&&!isNaN(parseFloat(r.y))}function _2(r,t,e,n,i,a){var s=[],o=zl(t,n),l=o?t.getCalculationInfo("stackResultDimension"):n,u=MT(t,l,r),d=t.indicesOfNearest(l,u)[0];s[i]=t.get(e,d),s[a]=t.get(l,d);var c=t.get(n,d),f=Ys(t.get(n,d));return f=Math.min(f,20),f>=0&&(s[a]=+s[a].toFixed(f)),[s,c]}var q3={min:Rt(_2,"min"),max:Rt(_2,"max"),average:Rt(_2,"average"),median:Rt(_2,"median")};function T1(r,t){if(t){var e=r.getData(),n=r.coordinateSystem,i=n&&n.dimensions;if(!s3e(t)&&!Ge(t.coord)&&Ge(i)){var a=Aj(t,e,n,r);if(t=kt(t),t.type&&q3[t.type]&&a.baseAxis&&a.valueAxis){var s=Vt(i,a.baseAxis.dim),o=Vt(i,a.valueAxis.dim),l=q3[t.type](e,a.baseDataDim,a.valueDataDim,s,o);t.coord=l[0],t.value=l[1]}else t.coord=[t.xAxis!=null?t.xAxis:t.radiusAxis,t.yAxis!=null?t.yAxis:t.angleAxis]}if(t.coord==null||!Ge(i))t.coord=[];else for(var u=t.coord,d=0;d<2;d++)q3[u[d]]&&(u[d]=MT(e,e.mapDimension(i[d]),u[d]));return t}}function Aj(r,t,e,n){var i={};return r.valueIndex!=null||r.valueDim!=null?(i.valueDataDim=r.valueIndex!=null?t.getDimension(r.valueIndex):r.valueDim,i.valueAxis=e.getAxis(o3e(n,i.valueDataDim)),i.baseAxis=e.getOtherAxis(i.valueAxis),i.baseDataDim=t.mapDimension(i.baseAxis.dim)):(i.baseAxis=n.getBaseAxis(),i.valueAxis=e.getOtherAxis(i.baseAxis),i.baseDataDim=t.mapDimension(i.baseAxis.dim),i.valueDataDim=t.mapDimension(i.valueAxis.dim)),i}function o3e(r,t){var e=r.getData().getDimensionInfo(t);return e&&e.coordDim}function C1(r,t){return r&&r.containData&&t.coord&&!n8(t)?r.containData(t.coord):!0}function l3e(r,t,e){return r&&r.containZone&&t.coord&&e.coord&&!n8(t)&&!n8(e)?r.containZone(t.coord,e.coord):!0}function kj(r,t){return r?function(e,n,i,a){var s=a<2?e.coord&&e.coord[a]:e.value;return Zu(s,t[a])}:function(e,n,i,a){return Zu(e.value,t[a])}}function MT(r,t,e){if(e==="average"){var n=0,i=0;return r.each(t,function(a,s){isNaN(a)||(n+=a,i++)}),n/i}else return e==="median"?r.getMedian(t):r.getDataExtent(t)[e==="max"?1:0]}var K3=mr(),wT=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.init=function(){this.markerGroupMap=wt()},t.prototype.render=function(e,n,i){var a=this,s=this.markerGroupMap;s.each(function(o){K3(o).keep=!1}),n.eachSeries(function(o){var l=Ul.getMarkerModelFromSeries(o,a.type);l&&a.renderSeries(o,l,n,i)}),s.each(function(o){!K3(o).keep&&a.group.remove(o.group)})},t.prototype.markKeep=function(e){K3(e).keep=!0},t.prototype.toggleBlurSeries=function(e,n){var i=this;oe(e,function(a){var s=Ul.getMarkerModelFromSeries(a,i.type);if(s){var o=s.getData();o.eachItemGraphicEl(function(l){l&&(n?bB(l):DS(l))})}})},t.type="marker",t})(ln);function jO(r,t,e){var n=t.coordinateSystem;r.each(function(i){var a=r.getItemModel(i),s,o=ut(a.get("x"),e.getWidth()),l=ut(a.get("y"),e.getHeight());if(!isNaN(o)&&!isNaN(l))s=[o,l];else if(t.getMarkerPosition)s=t.getMarkerPosition(r.getValues(r.dimensions,i));else if(n){var u=r.get(n.dimensions[0],i),d=r.get(n.dimensions[1],i);s=n.dataToPoint([u,d])}isNaN(o)||(s[0]=o),isNaN(l)||(s[1]=l),r.setItemLayout(i,s)})}var u3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.updateTransform=function(e,n,i){n.eachSeries(function(a){var s=Ul.getMarkerModelFromSeries(a,"markPoint");s&&(jO(s.getData(),a,i),this.markerGroupMap.get(a.id).updateLayout())},this)},t.prototype.renderSeries=function(e,n,i,a){var s=e.coordinateSystem,o=e.id,l=e.getData(),u=this.markerGroupMap,d=u.get(o)||u.set(o,new K1),c=d3e(s,e,n);n.setData(c),jO(n.getData(),e,a),c.each(function(f){var h=c.getItemModel(f),m=h.getShallow("symbol"),p=h.getShallow("symbolSize"),g=h.getShallow("symbolRotate"),v=h.getShallow("symbolOffset"),x=h.getShallow("symbolKeepAspect");if(Tt(m)||Tt(p)||Tt(g)||Tt(v)){var y=n.getRawValue(f),w=n.getDataParams(f);Tt(m)&&(m=m(y,w)),Tt(p)&&(p=p(y,w)),Tt(g)&&(g=g(y,w)),Tt(v)&&(v=v(y,w))}var _=h.getModel("itemStyle").getItemStyle(),D=Y1(l,"color");_.fill||(_.fill=D),c.setItemVisual(f,{symbol:m,symbolSize:p,symbolRotate:g,symbolOffset:v,symbolKeepAspect:x,style:_})}),d.updateData(c),this.group.add(d.group),c.eachItemGraphicEl(function(f){f.traverse(function(h){Pt(h).dataModel=n})}),this.markKeep(d),d.group.silent=n.get("silent")||e.get("silent")},t.type="markPoint",t})(wT);function d3e(r,t,e){var n;r?n=Ze(r&&r.dimensions,function(o){var l=t.getData().getDimensionInfo(t.getData().mapDimension(o))||{};return We(We({},l),{name:o,ordinalMeta:null})}):n=[{name:"value",type:"float"}];var i=new Vi(n,e),a=Ze(e.get("data"),Rt(T1,t));r&&(a=Cr(a,Rt(C1,r)));var s=kj(!!r,n);return i.initData(a,null,s),i}function c3e(r){r.registerComponentModel(a3e),r.registerComponentView(u3e),r.registerPreprocessor(function(t){yT(t.series,"markPoint")&&(t.markPoint=t.markPoint||{})})}var f3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.createMarkerModelFromSeries=function(e,n,i){return new t(e,n,i)},t.type="markLine",t.defaultOption={z:5,symbol:["circle","arrow"],symbolSize:[8,16],symbolOffset:0,precision:2,tooltip:{trigger:"item"},label:{show:!0,position:"end",distance:5},lineStyle:{type:"dashed"},emphasis:{label:{show:!0},lineStyle:{width:3}},animationEasing:"linear"},t})(Ul),T2=mr(),h3e=function(r,t,e,n){var i=r.getData(),a;if(Ge(n))a=n;else{var s=n.type;if(s==="min"||s==="max"||s==="average"||s==="median"||n.xAxis!=null||n.yAxis!=null){var o=void 0,l=void 0;if(n.yAxis!=null||n.xAxis!=null)o=t.getAxis(n.yAxis!=null?"y":"x"),l=ni(n.yAxis,n.xAxis);else{var u=Aj(n,i,t,r);o=u.valueAxis;var d=m_(i,u.valueDataDim);l=MT(i,d,s)}var c=o.dim==="x"?0:1,f=1-c,h=kt(n),m={coord:[]};h.type=null,h.coord=[],h.coord[f]=-1/0,m.coord[f]=1/0;var p=e.get("precision");p>=0&&xr(l)&&(l=+l.toFixed(Math.min(p,20))),h.coord[c]=m.coord[c]=l,a=[h,m,{type:s,valueIndex:n.valueIndex,value:l}]}else a=[]}var g=[T1(r,a[0]),T1(r,a[1]),We({},a[2])];return g[2].type=g[2].type||null,Bt(g[2],g[0]),Bt(g[2],g[1]),g};function tb(r){return!isNaN(r)&&!isFinite(r)}function VO(r,t,e,n){var i=1-r,a=n.dimensions[r];return tb(t[i])&&tb(e[i])&&t[r]===e[r]&&n.getAxis(a).containData(t[r])}function m3e(r,t){if(r.type==="cartesian2d"){var e=t[0].coord,n=t[1].coord;if(e&&n&&(VO(1,e,n,r)||VO(0,e,n,r)))return!0}return C1(r,t[0])&&C1(r,t[1])}function Q3(r,t,e,n,i){var a=n.coordinateSystem,s=r.getItemModel(t),o,l=ut(s.get("x"),i.getWidth()),u=ut(s.get("y"),i.getHeight());if(!isNaN(l)&&!isNaN(u))o=[l,u];else{if(n.getMarkerPosition)o=n.getMarkerPosition(r.getValues(r.dimensions,t));else{var d=a.dimensions,c=r.get(d[0],t),f=r.get(d[1],t);o=a.dataToPoint([c,f])}if(df(a,"cartesian2d")){var h=a.getAxis("x"),m=a.getAxis("y"),d=a.dimensions;tb(r.get(d[0],t))?o[0]=h.toGlobalCoord(h.getExtent()[e?0:1]):tb(r.get(d[1],t))&&(o[1]=m.toGlobalCoord(m.getExtent()[e?0:1]))}isNaN(l)||(o[0]=l),isNaN(u)||(o[1]=u)}r.setItemLayout(t,o)}var p3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.updateTransform=function(e,n,i){n.eachSeries(function(a){var s=Ul.getMarkerModelFromSeries(a,"markLine");if(s){var o=s.getData(),l=T2(s).from,u=T2(s).to;l.each(function(d){Q3(l,d,!0,a,i),Q3(u,d,!1,a,i)}),o.each(function(d){o.setItemLayout(d,[l.getItemLayout(d),u.getItemLayout(d)])}),this.markerGroupMap.get(a.id).updateLayout()}},this)},t.prototype.renderSeries=function(e,n,i,a){var s=e.coordinateSystem,o=e.id,l=e.getData(),u=this.markerGroupMap,d=u.get(o)||u.set(o,new X_);this.group.add(d.group);var c=g3e(s,e,n),f=c.from,h=c.to,m=c.line;T2(n).from=f,T2(n).to=h,n.setData(m);var p=n.get("symbol"),g=n.get("symbolSize"),v=n.get("symbolRotate"),x=n.get("symbolOffset");Ge(p)||(p=[p,p]),Ge(g)||(g=[g,g]),Ge(v)||(v=[v,v]),Ge(x)||(x=[x,x]),c.from.each(function(w){y(f,w,!0),y(h,w,!1)}),m.each(function(w){var _=m.getItemModel(w).getModel("lineStyle").getLineStyle();m.setItemLayout(w,[f.getItemLayout(w),h.getItemLayout(w)]),_.stroke==null&&(_.stroke=f.getItemVisual(w,"style").fill),m.setItemVisual(w,{fromSymbolKeepAspect:f.getItemVisual(w,"symbolKeepAspect"),fromSymbolOffset:f.getItemVisual(w,"symbolOffset"),fromSymbolRotate:f.getItemVisual(w,"symbolRotate"),fromSymbolSize:f.getItemVisual(w,"symbolSize"),fromSymbol:f.getItemVisual(w,"symbol"),toSymbolKeepAspect:h.getItemVisual(w,"symbolKeepAspect"),toSymbolOffset:h.getItemVisual(w,"symbolOffset"),toSymbolRotate:h.getItemVisual(w,"symbolRotate"),toSymbolSize:h.getItemVisual(w,"symbolSize"),toSymbol:h.getItemVisual(w,"symbol"),style:_})}),d.updateData(m),c.line.eachItemGraphicEl(function(w){Pt(w).dataModel=n,w.traverse(function(_){Pt(_).dataModel=n})});function y(w,_,D){var P=w.getItemModel(_);Q3(w,_,D,e,a);var O=P.getModel("itemStyle").getItemStyle();O.fill==null&&(O.fill=Y1(l,"color")),w.setItemVisual(_,{symbolKeepAspect:P.get("symbolKeepAspect"),symbolOffset:Ut(P.get("symbolOffset",!0),x[D?0:1]),symbolRotate:Ut(P.get("symbolRotate",!0),v[D?0:1]),symbolSize:Ut(P.get("symbolSize"),g[D?0:1]),symbol:Ut(P.get("symbol",!0),p[D?0:1]),style:O})}this.markKeep(d),d.group.silent=n.get("silent")||e.get("silent")},t.type="markLine",t})(wT);function g3e(r,t,e){var n;r?n=Ze(r&&r.dimensions,function(u){var d=t.getData().getDimensionInfo(t.getData().mapDimension(u))||{};return We(We({},d),{name:u,ordinalMeta:null})}):n=[{name:"value",type:"float"}];var i=new Vi(n,e),a=new Vi(n,e),s=new Vi([],e),o=Ze(e.get("data"),Rt(h3e,t,r,e));r&&(o=Cr(o,Rt(m3e,r)));var l=kj(!!r,n);return i.initData(Ze(o,function(u){return u[0]}),null,l),a.initData(Ze(o,function(u){return u[1]}),null,l),s.initData(Ze(o,function(u){return u[2]})),s.hasItemOption=!0,{from:i,to:a,line:s}}function v3e(r){r.registerComponentModel(f3e),r.registerComponentView(p3e),r.registerPreprocessor(function(t){yT(t.series,"markLine")&&(t.markLine=t.markLine||{})})}var x3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.createMarkerModelFromSeries=function(e,n,i){return new t(e,n,i)},t.type="markArea",t.defaultOption={z:1,tooltip:{trigger:"item"},animation:!1,label:{show:!0,position:"top"},itemStyle:{borderWidth:0},emphasis:{label:{show:!0,position:"top"}}},t})(Ul),C2=mr(),b3e=function(r,t,e,n){var i=n[0],a=n[1];if(!(!i||!a)){var s=T1(r,i),o=T1(r,a),l=s.coord,u=o.coord;l[0]=ni(l[0],-1/0),l[1]=ni(l[1],-1/0),u[0]=ni(u[0],1/0),u[1]=ni(u[1],1/0);var d=wb([{},s,o]);return d.coord=[s.coord,o.coord],d.x0=s.x,d.y0=s.y,d.x1=o.x,d.y1=o.y,d}};function rb(r){return!isNaN(r)&&!isFinite(r)}function GO(r,t,e,n){var i=1-r;return rb(t[i])&&rb(e[i])}function y3e(r,t){var e=t.coord[0],n=t.coord[1],i={coord:e,x:t.x0,y:t.y0},a={coord:n,x:t.x1,y:t.y1};return df(r,"cartesian2d")?e&&n&&(GO(1,e,n)||GO(0,e,n))?!0:l3e(r,i,a):C1(r,i)||C1(r,a)}function ZO(r,t,e,n,i){var a=n.coordinateSystem,s=r.getItemModel(t),o,l=ut(s.get(e[0]),i.getWidth()),u=ut(s.get(e[1]),i.getHeight());if(!isNaN(l)&&!isNaN(u))o=[l,u];else{if(n.getMarkerPosition){var d=r.getValues(["x0","y0"],t),c=r.getValues(["x1","y1"],t),f=a.clampData(d),h=a.clampData(c),m=[];e[0]==="x0"?m[0]=f[0]>h[0]?c[0]:d[0]:m[0]=f[0]>h[0]?d[0]:c[0],e[1]==="y0"?m[1]=f[1]>h[1]?c[1]:d[1]:m[1]=f[1]>h[1]?d[1]:c[1],o=n.getMarkerPosition(m,e,!0)}else{var p=r.get(e[0],t),g=r.get(e[1],t),v=[p,g];a.clampData&&a.clampData(v,v),o=a.dataToPoint(v,!0)}if(df(a,"cartesian2d")){var x=a.getAxis("x"),y=a.getAxis("y"),p=r.get(e[0],t),g=r.get(e[1],t);rb(p)?o[0]=x.toGlobalCoord(x.getExtent()[e[0]==="x0"?0:1]):rb(g)&&(o[1]=y.toGlobalCoord(y.getExtent()[e[1]==="y0"?0:1]))}isNaN(l)||(o[0]=l),isNaN(u)||(o[1]=u)}return o}var YO=[["x0","y0"],["x1","y0"],["x1","y1"],["x0","y1"]],M3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.updateTransform=function(e,n,i){n.eachSeries(function(a){var s=Ul.getMarkerModelFromSeries(a,"markArea");if(s){var o=s.getData();o.each(function(l){var u=Ze(YO,function(c){return ZO(o,l,c,a,i)});o.setItemLayout(l,u);var d=o.getItemGraphicEl(l);d.setShape("points",u)})}},this)},t.prototype.renderSeries=function(e,n,i,a){var s=e.coordinateSystem,o=e.id,l=e.getData(),u=this.markerGroupMap,d=u.get(o)||u.set(o,{group:new zt});this.group.add(d.group),this.markKeep(d);var c=w3e(s,e,n);n.setData(c),c.each(function(f){var h=Ze(YO,function(O){return ZO(c,f,O,e,a)}),m=s.getAxis("x").scale,p=s.getAxis("y").scale,g=m.getExtent(),v=p.getExtent(),x=[m.parse(c.get("x0",f)),m.parse(c.get("x1",f))],y=[p.parse(c.get("y0",f)),p.parse(c.get("y1",f))];Xa(x),Xa(y);var w=!(g[0]>x[1]||g[1]<x[0]||v[0]>y[1]||v[1]<y[0]),_=!w;c.setItemLayout(f,{points:h,allClipped:_});var D=c.getItemModel(f).getModel("itemStyle").getItemStyle(),P=Y1(l,"color");D.fill||(D.fill=P,ct(D.fill)&&(D.fill=t1(D.fill,.4))),D.stroke||(D.stroke=P),c.setItemVisual(f,"style",D)}),c.diff(C2(d).data).add(function(f){var h=c.getItemLayout(f);if(!h.allClipped){var m=new $i({shape:{points:h.points}});c.setItemGraphicEl(f,m),d.group.add(m)}}).update(function(f,h){var m=C2(d).data.getItemGraphicEl(h),p=c.getItemLayout(f);p.allClipped?m&&d.group.remove(m):(m?Mr(m,{shape:{points:p.points}},n,f):m=new $i({shape:{points:p.points}}),c.setItemGraphicEl(f,m),d.group.add(m))}).remove(function(f){var h=C2(d).data.getItemGraphicEl(f);d.group.remove(h)}).execute(),c.eachItemGraphicEl(function(f,h){var m=c.getItemModel(h),p=c.getItemVisual(h,"style");f.useStyle(c.getItemVisual(h,"style")),ki(f,oi(m),{labelFetcher:n,labelDataIndex:h,defaultText:c.getName(h)||"",inheritColor:ct(p.fill)?t1(p.fill,1):"#000"}),Ai(f,m),Mn(f,null,null,m.get(["emphasis","disabled"])),Pt(f).dataModel=n}),C2(d).data=c,d.group.silent=n.get("silent")||e.get("silent")},t.type="markArea",t})(wT);function w3e(r,t,e){var n,i,a=["x0","y0","x1","y1"];if(r){var s=Ze(r&&r.dimensions,function(u){var d=t.getData(),c=d.getDimensionInfo(d.mapDimension(u))||{};return We(We({},c),{name:u,ordinalMeta:null})});i=Ze(a,function(u,d){return{name:u,type:s[d%2].type}}),n=new Vi(i,e)}else i=[{name:"value",type:"float"}],n=new Vi(i,e);var o=Ze(e.get("data"),Rt(b3e,t,r,e));r&&(o=Cr(o,Rt(y3e,r)));var l=r?function(u,d,c,f){var h=u.coord[Math.floor(f/2)][f%2];return Zu(h,i[f])}:function(u,d,c,f){return Zu(u.value,i[f])};return n.initData(o,null,l),n.hasItemOption=!0,n}function S3e(r){r.registerComponentModel(x3e),r.registerComponentView(M3e),r.registerPreprocessor(function(t){yT(t.series,"markArea")&&(t.markArea=t.markArea||{})})}var _3e=function(r,t){if(t==="all")return{type:"all",title:r.getLocaleModel().get(["legend","selector","all"])};if(t==="inverse")return{type:"inverse",title:r.getLocaleModel().get(["legend","selector","inverse"])}},i8=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.layoutMode={type:"box",ignoreSize:!0},e}return t.prototype.init=function(e,n,i){this.mergeDefaultAndTheme(e,i),e.selected=e.selected||{},this._updateSelector(e)},t.prototype.mergeOption=function(e,n){r.prototype.mergeOption.call(this,e,n),this._updateSelector(e)},t.prototype._updateSelector=function(e){var n=e.selector,i=this.ecModel;n===!0&&(n=e.selector=["all","inverse"]),Ge(n)&&oe(n,function(a,s){ct(a)&&(a={type:a}),n[s]=Bt(a,_3e(i,a.type))})},t.prototype.optionUpdated=function(){this._updateData(this.ecModel);var e=this._data;if(e[0]&&this.get("selectedMode")==="single"){for(var n=!1,i=0;i<e.length;i++){var a=e[i].get("name");if(this.isSelected(a)){this.select(a),n=!0;break}}!n&&this.select(e[0].get("name"))}},t.prototype._updateData=function(e){var n=[],i=[];e.eachRawSeries(function(l){var u=l.name;i.push(u);var d;if(l.legendVisualProvider){var c=l.legendVisualProvider,f=c.getAllNames();e.isSeriesFiltered(l)||(i=i.concat(f)),f.length?n=n.concat(f):d=!0}else d=!0;d&&MS(l)&&n.push(l.name)}),this._availableNames=i;var a=this.get("data")||n,s=wt(),o=Ze(a,function(l){return(ct(l)||xr(l))&&(l={name:l}),s.get(l.name)?null:(s.set(l.name,!0),new Ar(l,this,this.ecModel))},this);this._data=Cr(o,function(l){return!!l})},t.prototype.getData=function(){return this._data},t.prototype.select=function(e){var n=this.option.selected,i=this.get("selectedMode");if(i==="single"){var a=this._data;oe(a,function(s){n[s.get("name")]=!1})}n[e]=!0},t.prototype.unSelect=function(e){this.get("selectedMode")!=="single"&&(this.option.selected[e]=!1)},t.prototype.toggleSelected=function(e){var n=this.option.selected;n.hasOwnProperty(e)||(n[e]=!0),this[n[e]?"unSelect":"select"](e)},t.prototype.allSelect=function(){var e=this._data,n=this.option.selected;oe(e,function(i){n[i.get("name",!0)]=!0})},t.prototype.inverseSelect=function(){var e=this._data,n=this.option.selected;oe(e,function(i){var a=i.get("name",!0);n.hasOwnProperty(a)||(n[a]=!0),n[a]=!n[a]})},t.prototype.isSelected=function(e){var n=this.option.selected;return!(n.hasOwnProperty(e)&&!n[e])&&Vt(this._availableNames,e)>=0},t.prototype.getOrient=function(){return this.get("orient")==="vertical"?{index:1,name:"vertical"}:{index:0,name:"horizontal"}},t.type="legend.plain",t.dependencies=["series"],t.defaultOption={z:4,show:!0,orient:"horizontal",left:"center",top:0,align:"auto",backgroundColor:"rgba(0,0,0,0)",borderColor:"#ccc",borderRadius:0,borderWidth:0,padding:5,itemGap:10,itemWidth:25,itemHeight:14,symbolRotate:"inherit",symbolKeepAspect:!0,inactiveColor:"#ccc",inactiveBorderColor:"#ccc",inactiveBorderWidth:"auto",itemStyle:{color:"inherit",opacity:"inherit",borderColor:"inherit",borderWidth:"auto",borderCap:"inherit",borderJoin:"inherit",borderDashOffset:"inherit",borderMiterLimit:"inherit"},lineStyle:{width:"auto",color:"inherit",inactiveColor:"#ccc",inactiveWidth:2,opacity:"inherit",type:"inherit",cap:"inherit",join:"inherit",dashOffset:"inherit",miterLimit:"inherit"},textStyle:{color:"#333"},selectedMode:!0,selector:!1,selectorLabel:{show:!0,borderRadius:10,padding:[3,5,3,5],fontSize:12,fontFamily:"sans-serif",color:"#666",borderWidth:1,borderColor:"#666"},emphasis:{selectorLabel:{show:!0,color:"#eee",backgroundColor:"#666"}},selectorPosition:"auto",selectorItemGap:7,selectorButtonGap:10,tooltip:{show:!1}},t})(tr),f0=Rt,a8=oe,A2=zt,Dj=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.newlineDisabled=!1,e}return t.prototype.init=function(){this.group.add(this._contentGroup=new A2),this.group.add(this._selectorGroup=new A2),this._isFirstRender=!0},t.prototype.getContentGroup=function(){return this._contentGroup},t.prototype.getSelectorGroup=function(){return this._selectorGroup},t.prototype.render=function(e,n,i){var a=this._isFirstRender;if(this._isFirstRender=!1,this.resetInner(),!!e.get("show",!0)){var s=e.get("align"),o=e.get("orient");(!s||s==="auto")&&(s=e.get("left")==="right"&&o==="vertical"?"right":"left");var l=e.get("selector",!0),u=e.get("selectorPosition",!0);l&&(!u||u==="auto")&&(u=o==="horizontal"?"end":"start"),this.renderInner(s,e,n,i,l,o,u);var d=e.getBoxLayoutParams(),c={width:i.getWidth(),height:i.getHeight()},f=e.get("padding"),h=Hn(d,c,f),m=this.layoutInner(e,s,h,a,l,u),p=Hn(Ct({width:m.width,height:m.height},d),c,f);this.group.x=p.x-m.x,this.group.y=p.y-m.y,this.group.markRedraw(),this.group.add(this._backgroundEl=vj(m,e))}},t.prototype.resetInner=function(){this.getContentGroup().removeAll(),this._backgroundEl&&this.group.remove(this._backgroundEl),this.getSelectorGroup().removeAll()},t.prototype.renderInner=function(e,n,i,a,s,o,l){var u=this.getContentGroup(),d=wt(),c=n.get("selectedMode"),f=[];i.eachRawSeries(function(h){!h.get("legendHoverLink")&&f.push(h.id)}),a8(n.getData(),function(h,m){var p=h.get("name");if(!this.newlineDisabled&&(p===""||p===`
 `)){var g=new A2;g.newline=!0,u.add(g);return}var v=i.getSeriesByName(p)[0];if(!d.get(p))if(v){var x=v.getData(),y=x.getVisual("legendLineStyle")||{},w=x.getVisual("legendIcon"),_=x.getVisual("style"),D=this._createItem(v,p,m,h,n,e,y,_,w,c,a);D.on("click",f0($O,p,null,a,f)).on("mouseover",f0(s8,v.name,null,a,f)).on("mouseout",f0(o8,v.name,null,a,f)),i.ssr&&D.eachChild(function(P){var O=Pt(P);O.seriesIndex=v.seriesIndex,O.dataIndex=m,O.ssrType="legend"}),d.set(p,!0)}else i.eachRawSeries(function(P){if(!d.get(p)&&P.legendVisualProvider){var O=P.legendVisualProvider;if(!O.containName(p))return;var U=O.indexOfName(p),L=O.getItemVisual(U,"style"),W=O.getItemVisual(U,"legendIcon"),B=la(L.fill);B&&B[3]===0&&(B[3]=.2,L=We(We({},L),{fill:eo(B,"rgba")}));var z=this._createItem(P,p,m,h,n,e,{},L,W,c,a);z.on("click",f0($O,null,p,a,f)).on("mouseover",f0(s8,null,p,a,f)).on("mouseout",f0(o8,null,p,a,f)),i.ssr&&z.eachChild(function(E){var k=Pt(E);k.seriesIndex=P.seriesIndex,k.dataIndex=m,k.ssrType="legend"}),d.set(p,!0)}},this)},this),s&&this._createSelector(s,n,a,o,l)},t.prototype._createSelector=function(e,n,i,a,s){var o=this.getSelectorGroup();a8(e,function(u){var d=u.type,c=new dr({style:{x:0,y:0,align:"center",verticalAlign:"middle"},onclick:function(){i.dispatchAction({type:d==="all"?"legendAllSelect":"legendInverseSelect",legendId:n.id})}});o.add(c);var f=n.getModel("selectorLabel"),h=n.getModel(["emphasis","selectorLabel"]);ki(c,{normal:f,emphasis:h},{defaultText:u.title}),ju(c)})},t.prototype._createItem=function(e,n,i,a,s,o,l,u,d,c,f){var h=e.visualDrawType,m=s.get("itemWidth"),p=s.get("itemHeight"),g=s.isSelected(n),v=a.get("symbolRotate"),x=a.get("symbolKeepAspect"),y=a.get("icon");d=y||d||"roundRect";var w=T3e(d,a,l,u,h,g,f),_=new A2,D=a.getModel("textStyle");if(Tt(e.getLegendIcon)&&(!y||y==="inherit"))_.add(e.getLegendIcon({itemWidth:m,itemHeight:p,icon:d,iconRotate:v,itemStyle:w.itemStyle,lineStyle:w.lineStyle,symbolKeepAspect:x}));else{var P=y==="inherit"&&e.getData().getVisual("symbol")?v==="inherit"?e.getData().getVisual("symbolRotate"):v:0;_.add(C3e({itemWidth:m,itemHeight:p,icon:d,iconRotate:P,itemStyle:w.itemStyle,symbolKeepAspect:x}))}var O=o==="left"?m+5:-5,U=o,L=s.get("formatter"),W=n;ct(L)&&L?W=L.replace("{name}",n??""):Tt(L)&&(W=L(n));var B=g?D.getTextColor():a.get("inactiveColor");_.add(new dr({style:en(D,{text:W,x:O,y:p/2,fill:B,align:U,verticalAlign:"middle"},{inheritColor:B})}));var z=new cr({shape:_.getBoundingRect(),style:{fill:"transparent"}}),E=a.getModel("tooltip");return E.get("show")&&sf({el:z,componentModel:s,itemName:n,itemTooltipOption:E.option}),_.add(z),_.eachChild(function(k){k.silent=!0}),z.silent=!c,this.getContentGroup().add(_),ju(_),_.__legendDataIndex=i,_},t.prototype.layoutInner=function(e,n,i,a,s,o){var l=this.getContentGroup(),u=this.getSelectorGroup();Fc(e.get("orient"),l,e.get("itemGap"),i.width,i.height);var d=l.getBoundingRect(),c=[-d.x,-d.y];if(u.markRedraw(),l.markRedraw(),s){Fc("horizontal",u,e.get("selectorItemGap",!0));var f=u.getBoundingRect(),h=[-f.x,-f.y],m=e.get("selectorButtonGap",!0),p=e.getOrient().index,g=p===0?"width":"height",v=p===0?"height":"width",x=p===0?"y":"x";o==="end"?h[p]+=d[g]+m:c[p]+=f[g]+m,h[1-p]+=d[v]/2-f[v]/2,u.x=h[0],u.y=h[1],l.x=c[0],l.y=c[1];var y={x:0,y:0};return y[g]=d[g]+m+f[g],y[v]=Math.max(d[v],f[v]),y[x]=Math.min(0,f[x]+h[1-p]),y}else return l.x=c[0],l.y=c[1],this.group.getBoundingRect()},t.prototype.remove=function(){this.getContentGroup().removeAll(),this._isFirstRender=!0},t.type="legend.plain",t})(ln);function T3e(r,t,e,n,i,a,s){function o(g,v){g.lineWidth==="auto"&&(g.lineWidth=v.lineWidth>0?2:0),a8(g,function(x,y){g[y]==="inherit"&&(g[y]=v[y])})}var l=t.getModel("itemStyle"),u=l.getItemStyle(),d=r.lastIndexOf("empty",0)===0?"fill":"stroke",c=l.getShallow("decal");u.decal=!c||c==="inherit"?n.decal:q0(c,s),u.fill==="inherit"&&(u.fill=n[i]),u.stroke==="inherit"&&(u.stroke=n[d]),u.opacity==="inherit"&&(u.opacity=(i==="fill"?n:e).opacity),o(u,n);var f=t.getModel("lineStyle"),h=f.getLineStyle();if(o(h,e),u.fill==="auto"&&(u.fill=n.fill),u.stroke==="auto"&&(u.stroke=n.fill),h.stroke==="auto"&&(h.stroke=n.fill),!a){var m=t.get("inactiveBorderWidth"),p=u[d];u.lineWidth=m==="auto"?n.lineWidth>0&&p?2:0:u.lineWidth,u.fill=t.get("inactiveColor"),u.stroke=t.get("inactiveBorderColor"),h.stroke=f.get("inactiveColor"),h.lineWidth=f.get("inactiveWidth")}return{itemStyle:u,lineStyle:h}}function C3e(r){var t=r.icon||"roundRect",e=On(t,0,0,r.itemWidth,r.itemHeight,r.itemStyle.fill,r.symbolKeepAspect);return e.setStyle(r.itemStyle),e.rotation=(r.iconRotate||0)*Math.PI/180,e.setOrigin([r.itemWidth/2,r.itemHeight/2]),t.indexOf("empty")>-1&&(e.style.stroke=e.style.fill,e.style.fill="#fff",e.style.lineWidth=2),e}function $O(r,t,e,n){o8(r,t,e,n),e.dispatchAction({type:"legendToggleSelect",name:r??t}),s8(r,t,e,n)}function Fj(r){for(var t=r.getZr().storage.getDisplayList(),e,n=0,i=t.length;n<i&&!(e=t[n].states.emphasis);)n++;return e&&e.hoverLayer}function s8(r,t,e,n){Fj(e)||e.dispatchAction({type:"highlight",seriesName:r,name:t,excludeSeriesId:n})}function o8(r,t,e,n){Fj(e)||e.dispatchAction({type:"downplay",seriesName:r,name:t,excludeSeriesId:n})}function A3e(r){var t=r.findComponents({mainType:"legend"});t&&t.length&&r.filterSeries(function(e){for(var n=0;n<t.length;n++)if(!t[n].isSelected(e.name))return!1;return!0})}function Zm(r,t,e){var n=r==="allSelect"||r==="inverseSelect",i={},a=[];e.eachComponent({mainType:"legend",query:t},function(o){n?o[r]():o[r](t.name),qO(o,i),a.push(o.componentIndex)});var s={};return e.eachComponent("legend",function(o){oe(i,function(l,u){o[l?"select":"unSelect"](u)}),qO(o,s)}),n?{selected:s,legendIndex:a}:{name:t.name,selected:s}}function qO(r,t){var e=t||{};return oe(r.getData(),function(n){var i=n.get("name");if(!(i===`
-`||i==="")){var a=r.isSelected(i);vt(e,i)?e[i]=e[i]&&a:e[i]=a}}),e}function k3e(r){r.registerAction("legendToggleSelect","legendselectchanged",Rt(Zm,"toggleSelected")),r.registerAction("legendAllSelect","legendselectall",Rt(Zm,"allSelect")),r.registerAction("legendInverseSelect","legendinverseselect",Rt(Zm,"inverseSelect")),r.registerAction("legendSelect","legendselected",Rt(Zm,"select")),r.registerAction("legendUnSelect","legendunselected",Rt(Zm,"unSelect"))}function Ej(r){r.registerComponentModel(i8),r.registerComponentView(Dj),r.registerProcessor(r.PRIORITY.PROCESSOR.SERIES_FILTER,A3e),r.registerSubTypeDefaulter("legend",function(){return"plain"}),k3e(r)}var D3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.setScrollDataIndex=function(e){this.option.scrollDataIndex=e},t.prototype.init=function(e,n,i){var a=gh(e);r.prototype.init.call(this,e,n,i),KO(this,e,a)},t.prototype.mergeOption=function(e,n){r.prototype.mergeOption.call(this,e,n),KO(this,this.option,e)},t.type="legend.scroll",t.defaultOption=cd(i8.defaultOption,{scrollDataIndex:0,pageButtonItemGap:5,pageButtonGap:null,pageButtonPosition:"end",pageFormatter:"{current}/{total}",pageIcons:{horizontal:["M0,0L12,-10L12,10z","M0,0L-12,-10L-12,10z"],vertical:["M0,0L20,0L10,-20z","M0,0L20,0L10,20z"]},pageIconColor:"#2f4554",pageIconInactiveColor:"#aaa",pageIconSize:15,pageTextStyle:{color:"#333"},animationDurationUpdate:800}),t})(i8);function KO(r,t,e){var n=r.getOrient(),i=[1,1];i[n.index]=0,rd(t,e,{type:"box",ignoreSize:!!i})}var QO=zt,J3=["width","height"],e5=["x","y"],F3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.newlineDisabled=!0,e._currentIndex=0,e}return t.prototype.init=function(){r.prototype.init.call(this),this.group.add(this._containerGroup=new QO),this._containerGroup.add(this.getContentGroup()),this.group.add(this._controllerGroup=new QO)},t.prototype.resetInner=function(){r.prototype.resetInner.call(this),this._controllerGroup.removeAll(),this._containerGroup.removeClipPath(),this._containerGroup.__rectSize=null},t.prototype.renderInner=function(e,n,i,a,s,o,l){var u=this;r.prototype.renderInner.call(this,e,n,i,a,s,o,l);var d=this._controllerGroup,c=n.get("pageIconSize",!0),f=Ge(c)?c:[c,c];m("pagePrev",0);var h=n.getModel("pageTextStyle");d.add(new dr({name:"pageText",style:{text:"xx/xx",fill:h.getTextColor(),font:h.getFont(),verticalAlign:"middle",align:"center"},silent:!0})),m("pageNext",1);function m(p,g){var v=p+"DataIndex",x=hh(n.get("pageIcons",!0)[n.getOrient().name][g],{onclick:ht(u._pageGo,u,v,n,a)},{x:-f[0]/2,y:-f[1]/2,width:f[0],height:f[1]});x.name=p,d.add(x)}},t.prototype.layoutInner=function(e,n,i,a,s,o){var l=this.getSelectorGroup(),u=e.getOrient().index,d=J3[u],c=e5[u],f=J3[1-u],h=e5[1-u];s&&Fc("horizontal",l,e.get("selectorItemGap",!0));var m=e.get("selectorButtonGap",!0),p=l.getBoundingRect(),g=[-p.x,-p.y],v=kt(i);s&&(v[d]=i[d]-p[d]-m);var x=this._layoutContentAndController(e,a,v,u,d,f,h,c);if(s){if(o==="end")g[u]+=x[d]+m;else{var y=p[d]+m;g[u]-=y,x[c]-=y}x[d]+=p[d]+m,g[1-u]+=x[h]+x[f]/2-p[f]/2,x[f]=Math.max(x[f],p[f]),x[h]=Math.min(x[h],p[h]+g[1-u]),l.x=g[0],l.y=g[1],l.markRedraw()}return x},t.prototype._layoutContentAndController=function(e,n,i,a,s,o,l,u){var d=this.getContentGroup(),c=this._containerGroup,f=this._controllerGroup;Fc(e.get("orient"),d,e.get("itemGap"),a?i.width:null,a?null:i.height),Fc("horizontal",f,e.get("pageButtonItemGap",!0));var h=d.getBoundingRect(),m=f.getBoundingRect(),p=this._showController=h[s]>i[s],g=[-h.x,-h.y];n||(g[a]=d[u]);var v=[0,0],x=[-m.x,-m.y],y=Ut(e.get("pageButtonGap",!0),e.get("itemGap",!0));if(p){var w=e.get("pageButtonPosition",!0);w==="end"?x[a]+=i[s]-m[s]:v[a]+=m[s]+y}x[1-a]+=h[o]/2-m[o]/2,d.setPosition(g),c.setPosition(v),f.setPosition(x);var _={x:0,y:0};if(_[s]=p?i[s]:h[s],_[o]=Math.max(h[o],m[o]),_[l]=Math.min(0,m[l]+x[1-a]),c.__rectSize=i[s],p){var D={x:0,y:0};D[s]=Math.max(i[s]-m[s]-y,0),D[o]=_[o],c.setClipPath(new cr({shape:D})),c.__rectSize=D[s]}else f.eachChild(function(O){O.attr({invisible:!0,silent:!0})});var P=this._getPageInfo(e);return P.pageIndex!=null&&Mr(d,{x:P.contentPosition[0],y:P.contentPosition[1]},p?e:null),this._updatePageInfoView(e,P),_},t.prototype._pageGo=function(e,n,i){var a=this._getPageInfo(n)[e];a!=null&&i.dispatchAction({type:"legendScroll",scrollDataIndex:a,legendId:n.id})},t.prototype._updatePageInfoView=function(e,n){var i=this._controllerGroup;oe(["pagePrev","pageNext"],function(d){var c=d+"DataIndex",f=n[c]!=null,h=i.childOfName(d);h&&(h.setStyle("fill",f?e.get("pageIconColor",!0):e.get("pageIconInactiveColor",!0)),h.cursor=f?"pointer":"default")});var a=i.childOfName("pageText"),s=e.get("pageFormatter"),o=n.pageIndex,l=o!=null?o+1:0,u=n.pageCount;a&&s&&a.setStyle("text",ct(s)?s.replace("{current}",l==null?"":l+"").replace("{total}",u==null?"":u+""):s({current:l,total:u}))},t.prototype._getPageInfo=function(e){var n=e.get("scrollDataIndex",!0),i=this.getContentGroup(),a=this._containerGroup.__rectSize,s=e.getOrient().index,o=J3[s],l=e5[s],u=this._findTargetItemIndex(n),d=i.children(),c=d[u],f=d.length,h=f?1:0,m={contentPosition:[i.x,i.y],pageCount:h,pageIndex:h-1,pagePrevDataIndex:null,pageNextDataIndex:null};if(!c)return m;var p=w(c);m.contentPosition[s]=-p.s;for(var g=u+1,v=p,x=p,y=null;g<=f;++g)y=w(d[g]),(!y&&x.e>v.s+a||y&&!_(y,v.s))&&(x.i>v.i?v=x:v=y,v&&(m.pageNextDataIndex==null&&(m.pageNextDataIndex=v.i),++m.pageCount)),x=y;for(var g=u-1,v=p,x=p,y=null;g>=-1;--g)y=w(d[g]),(!y||!_(x,y.s))&&v.i<x.i&&(x=v,m.pagePrevDataIndex==null&&(m.pagePrevDataIndex=v.i),++m.pageCount,++m.pageIndex),v=y;return m;function w(D){if(D){var P=D.getBoundingRect(),O=P[l]+D[l];return{s:O,e:O+P[o],i:D.__legendDataIndex}}}function _(D,P){return D.e>=P&&D.s<=P+a}},t.prototype._findTargetItemIndex=function(e){if(!this._showController)return 0;var n,i=this.getContentGroup(),a;return i.eachChild(function(s,o){var l=s.__legendDataIndex;a==null&&l!=null&&(a=o),l===e&&(n=o)}),n??a},t.type="legend.scroll",t})(Dj);function E3e(r){r.registerAction("legendScroll","legendscroll",function(t,e){var n=t.scrollDataIndex;n!=null&&e.eachComponent({mainType:"legend",subType:"scroll",query:t},function(i){i.setScrollDataIndex(n)})})}function z3e(r){Qt(Ej),r.registerComponentModel(D3e),r.registerComponentView(F3e),E3e(r)}function P3e(r){Qt(Ej),Qt(z3e)}var O3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.type="dataZoom.inside",t.defaultOption=cd(_1.defaultOption,{disabled:!1,zoomLock:!1,zoomOnMouseWheel:!0,moveOnMouseMove:!0,moveOnMouseWheel:!1,preventDefaultMouseMove:!0}),t})(_1),ST=mr();function U3e(r,t,e){ST(r).coordSysRecordMap.each(function(n){var i=n.dataZoomInfoMap.get(t.uid);i&&(i.getRange=e)})}function I3e(r,t){for(var e=ST(r).coordSysRecordMap,n=e.keys(),i=0;i<n.length;i++){var a=n[i],s=e.get(a),o=s.dataZoomInfoMap;if(o){var l=t.uid,u=o.get(l);u&&(o.removeKey(l),o.keys().length||zj(e,s))}}}function zj(r,t){if(t){r.removeKey(t.model.uid);var e=t.controller;e&&e.dispose()}}function R3e(r,t){var e={model:t,containsPoint:Rt(B3e,t),dispatchAction:Rt(L3e,r),dataZoomInfoMap:null,controller:null},n=e.controller=new rg(r.getZr());return oe(["pan","zoom","scrollMove"],function(i){n.on(i,function(a){var s=[];e.dataZoomInfoMap.each(function(o){if(a.isAvailableBehavior(o.model.option)){var l=(o.getRange||{})[i],u=l&&l(o.dzReferCoordSysInfo,e.model.mainType,e.controller,a);!o.model.get("disabled",!0)&&u&&s.push({dataZoomId:o.model.id,start:u[0],end:u[1]})}}),s.length&&e.dispatchAction(s)})}),e}function L3e(r,t){r.isDisposed()||r.dispatchAction({type:"dataZoom",animation:{easing:"cubicOut",duration:100},batch:t})}function B3e(r,t,e,n){return r.coordinateSystem.containPoint([e,n])}function N3e(r){var t,e="type_",n={type_true:2,type_move:1,type_false:0,type_undefined:-1},i=!0;return r.each(function(a){var s=a.model,o=s.get("disabled",!0)?!1:s.get("zoomLock",!0)?"move":!0;n[e+o]>n[e+t]&&(t=o),i=i&&s.get("preventDefaultMouseMove",!0)}),{controlType:t,opt:{zoomOnMouseWheel:!0,moveOnMouseMove:!0,moveOnMouseWheel:!0,preventDefaultMouseMove:!!i}}}function H3e(r){r.registerProcessor(r.PRIORITY.PROCESSOR.FILTER,function(t,e){var n=ST(e),i=n.coordSysRecordMap||(n.coordSysRecordMap=wt());i.each(function(a){a.dataZoomInfoMap=null}),t.eachComponent({mainType:"dataZoom",subType:"inside"},function(a){var s=mj(a);oe(s.infoList,function(o){var l=o.model.uid,u=i.get(l)||i.set(l,R3e(e,o.model)),d=u.dataZoomInfoMap||(u.dataZoomInfoMap=wt());d.set(a.uid,{dzReferCoordSysInfo:o,model:a,getRange:null})})}),i.each(function(a){var s=a.controller,o,l=a.dataZoomInfoMap;if(l){var u=l.keys()[0];u!=null&&(o=l.get(u))}if(!o){zj(i,a);return}var d=N3e(l);s.enable(d.controlType,d.opt),s.setPointerChecker(a.containsPoint),yh(a,"dispatchAction",o.model.get("throttle",!0),"fixRate")})})}var W3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type="dataZoom.inside",e}return t.prototype.render=function(e,n,i){if(r.prototype.render.apply(this,arguments),e.noTarget()){this._clear();return}this.range=e.getPercentRange(),U3e(i,e,{pan:ht(t5.pan,this),zoom:ht(t5.zoom,this),scrollMove:ht(t5.scrollMove,this)})},t.prototype.dispose=function(){this._clear(),r.prototype.dispose.apply(this,arguments)},t.prototype._clear=function(){I3e(this.api,this.dataZoomModel),this.range=null},t.type="dataZoom.inside",t})(mT),t5={zoom:function(r,t,e,n){var i=this.range,a=i.slice(),s=r.axisModels[0];if(s){var o=r5[t](null,[n.originX,n.originY],s,e,r),l=(o.signal>0?o.pixelStart+o.pixelLength-o.pixel:o.pixel-o.pixelStart)/o.pixelLength*(a[1]-a[0])+a[0],u=Math.max(1/n.scale,0);a[0]=(a[0]-l)*u+l,a[1]=(a[1]-l)*u+l;var d=this.dataZoomModel.findRepresentativeAxisProxy().getMinMaxSpan();if(ff(0,a,[0,100],0,d.minSpan,d.maxSpan),this.range=a,i[0]!==a[0]||i[1]!==a[1])return a}},pan:JO(function(r,t,e,n,i,a){var s=r5[n]([a.oldX,a.oldY],[a.newX,a.newY],t,i,e);return s.signal*(r[1]-r[0])*s.pixel/s.pixelLength}),scrollMove:JO(function(r,t,e,n,i,a){var s=r5[n]([0,0],[a.scrollDelta,a.scrollDelta],t,i,e);return s.signal*(r[1]-r[0])*a.scrollDelta})};function JO(r){return function(t,e,n,i){var a=this.range,s=a.slice(),o=t.axisModels[0];if(o){var l=r(s,o,t,e,n,i);if(ff(l,s,[0,100],"all"),this.range=s,a[0]!==s[0]||a[1]!==s[1])return s}}}var r5={grid:function(r,t,e,n,i){var a=e.axis,s={},o=i.model.coordinateSystem.getRect();return r=r||[0,0],a.dim==="x"?(s.pixel=t[0]-r[0],s.pixelLength=o.width,s.pixelStart=o.x,s.signal=a.inverse?1:-1):(s.pixel=t[1]-r[1],s.pixelLength=o.height,s.pixelStart=o.y,s.signal=a.inverse?-1:1),s},polar:function(r,t,e,n,i){var a=e.axis,s={},o=i.model.coordinateSystem,l=o.getRadiusAxis().getExtent(),u=o.getAngleAxis().getExtent();return r=r?o.pointToCoord(r):[0,0],t=o.pointToCoord(t),e.mainType==="radiusAxis"?(s.pixel=t[0]-r[0],s.pixelLength=l[1]-l[0],s.pixelStart=l[0],s.signal=a.inverse?1:-1):(s.pixel=t[1]-r[1],s.pixelLength=u[1]-u[0],s.pixelStart=u[0],s.signal=a.inverse?-1:1),s},singleAxis:function(r,t,e,n,i){var a=e.axis,s=i.model.coordinateSystem.getRect(),o={};return r=r||[0,0],a.orient==="horizontal"?(o.pixel=t[0]-r[0],o.pixelLength=s.width,o.pixelStart=s.x,o.signal=a.inverse?1:-1):(o.pixel=t[1]-r[1],o.pixelLength=s.height,o.pixelStart=s.y,o.signal=a.inverse?-1:1),o}};function Pj(r){pT(r),r.registerComponentModel(O3e),r.registerComponentView(W3e),H3e(r)}var X3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.type="dataZoom.slider",t.layoutMode="box",t.defaultOption=cd(_1.defaultOption,{show:!0,right:"ph",top:"ph",width:"ph",height:"ph",left:null,bottom:null,borderColor:"#d2dbee",borderRadius:3,backgroundColor:"rgba(47,69,84,0)",dataBackground:{lineStyle:{color:"#d2dbee",width:.5},areaStyle:{color:"#d2dbee",opacity:.2}},selectedDataBackground:{lineStyle:{color:"#8fb0f7",width:.5},areaStyle:{color:"#8fb0f7",opacity:.2}},fillerColor:"rgba(135,175,274,0.2)",handleIcon:"path://M-9.35,34.56V42m0-40V9.5m-2,0h4a2,2,0,0,1,2,2v21a2,2,0,0,1-2,2h-4a2,2,0,0,1-2-2v-21A2,2,0,0,1-11.35,9.5Z",handleSize:"100%",handleStyle:{color:"#fff",borderColor:"#ACB8D1"},moveHandleSize:7,moveHandleIcon:"path://M-320.9-50L-320.9-50c18.1,0,27.1,9,27.1,27.1V85.7c0,18.1-9,27.1-27.1,27.1l0,0c-18.1,0-27.1-9-27.1-27.1V-22.9C-348-41-339-50-320.9-50z M-212.3-50L-212.3-50c18.1,0,27.1,9,27.1,27.1V85.7c0,18.1-9,27.1-27.1,27.1l0,0c-18.1,0-27.1-9-27.1-27.1V-22.9C-239.4-41-230.4-50-212.3-50z M-103.7-50L-103.7-50c18.1,0,27.1,9,27.1,27.1V85.7c0,18.1-9,27.1-27.1,27.1l0,0c-18.1,0-27.1-9-27.1-27.1V-22.9C-130.9-41-121.8-50-103.7-50z",moveHandleStyle:{color:"#D2DBEE",opacity:.7},showDetail:!0,showDataShadow:"auto",realtime:!0,zoomLock:!1,textStyle:{color:"#6E7079"},brushSelect:!0,brushStyle:{color:"rgba(135,175,274,0.15)"},emphasis:{handleLabel:{show:!0},handleStyle:{borderColor:"#8FB0F7"},moveHandleStyle:{color:"#8FB0F7"}}}),t})(_1),Ym=cr,eU=7,j3e=1,n5=30,V3e=7,$m="horizontal",tU="vertical",G3e=5,Z3e=["line","bar","candlestick","scatter"],Y3e={easing:"cubicOut",duration:100,delay:0},$3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e._displayables={},e}return t.prototype.init=function(e,n){this.api=n,this._onBrush=ht(this._onBrush,this),this._onBrushEnd=ht(this._onBrushEnd,this)},t.prototype.render=function(e,n,i,a){if(r.prototype.render.apply(this,arguments),yh(this,"_dispatchZoomAction",e.get("throttle"),"fixRate"),this._orient=e.getOrient(),e.get("show")===!1){this.group.removeAll();return}if(e.noTarget()){this._clear(),this.group.removeAll();return}(!a||a.type!=="dataZoom"||a.from!==this.uid)&&this._buildView(),this._updateView()},t.prototype.dispose=function(){this._clear(),r.prototype.dispose.apply(this,arguments)},t.prototype._clear=function(){c1(this,"_dispatchZoomAction");var e=this.api.getZr();e.off("mousemove",this._onBrush),e.off("mouseup",this._onBrushEnd)},t.prototype._buildView=function(){var e=this.group;e.removeAll(),this._brushing=!1,this._displayables.brushRect=null,this._resetLocation(),this._resetInterval();var n=this._displayables.sliderGroup=new zt;this._renderBackground(),this._renderHandle(),this._renderDataShadow(),e.add(n),this._positionGroup()},t.prototype._resetLocation=function(){var e=this.dataZoomModel,n=this.api,i=e.get("brushSelect"),a=i?V3e:0,s=this._findCoordRect(),o={width:n.getWidth(),height:n.getHeight()},l=this._orient===$m?{right:o.width-s.x-s.width,top:o.height-n5-eU-a,width:s.width,height:n5}:{right:eU,top:s.y,width:n5,height:s.height},u=gh(e.option);oe(["right","top","width","height"],function(c){u[c]==="ph"&&(u[c]=l[c])});var d=Hn(u,o);this._location={x:d.x,y:d.y},this._size=[d.width,d.height],this._orient===tU&&this._size.reverse()},t.prototype._positionGroup=function(){var e=this.group,n=this._location,i=this._orient,a=this.dataZoomModel.getFirstTargetAxisModel(),s=a&&a.get("inverse"),o=this._displayables.sliderGroup,l=(this._dataShadowInfo||{}).otherAxisInverse;o.attr(i===$m&&!s?{scaleY:l?1:-1,scaleX:1}:i===$m&&s?{scaleY:l?1:-1,scaleX:-1}:i===tU&&!s?{scaleY:l?-1:1,scaleX:1,rotation:Math.PI/2}:{scaleY:l?-1:1,scaleX:-1,rotation:Math.PI/2});var u=e.getBoundingRect([o]);e.x=n.x-u.x,e.y=n.y-u.y,e.markRedraw()},t.prototype._getViewExtent=function(){return[0,this._size[0]]},t.prototype._renderBackground=function(){var e=this.dataZoomModel,n=this._size,i=this._displayables.sliderGroup,a=e.get("brushSelect");i.add(new Ym({silent:!0,shape:{x:0,y:0,width:n[0],height:n[1]},style:{fill:e.get("backgroundColor")},z2:-40}));var s=new Ym({shape:{x:0,y:0,width:n[0],height:n[1]},style:{fill:"transparent"},z2:0,onclick:ht(this._onClickPanel,this)}),o=this.api.getZr();a?(s.on("mousedown",this._onBrushStart,this),s.cursor="crosshair",o.on("mousemove",this._onBrush),o.on("mouseup",this._onBrushEnd)):(o.off("mousemove",this._onBrush),o.off("mouseup",this._onBrushEnd)),i.add(s)},t.prototype._renderDataShadow=function(){var e=this._dataShadowInfo=this._prepareDataShadowInfo();if(this._displayables.dataShadowSegs=[],!e)return;var n=this._size,i=this._shadowSize||[],a=e.series,s=a.getRawData(),o=a.getShadowDim&&a.getShadowDim(),l=o&&s.getDimensionInfo(o)?a.getShadowDim():e.otherDim;if(l==null)return;var u=this._shadowPolygonPts,d=this._shadowPolylinePts;if(s!==this._shadowData||l!==this._shadowDim||n[0]!==i[0]||n[1]!==i[1]){var c=s.getDataExtent(l),f=(c[1]-c[0])*.3;c=[c[0]-f,c[1]+f];var h=[0,n[1]],m=[0,n[0]],p=[[n[0],0],[0,0]],g=[],v=m[1]/(s.count()-1),x=0,y=Math.round(s.count()/n[0]),w;s.each([l],function(U,L){if(y>0&&L%y){x+=v;return}var W=U==null||isNaN(U)||U==="",B=W?0:Ur(U,c,h,!0);W&&!w&&L?(p.push([p[p.length-1][0],0]),g.push([g[g.length-1][0],0])):!W&&w&&(p.push([x,0]),g.push([x,0])),p.push([x,B]),g.push([x,B]),x+=v,w=W}),u=this._shadowPolygonPts=p,d=this._shadowPolylinePts=g}this._shadowData=s,this._shadowDim=l,this._shadowSize=[n[0],n[1]];var _=this.dataZoomModel;function D(U){var L=_.getModel(U?"selectedDataBackground":"dataBackground"),W=new zt,B=new $i({shape:{points:u},segmentIgnoreThreshold:1,style:L.getModel("areaStyle").getAreaStyle(),silent:!0,z2:-20}),z=new Qi({shape:{points:d},segmentIgnoreThreshold:1,style:L.getModel("lineStyle").getLineStyle(),silent:!0,z2:-19});return W.add(B),W.add(z),W}for(var P=0;P<3;P++){var O=D(P===1);this._displayables.sliderGroup.add(O),this._displayables.dataShadowSegs.push(O)}},t.prototype._prepareDataShadowInfo=function(){var e=this.dataZoomModel,n=e.get("showDataShadow");if(n!==!1){var i,a=this.ecModel;return e.eachTargetAxis(function(s,o){var l=e.getAxisProxy(s,o).getTargetSeriesModels();oe(l,function(u){if(!i&&!(n!==!0&&Vt(Z3e,u.get("type"))<0)){var d=a.getComponent(Hu(s),o).axis,c=q3e(s),f,h=u.coordinateSystem;c!=null&&h.getOtherAxis&&(f=h.getOtherAxis(d).inverse),c=u.getData().mapDimension(c),i={thisAxis:d,series:u,thisDim:s,otherDim:c,otherAxisInverse:f}}},this)},this),i}},t.prototype._renderHandle=function(){var e=this.group,n=this._displayables,i=n.handles=[null,null],a=n.handleLabels=[null,null],s=this._displayables.sliderGroup,o=this._size,l=this.dataZoomModel,u=this.api,d=l.get("borderRadius")||0,c=l.get("brushSelect"),f=n.filler=new Ym({silent:c,style:{fill:l.get("fillerColor")},textConfig:{position:"inside"}});s.add(f),s.add(new Ym({silent:!0,subPixelOptimize:!0,shape:{x:0,y:0,width:o[0],height:o[1],r:d},style:{stroke:l.get("dataBackgroundColor")||l.get("borderColor"),lineWidth:j3e,fill:"rgba(0,0,0,0)"}})),oe([0,1],function(y){var w=l.get("handleIcon");!Ex[w]&&w.indexOf("path://")<0&&w.indexOf("image://")<0&&(w="path://"+w);var _=On(w,-1,0,2,2,null,!0);_.attr({cursor:rU(this._orient),draggable:!0,drift:ht(this._onDragMove,this,y),ondragend:ht(this._onDragEnd,this),onmouseover:ht(this._showDataInfo,this,!0),onmouseout:ht(this._showDataInfo,this,!1),z2:5});var D=_.getBoundingRect(),P=l.get("handleSize");this._handleHeight=ut(P,this._size[1]),this._handleWidth=D.width/D.height*this._handleHeight,_.setStyle(l.getModel("handleStyle").getItemStyle()),_.style.strokeNoScale=!0,_.rectHover=!0,_.ensureState("emphasis").style=l.getModel(["emphasis","handleStyle"]).getItemStyle(),ju(_);var O=l.get("handleColor");O!=null&&(_.style.fill=O),s.add(i[y]=_);var U=l.getModel("textStyle"),L=l.get("handleLabel")||{},W=L.show||!1;e.add(a[y]=new dr({silent:!0,invisible:!W,style:en(U,{x:0,y:0,text:"",verticalAlign:"middle",align:"center",fill:U.getTextColor(),font:U.getFont()}),z2:10}))},this);var h=f;if(c){var m=ut(l.get("moveHandleSize"),o[1]),p=n.moveHandle=new cr({style:l.getModel("moveHandleStyle").getItemStyle(),silent:!0,shape:{r:[0,0,2,2],y:o[1]-.5,height:m}}),g=m*.8,v=n.moveHandleIcon=On(l.get("moveHandleIcon"),-g/2,-g/2,g,g,"#fff",!0);v.silent=!0,v.y=o[1]+m/2-.5,p.ensureState("emphasis").style=l.getModel(["emphasis","moveHandleStyle"]).getItemStyle();var x=Math.min(o[1]/2,Math.max(m,10));h=n.moveZone=new cr({invisible:!0,shape:{y:o[1]-x,height:m+x}}),h.on("mouseover",function(){u.enterEmphasis(p)}).on("mouseout",function(){u.leaveEmphasis(p)}),s.add(p),s.add(v),s.add(h)}h.attr({draggable:!0,cursor:rU(this._orient),drift:ht(this._onDragMove,this,"all"),ondragstart:ht(this._showDataInfo,this,!0),ondragend:ht(this._onDragEnd,this),onmouseover:ht(this._showDataInfo,this,!0),onmouseout:ht(this._showDataInfo,this,!1)})},t.prototype._resetInterval=function(){var e=this._range=this.dataZoomModel.getPercentRange(),n=this._getViewExtent();this._handleEnds=[Ur(e[0],[0,100],n,!0),Ur(e[1],[0,100],n,!0)]},t.prototype._updateInterval=function(e,n){var i=this.dataZoomModel,a=this._handleEnds,s=this._getViewExtent(),o=i.findRepresentativeAxisProxy().getMinMaxSpan(),l=[0,100];ff(n,a,s,i.get("zoomLock")?"all":e,o.minSpan!=null?Ur(o.minSpan,l,s,!0):null,o.maxSpan!=null?Ur(o.maxSpan,l,s,!0):null);var u=this._range,d=this._range=Xa([Ur(a[0],s,l,!0),Ur(a[1],s,l,!0)]);return!u||u[0]!==d[0]||u[1]!==d[1]},t.prototype._updateView=function(e){var n=this._displayables,i=this._handleEnds,a=Xa(i.slice()),s=this._size;oe([0,1],function(h){var m=n.handles[h],p=this._handleHeight;m.attr({scaleX:p/2,scaleY:p/2,x:i[h]+(h?-1:1),y:s[1]/2-p/2})},this),n.filler.setShape({x:a[0],y:0,width:a[1]-a[0],height:s[1]});var o={x:a[0],width:a[1]-a[0]};n.moveHandle&&(n.moveHandle.setShape(o),n.moveZone.setShape(o),n.moveZone.getBoundingRect(),n.moveHandleIcon&&n.moveHandleIcon.attr("x",o.x+o.width/2));for(var l=n.dataShadowSegs,u=[0,a[0],a[1],s[0]],d=0;d<l.length;d++){var c=l[d],f=c.getClipPath();f||(f=new cr,c.setClipPath(f)),f.setShape({x:u[d],y:0,width:u[d+1]-u[d],height:s[1]})}this._updateDataInfo(e)},t.prototype._updateDataInfo=function(e){var n=this.dataZoomModel,i=this._displayables,a=i.handleLabels,s=this._orient,o=["",""];if(n.get("showDetail")){var l=n.findRepresentativeAxisProxy();if(l){var u=l.getAxisModel().axis,d=this._range,c=e?l.calculateDataWindow({start:d[0],end:d[1]}).valueWindow:l.getDataValueWindow();o=[this._formatLabel(c[0],u),this._formatLabel(c[1],u)]}}var f=Xa(this._handleEnds.slice());h.call(this,0),h.call(this,1);function h(m){var p=Vu(i.handles[m].parent,this.group),g=Bb(m===0?"right":"left",p),v=this._handleWidth/2+G3e,x=to([f[m]+(m===0?-v:v),this._size[1]/2],p);a[m].setStyle({x:x[0],y:x[1],verticalAlign:s===$m?"middle":g,align:s===$m?g:"center",text:o[m]})}},t.prototype._formatLabel=function(e,n){var i=this.dataZoomModel,a=i.get("labelFormatter"),s=i.get("labelPrecision");(s==null||s==="auto")&&(s=n.getPixelPrecision());var o=e==null||isNaN(e)?"":n.type==="category"||n.type==="time"?n.scale.getLabel({value:Math.round(e)}):e.toFixed(Math.min(s,20));return Tt(a)?a(e,o):ct(a)?a.replace("{value}",o):o},t.prototype._showDataInfo=function(e){var n=this.dataZoomModel.get("handleLabel")||{},i=n.show||!1,a=this.dataZoomModel.getModel(["emphasis","handleLabel"]),s=a.get("show")||!1,o=e||this._dragging?s:i,l=this._displayables,u=l.handleLabels;u[0].attr("invisible",!o),u[1].attr("invisible",!o),l.moveHandle&&this.api[o?"enterEmphasis":"leaveEmphasis"](l.moveHandle,1)},t.prototype._onDragMove=function(e,n,i,a){this._dragging=!0,kl(a.event);var s=this._displayables.sliderGroup.getLocalTransform(),o=to([n,i],s,!0),l=this._updateInterval(e,o[0]),u=this.dataZoomModel.get("realtime");this._updateView(!u),l&&u&&this._dispatchZoomAction(!0)},t.prototype._onDragEnd=function(){this._dragging=!1,this._showDataInfo(!1);var e=this.dataZoomModel.get("realtime");!e&&this._dispatchZoomAction(!1)},t.prototype._onClickPanel=function(e){var n=this._size,i=this._displayables.sliderGroup.transformCoordToLocal(e.offsetX,e.offsetY);if(!(i[0]<0||i[0]>n[0]||i[1]<0||i[1]>n[1])){var a=this._handleEnds,s=(a[0]+a[1])/2,o=this._updateInterval("all",i[0]-s);this._updateView(),o&&this._dispatchZoomAction(!1)}},t.prototype._onBrushStart=function(e){var n=e.offsetX,i=e.offsetY;this._brushStart=new Xt(n,i),this._brushing=!0,this._brushStartTime=+new Date},t.prototype._onBrushEnd=function(e){if(this._brushing){var n=this._displayables.brushRect;if(this._brushing=!1,!!n){n.attr("ignore",!0);var i=n.shape,a=+new Date;if(!(a-this._brushStartTime<200&&Math.abs(i.width)<5)){var s=this._getViewExtent(),o=[0,100];this._range=Xa([Ur(i.x,s,o,!0),Ur(i.x+i.width,s,o,!0)]),this._handleEnds=[i.x,i.x+i.width],this._updateView(),this._dispatchZoomAction(!1)}}}},t.prototype._onBrush=function(e){this._brushing&&(kl(e.event),this._updateBrushRect(e.offsetX,e.offsetY))},t.prototype._updateBrushRect=function(e,n){var i=this._displayables,a=this.dataZoomModel,s=i.brushRect;s||(s=i.brushRect=new Ym({silent:!0,style:a.getModel("brushStyle").getItemStyle()}),i.sliderGroup.add(s)),s.attr("ignore",!1);var o=this._brushStart,l=this._displayables.sliderGroup,u=l.transformCoordToLocal(e,n),d=l.transformCoordToLocal(o.x,o.y),c=this._size;u[0]=Math.max(Math.min(c[0],u[0]),0),s.setShape({x:d[0],y:0,width:u[0]-d[0],height:c[1]})},t.prototype._dispatchZoomAction=function(e){var n=this._range;this.api.dispatchAction({type:"dataZoom",from:this.uid,dataZoomId:this.dataZoomModel.id,animation:e?Y3e:null,start:n[0],end:n[1]})},t.prototype._findCoordRect=function(){var e,n=mj(this.dataZoomModel).infoList;if(!e&&n.length){var i=n[0].model.coordinateSystem;e=i.getRect&&i.getRect()}if(!e){var a=this.api.getWidth(),s=this.api.getHeight();e={x:a*.2,y:s*.2,width:a*.6,height:s*.6}}return e},t.type="dataZoom.slider",t})(mT);function q3e(r){var t={x:"y",y:"x",radius:"angle",angle:"radius"};return t[r]}function rU(r){return r==="vertical"?"ns-resize":"ew-resize"}function Oj(r){r.registerComponentModel(X3e),r.registerComponentView($3e),pT(r)}function K3e(r){Qt(Pj),Qt(Oj)}var Uj={get:function(r,t,e){var n=kt((Q3e[r]||{})[t]);return e&&Ge(n)?n[n.length-1]:n}},Q3e={color:{active:["#006edd","#e0ffff"],inactive:["rgba(0,0,0,0)"]},colorHue:{active:[0,360],inactive:[0,0]},colorSaturation:{active:[.3,1],inactive:[0,0]},colorLightness:{active:[.9,.5],inactive:[0,0]},colorAlpha:{active:[.3,1],inactive:[0,0]},opacity:{active:[.3,1],inactive:[0,0]},symbol:{active:["circle","roundRect","diamond"],inactive:["none"]},symbolSize:{active:[10,50],inactive:[0,0]}},nU=ai.mapVisual,J3e=ai.eachVisual,e5e=Ge,iU=oe,t5e=Xa,r5e=Ur,nb=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.stateList=["inRange","outOfRange"],e.replacableOptionKeys=["inRange","outOfRange","target","controller","color"],e.layoutMode={type:"box",ignoreSize:!0},e.dataBound=[-1/0,1/0],e.targetVisuals={},e.controllerVisuals={},e}return t.prototype.init=function(e,n,i){this.mergeDefaultAndTheme(e,i)},t.prototype.optionUpdated=function(e,n){var i=this.option;!n&&_j(i,e,this.replacableOptionKeys),this.textStyleModel=this.getModel("textStyle"),this.resetItemSize(),this.completeVisualOption()},t.prototype.resetVisual=function(e){var n=this.stateList;e=ht(e,this),this.controllerVisuals=t8(this.option.controller,n,e),this.targetVisuals=t8(this.option.target,n,e)},t.prototype.getItemSymbol=function(){return null},t.prototype.getTargetSeriesIndices=function(){var e=this.option.seriesIndex,n=[];return e==null||e==="all"?this.ecModel.eachSeries(function(i,a){n.push(a)}):n=qr(e),n},t.prototype.eachTargetSeries=function(e,n){oe(this.getTargetSeriesIndices(),function(i){var a=this.ecModel.getSeriesByIndex(i);a&&e.call(n,a)},this)},t.prototype.isTargetSeries=function(e){var n=!1;return this.eachTargetSeries(function(i){i===e&&(n=!0)}),n},t.prototype.formatValueText=function(e,n,i){var a=this.option,s=a.precision,o=this.dataBound,l=a.formatter,u;i=i||["<",">"],Ge(e)&&(e=e.slice(),u=!0);var d=n?e:u?[c(e[0]),c(e[1])]:c(e);if(ct(l))return l.replace("{value}",u?d[0]:d).replace("{value2}",u?d[1]:d);if(Tt(l))return u?l(e[0],e[1]):l(e);if(u)return e[0]===o[0]?i[0]+" "+d[1]:e[1]===o[1]?i[1]+" "+d[0]:d[0]+" - "+d[1];return d;function c(f){return f===o[0]?"min":f===o[1]?"max":(+f).toFixed(Math.min(s,20))}},t.prototype.resetExtent=function(){var e=this.option,n=t5e([e.min,e.max]);this._dataExtent=n},t.prototype.getDataDimensionIndex=function(e){var n=this.option.dimension;if(n!=null)return e.getDimensionIndex(n);for(var i=e.dimensions,a=i.length-1;a>=0;a--){var s=i[a],o=e.getDimensionInfo(s);if(!o.isCalculationCoord)return o.storeDimIndex}},t.prototype.getExtent=function(){return this._dataExtent.slice()},t.prototype.completeVisualOption=function(){var e=this.ecModel,n=this.option,i={inRange:n.inRange,outOfRange:n.outOfRange},a=n.target||(n.target={}),s=n.controller||(n.controller={});Bt(a,i),Bt(s,i);var o=this.isCategory();l.call(this,a),l.call(this,s),u.call(this,a,"inRange","outOfRange"),d.call(this,s);function l(c){e5e(n.color)&&!c.inRange&&(c.inRange={color:n.color.slice().reverse()}),c.inRange=c.inRange||{color:e.get("gradientColor")}}function u(c,f,h){var m=c[f],p=c[h];m&&!p&&(p=c[h]={},iU(m,function(g,v){if(ai.isValidType(v)){var x=Uj.get(v,"inactive",o);x!=null&&(p[v]=x,v==="color"&&!p.hasOwnProperty("opacity")&&!p.hasOwnProperty("colorAlpha")&&(p.opacity=[0,0]))}}))}function d(c){var f=(c.inRange||{}).symbol||(c.outOfRange||{}).symbol,h=(c.inRange||{}).symbolSize||(c.outOfRange||{}).symbolSize,m=this.get("inactiveColor"),p=this.getItemSymbol(),g=p||"roundRect";iU(this.stateList,function(v){var x=this.itemSize,y=c[v];y||(y=c[v]={color:o?m:[m]}),y.symbol==null&&(y.symbol=f&&kt(f)||(o?g:[g])),y.symbolSize==null&&(y.symbolSize=h&&kt(h)||(o?x[0]:[x[0],x[0]])),y.symbol=nU(y.symbol,function(D){return D==="none"?g:D});var w=y.symbolSize;if(w!=null){var _=-1/0;J3e(w,function(D){D>_&&(_=D)}),y.symbolSize=nU(w,function(D){return r5e(D,[0,_],[0,x[0]],!0)})}},this)}},t.prototype.resetItemSize=function(){this.itemSize=[parseFloat(this.get("itemWidth")),parseFloat(this.get("itemHeight"))]},t.prototype.isCategory=function(){return!!this.option.categories},t.prototype.setSelected=function(e){},t.prototype.getSelected=function(){return null},t.prototype.getValueState=function(e){return null},t.prototype.getVisualMeta=function(e){return null},t.type="visualMap",t.dependencies=["series"],t.defaultOption={show:!0,z:4,seriesIndex:"all",min:0,max:200,left:0,right:null,top:null,bottom:0,itemWidth:null,itemHeight:null,inverse:!1,orient:"vertical",backgroundColor:"rgba(0,0,0,0)",borderColor:"#ccc",contentColor:"#5793f3",inactiveColor:"#aaa",borderWidth:0,padding:5,textGap:10,precision:0,textStyle:{color:"#333"}},t})(tr),aU=[20,140],n5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.optionUpdated=function(e,n){r.prototype.optionUpdated.apply(this,arguments),this.resetExtent(),this.resetVisual(function(i){i.mappingMethod="linear",i.dataExtent=this.getExtent()}),this._resetRange()},t.prototype.resetItemSize=function(){r.prototype.resetItemSize.apply(this,arguments);var e=this.itemSize;(e[0]==null||isNaN(e[0]))&&(e[0]=aU[0]),(e[1]==null||isNaN(e[1]))&&(e[1]=aU[1])},t.prototype._resetRange=function(){var e=this.getExtent(),n=this.option.range;!n||n.auto?(e.auto=1,this.option.range=e):Ge(n)&&(n[0]>n[1]&&n.reverse(),n[0]=Math.max(n[0],e[0]),n[1]=Math.min(n[1],e[1]))},t.prototype.completeVisualOption=function(){r.prototype.completeVisualOption.apply(this,arguments),oe(this.stateList,function(e){var n=this.option.controller[e].symbolSize;n&&n[0]!==n[1]&&(n[0]=n[1]/3)},this)},t.prototype.setSelected=function(e){this.option.range=e.slice(),this._resetRange()},t.prototype.getSelected=function(){var e=this.getExtent(),n=Xa((this.get("range")||[]).slice());return n[0]>e[1]&&(n[0]=e[1]),n[1]>e[1]&&(n[1]=e[1]),n[0]<e[0]&&(n[0]=e[0]),n[1]<e[0]&&(n[1]=e[0]),n},t.prototype.getValueState=function(e){var n=this.option.range,i=this.getExtent();return(n[0]<=i[0]||n[0]<=e)&&(n[1]>=i[1]||e<=n[1])?"inRange":"outOfRange"},t.prototype.findTargetDataIndices=function(e){var n=[];return this.eachTargetSeries(function(i){var a=[],s=i.getData();s.each(this.getDataDimensionIndex(s),function(o,l){e[0]<=o&&o<=e[1]&&a.push(l)},this),n.push({seriesId:i.id,dataIndex:a})},this),n},t.prototype.getVisualMeta=function(e){var n=sU(this,"outOfRange",this.getExtent()),i=sU(this,"inRange",this.option.range.slice()),a=[];function s(h,m){a.push({value:h,color:e(h,m)})}for(var o=0,l=0,u=i.length,d=n.length;l<d&&(!i.length||n[l]<=i[0]);l++)n[l]<i[o]&&s(n[l],"outOfRange");for(var c=1;o<u;o++,c=0)c&&a.length&&s(i[o],"outOfRange"),s(i[o],"inRange");for(var c=1;l<d;l++)(!i.length||i[i.length-1]<n[l])&&(c&&(a.length&&s(a[a.length-1].value,"outOfRange"),c=0),s(n[l],"outOfRange"));var f=a.length;return{stops:a,outerColors:[f?a[0].color:"transparent",f?a[f-1].color:"transparent"]}},t.type="visualMap.continuous",t.defaultOption=cd(nb.defaultOption,{align:"auto",calculable:!1,hoverLink:!0,realtime:!0,handleIcon:"path://M-11.39,9.77h0a3.5,3.5,0,0,1-3.5,3.5h-22a3.5,3.5,0,0,1-3.5-3.5h0a3.5,3.5,0,0,1,3.5-3.5h22A3.5,3.5,0,0,1-11.39,9.77Z",handleSize:"120%",handleStyle:{borderColor:"#fff",borderWidth:1},indicatorIcon:"circle",indicatorSize:"50%",indicatorStyle:{borderColor:"#fff",borderWidth:2,shadowBlur:2,shadowOffsetX:1,shadowOffsetY:1,shadowColor:"rgba(0,0,0,0.2)"}}),t})(nb);function sU(r,t,e){if(e[0]===e[1])return e.slice();for(var n=200,i=(e[1]-e[0])/n,a=e[0],s=[],o=0;o<=n&&a<e[1];o++)s.push(a),a+=i;return s.push(e[1]),s}var Ij=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.autoPositionValues={left:1,right:1,top:1,bottom:1},e}return t.prototype.init=function(e,n){this.ecModel=e,this.api=n},t.prototype.render=function(e,n,i,a){if(this.visualMapModel=e,e.get("show")===!1){this.group.removeAll();return}this.doRender(e,n,i,a)},t.prototype.renderBackground=function(e){var n=this.visualMapModel,i=lf(n.get("padding")||0),a=e.getBoundingRect();e.add(new cr({z2:-1,silent:!0,shape:{x:a.x-i[3],y:a.y-i[0],width:a.width+i[3]+i[1],height:a.height+i[0]+i[2]},style:{fill:n.get("backgroundColor"),stroke:n.get("borderColor"),lineWidth:n.get("borderWidth")}}))},t.prototype.getControllerVisual=function(e,n,i){i=i||{};var a=i.forceState,s=this.visualMapModel,o={};if(n==="color"){var l=s.get("contentColor");o.color=l}function u(h){return o[h]}function d(h,m){o[h]=m}var c=s.controllerVisuals[a||s.getValueState(e)],f=ai.prepareVisualTypes(c);return oe(f,function(h){var m=c[h];i.convertOpacityToAlpha&&h==="opacity"&&(h="colorAlpha",m=c.__alphaForOpacity),ai.dependsOn(h,n)&&m&&m.applyVisual(e,u,d)}),o[n]},t.prototype.positionGroup=function(e){var n=this.visualMapModel,i=this.api;Vb(e,n.getBoxLayoutParams(),{width:i.getWidth(),height:i.getHeight()})},t.prototype.doRender=function(e,n,i,a){},t.type="visualMap",t})(ln),oU=[["left","right","width"],["top","bottom","height"]];function Rj(r,t,e){var n=r.option,i=n.align;if(i!=null&&i!=="auto")return i;for(var a={width:t.getWidth(),height:t.getHeight()},s=n.orient==="horizontal"?1:0,o=oU[s],l=[0,null,10],u={},d=0;d<3;d++)u[oU[1-s][d]]=l[d],u[o[d]]=d===2?e[0]:n[o[d]];var c=[["x","width",3],["y","height",0]][s],f=Hn(u,a,n.padding);return o[(f.margin[c[2]]||0)+f[c[0]]+f[c[1]]*.5<a[c[1]]*.5?0:1]}function Z2(r,t){return oe(r||[],function(e){e.dataIndex!=null&&(e.dataIndexInside=e.dataIndex,e.dataIndex=null),e.highlightKey="visualMap"+(t?t.componentIndex:"")}),r}var Co=Ur,i5e=oe,lU=Math.min,i5=Math.max,a5e=12,s5e=6,o5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e._shapes={},e._dataInterval=[],e._handleEnds=[],e._hoverLinkDataIndices=[],e}return t.prototype.init=function(e,n){r.prototype.init.call(this,e,n),this._hoverLinkFromSeriesMouseOver=ht(this._hoverLinkFromSeriesMouseOver,this),this._hideIndicator=ht(this._hideIndicator,this)},t.prototype.doRender=function(e,n,i,a){(!a||a.type!=="selectDataRange"||a.from!==this.uid)&&this._buildView()},t.prototype._buildView=function(){this.group.removeAll();var e=this.visualMapModel,n=this.group;this._orient=e.get("orient"),this._useHandle=e.get("calculable"),this._resetInterval(),this._renderBar(n);var i=e.get("text");this._renderEndsText(n,i,0),this._renderEndsText(n,i,1),this._updateView(!0),this.renderBackground(n),this._updateView(),this._enableHoverLinkToSeries(),this._enableHoverLinkFromSeries(),this.positionGroup(n)},t.prototype._renderEndsText=function(e,n,i){if(n){var a=n[1-i];a=a!=null?a+"":"";var s=this.visualMapModel,o=s.get("textGap"),l=s.itemSize,u=this._shapes.mainGroup,d=this._applyTransform([l[0]/2,i===0?-o:l[1]+o],u),c=this._applyTransform(i===0?"bottom":"top",u),f=this._orient,h=this.visualMapModel.textStyleModel;this.group.add(new dr({style:en(h,{x:d[0],y:d[1],verticalAlign:f==="horizontal"?"middle":c,align:f==="horizontal"?c:"center",text:a})}))}},t.prototype._renderBar=function(e){var n=this.visualMapModel,i=this._shapes,a=n.itemSize,s=this._orient,o=this._useHandle,l=Rj(n,this.api,a),u=i.mainGroup=this._createBarGroup(l),d=new zt;u.add(d),d.add(i.outOfRange=uU()),d.add(i.inRange=uU(null,o?cU(this._orient):null,ht(this._dragHandle,this,"all",!1),ht(this._dragHandle,this,"all",!0))),d.setClipPath(new cr({shape:{x:0,y:0,width:a[0],height:a[1],r:3}}));var c=n.textStyleModel.getTextRect("国"),f=i5(c.width,c.height);o&&(i.handleThumbs=[],i.handleLabels=[],i.handleLabelPoints=[],this._createHandle(n,u,0,a,f,s),this._createHandle(n,u,1,a,f,s)),this._createIndicator(n,u,a,f,s),e.add(u)},t.prototype._createHandle=function(e,n,i,a,s,o){var l=ht(this._dragHandle,this,i,!1),u=ht(this._dragHandle,this,i,!0),d=io(e.get("handleSize"),a[0]),c=On(e.get("handleIcon"),-d/2,-d/2,d,d,null,!0),f=cU(this._orient);c.attr({cursor:f,draggable:!0,drift:l,ondragend:u,onmousemove:function(v){kl(v.event)}}),c.x=a[0]/2,c.useStyle(e.getModel("handleStyle").getItemStyle()),c.setStyle({strokeNoScale:!0,strokeFirst:!0}),c.style.lineWidth*=2,c.ensureState("emphasis").style=e.getModel(["emphasis","handleStyle"]).getItemStyle(),vc(c,!0),n.add(c);var h=this.visualMapModel.textStyleModel,m=new dr({cursor:f,draggable:!0,drift:l,onmousemove:function(v){kl(v.event)},ondragend:u,style:en(h,{x:0,y:0,text:""})});m.ensureState("blur").style={opacity:.1},m.stateTransition={duration:200},this.group.add(m);var p=[d,0],g=this._shapes;g.handleThumbs[i]=c,g.handleLabelPoints[i]=p,g.handleLabels[i]=m},t.prototype._createIndicator=function(e,n,i,a,s){var o=io(e.get("indicatorSize"),i[0]),l=On(e.get("indicatorIcon"),-o/2,-o/2,o,o,null,!0);l.attr({cursor:"move",invisible:!0,silent:!0,x:i[0]/2});var u=e.getModel("indicatorStyle").getItemStyle();if(l instanceof ui){var d=l.style;l.useStyle(We({image:d.image,x:d.x,y:d.y,width:d.width,height:d.height},u))}else l.useStyle(u);n.add(l);var c=this.visualMapModel.textStyleModel,f=new dr({silent:!0,invisible:!0,style:en(c,{x:0,y:0,text:""})});this.group.add(f);var h=[(s==="horizontal"?a/2:s5e)+i[0]/2,0],m=this._shapes;m.indicator=l,m.indicatorLabel=f,m.indicatorLabelPoint=h,this._firstShowIndicator=!0},t.prototype._dragHandle=function(e,n,i,a){if(this._useHandle){if(this._dragging=!n,!n){var s=this._applyTransform([i,a],this._shapes.mainGroup,!0);this._updateInterval(e,s[1]),this._hideIndicator(),this._updateView()}n===!this.visualMapModel.get("realtime")&&this.api.dispatchAction({type:"selectDataRange",from:this.uid,visualMapId:this.visualMapModel.id,selected:this._dataInterval.slice()}),n?!this._hovering&&this._clearHoverLinkToSeries():dU(this.visualMapModel)&&this._doHoverLinkToSeries(this._handleEnds[e],!1)}},t.prototype._resetInterval=function(){var e=this.visualMapModel,n=this._dataInterval=e.getSelected(),i=e.getExtent(),a=[0,e.itemSize[1]];this._handleEnds=[Co(n[0],i,a,!0),Co(n[1],i,a,!0)]},t.prototype._updateInterval=function(e,n){n=n||0;var i=this.visualMapModel,a=this._handleEnds,s=[0,i.itemSize[1]];ff(n,a,s,e,0);var o=i.getExtent();this._dataInterval=[Co(a[0],s,o,!0),Co(a[1],s,o,!0)]},t.prototype._updateView=function(e){var n=this.visualMapModel,i=n.getExtent(),a=this._shapes,s=[0,n.itemSize[1]],o=e?s:this._handleEnds,l=this._createBarVisual(this._dataInterval,i,o,"inRange"),u=this._createBarVisual(i,i,s,"outOfRange");a.inRange.setStyle({fill:l.barColor}).setShape("points",l.barPoints),a.outOfRange.setStyle({fill:u.barColor}).setShape("points",u.barPoints),this._updateHandle(o,l)},t.prototype._createBarVisual=function(e,n,i,a){var s={forceState:a,convertOpacityToAlpha:!0},o=this._makeColorGradient(e,s),l=[this.getControllerVisual(e[0],"symbolSize",s),this.getControllerVisual(e[1],"symbolSize",s)],u=this._createBarPoints(i,l);return{barColor:new ch(0,0,0,1,o),barPoints:u,handlesColor:[o[0].color,o[o.length-1].color]}},t.prototype._makeColorGradient=function(e,n){var i=100,a=[],s=(e[1]-e[0])/i;a.push({color:this.getControllerVisual(e[0],"color",n),offset:0});for(var o=1;o<i;o++){var l=e[0]+s*o;if(l>e[1])break;a.push({color:this.getControllerVisual(l,"color",n),offset:o/i})}return a.push({color:this.getControllerVisual(e[1],"color",n),offset:1}),a},t.prototype._createBarPoints=function(e,n){var i=this.visualMapModel.itemSize;return[[i[0]-n[0],e[0]],[i[0],e[0]],[i[0],e[1]],[i[0]-n[1],e[1]]]},t.prototype._createBarGroup=function(e){var n=this._orient,i=this.visualMapModel.get("inverse");return new zt(n==="horizontal"&&!i?{scaleX:e==="bottom"?1:-1,rotation:Math.PI/2}:n==="horizontal"&&i?{scaleX:e==="bottom"?-1:1,rotation:-Math.PI/2}:n==="vertical"&&!i?{scaleX:e==="left"?1:-1,scaleY:-1}:{scaleX:e==="left"?1:-1})},t.prototype._updateHandle=function(e,n){if(this._useHandle){var i=this._shapes,a=this.visualMapModel,s=i.handleThumbs,o=i.handleLabels,l=a.itemSize,u=a.getExtent(),d=this._applyTransform("left",i.mainGroup);i5e([0,1],function(c){var f=s[c];f.setStyle("fill",n.handlesColor[c]),f.y=e[c];var h=Co(e[c],[0,l[1]],u,!0),m=this.getControllerVisual(h,"symbolSize");f.scaleX=f.scaleY=m/l[0],f.x=l[0]-m/2;var p=to(i.handleLabelPoints[c],Vu(f,this.group));if(this._orient==="horizontal"){var g=d==="left"||d==="top"?(l[0]-m)/2:(l[0]-m)/-2;p[1]+=g}o[c].setStyle({x:p[0],y:p[1],text:a.formatValueText(this._dataInterval[c]),verticalAlign:"middle",align:this._orient==="vertical"?this._applyTransform("left",i.mainGroup):"center"})},this)}},t.prototype._showIndicator=function(e,n,i,a){var s=this.visualMapModel,o=s.getExtent(),l=s.itemSize,u=[0,l[1]],d=this._shapes,c=d.indicator;if(c){c.attr("invisible",!1);var f={convertOpacityToAlpha:!0},h=this.getControllerVisual(e,"color",f),m=this.getControllerVisual(e,"symbolSize"),p=Co(e,o,u,!0),g=l[0]-m/2,v={x:c.x,y:c.y};c.y=p,c.x=g;var x=to(d.indicatorLabelPoint,Vu(c,this.group)),y=d.indicatorLabel;y.attr("invisible",!1);var w=this._applyTransform("left",d.mainGroup),_=this._orient,D=_==="horizontal";y.setStyle({text:(i||"")+s.formatValueText(n),verticalAlign:D?w:"middle",align:D?"center":w});var P={x:g,y:p,style:{fill:h}},O={style:{x:x[0],y:x[1]}};if(s.ecModel.isAnimationEnabled()&&!this._firstShowIndicator){var U={duration:100,easing:"cubicInOut",additive:!0};c.x=v.x,c.y=v.y,c.animateTo(P,U),y.animateTo(O,U)}else c.attr(P),y.attr(O);this._firstShowIndicator=!1;var L=this._shapes.handleLabels;if(L)for(var W=0;W<L.length;W++)this.api.enterBlur(L[W])}},t.prototype._enableHoverLinkToSeries=function(){var e=this;this._shapes.mainGroup.on("mousemove",function(n){if(e._hovering=!0,!e._dragging){var i=e.visualMapModel.itemSize,a=e._applyTransform([n.offsetX,n.offsetY],e._shapes.mainGroup,!0,!0);a[1]=lU(i5(0,a[1]),i[1]),e._doHoverLinkToSeries(a[1],0<=a[0]&&a[0]<=i[0])}}).on("mouseout",function(){e._hovering=!1,!e._dragging&&e._clearHoverLinkToSeries()})},t.prototype._enableHoverLinkFromSeries=function(){var e=this.api.getZr();this.visualMapModel.option.hoverLink?(e.on("mouseover",this._hoverLinkFromSeriesMouseOver,this),e.on("mouseout",this._hideIndicator,this)):this._clearHoverLinkFromSeries()},t.prototype._doHoverLinkToSeries=function(e,n){var i=this.visualMapModel,a=i.itemSize;if(i.option.hoverLink){var s=[0,a[1]],o=i.getExtent();e=lU(i5(s[0],e),s[1]);var l=l5e(i,o,s),u=[e-l,e+l],d=Co(e,s,o,!0),c=[Co(u[0],s,o,!0),Co(u[1],s,o,!0)];u[0]<s[0]&&(c[0]=-1/0),u[1]>s[1]&&(c[1]=1/0),n&&(c[0]===-1/0?this._showIndicator(d,c[1],"< ",l):c[1]===1/0?this._showIndicator(d,c[0],"> ",l):this._showIndicator(d,d,"≈ ",l));var f=this._hoverLinkDataIndices,h=[];(n||dU(i))&&(h=this._hoverLinkDataIndices=i.findTargetDataIndices(c));var m=eue(f,h);this._dispatchHighDown("downplay",Z2(m[0],i)),this._dispatchHighDown("highlight",Z2(m[1],i))}},t.prototype._hoverLinkFromSeriesMouseOver=function(e){var n;if(bc(e.target,function(l){var u=Pt(l);if(u.dataIndex!=null)return n=u,!0},!0),!!n){var i=this.ecModel.getSeriesByIndex(n.seriesIndex),a=this.visualMapModel;if(a.isTargetSeries(i)){var s=i.getData(n.dataType),o=s.getStore().get(a.getDataDimensionIndex(s),n.dataIndex);isNaN(o)||this._showIndicator(o,o)}}},t.prototype._hideIndicator=function(){var e=this._shapes;e.indicator&&e.indicator.attr("invisible",!0),e.indicatorLabel&&e.indicatorLabel.attr("invisible",!0);var n=this._shapes.handleLabels;if(n)for(var i=0;i<n.length;i++)this.api.leaveBlur(n[i])},t.prototype._clearHoverLinkToSeries=function(){this._hideIndicator();var e=this._hoverLinkDataIndices;this._dispatchHighDown("downplay",Z2(e,this.visualMapModel)),e.length=0},t.prototype._clearHoverLinkFromSeries=function(){this._hideIndicator();var e=this.api.getZr();e.off("mouseover",this._hoverLinkFromSeriesMouseOver),e.off("mouseout",this._hideIndicator)},t.prototype._applyTransform=function(e,n,i,a){var s=Vu(n,a?null:this.group);return Ge(e)?to(e,s,i):Bb(e,s,i)},t.prototype._dispatchHighDown=function(e,n){n&&n.length&&this.api.dispatchAction({type:e,batch:n})},t.prototype.dispose=function(){this._clearHoverLinkFromSeries(),this._clearHoverLinkToSeries()},t.type="visualMap.continuous",t})(Ij);function uU(r,t,e,n){return new $i({shape:{points:r},draggable:!!e,cursor:t,drift:e,onmousemove:function(i){kl(i.event)},ondragend:n})}function l5e(r,t,e){var n=a5e/2,i=r.get("hoverLinkDataSize");return i&&(n=Co(i,t,e,!0)/2),n}function dU(r){var t=r.get("hoverLinkOnHandle");return!!(t??r.get("realtime"))}function cU(r){return r==="vertical"?"ns-resize":"ew-resize"}var u5e={type:"selectDataRange",event:"dataRangeSelected",update:"update"},d5e=function(r,t){t.eachComponent({mainType:"visualMap",query:r},function(e){e.setSelected(r.selected)})},c5e=[{createOnAllSeries:!0,reset:function(r,t){var e=[];return t.eachComponent("visualMap",function(n){var i=r.pipelineContext;!n.isTargetSeries(r)||i&&i.large||e.push(Pwe(n.stateList,n.targetVisuals,ht(n.getValueState,n),n.getDataDimensionIndex(r.getData())))}),e}},{createOnAllSeries:!0,reset:function(r,t){var e=r.getData(),n=[];t.eachComponent("visualMap",function(i){if(i.isTargetSeries(r)){var a=i.getVisualMeta(ht(f5e,null,r,i))||{stops:[],outerColors:[]},s=i.getDataDimensionIndex(e);s>=0&&(a.dimension=s,n.push(a))}}),r.getData().setVisual("visualMeta",n)}}];function f5e(r,t,e,n){for(var i=t.targetVisuals[n],a=ai.prepareVisualTypes(i),s={color:Y1(r.getData(),"color")},o=0,l=a.length;o<l;o++){var u=a[o],d=i[u==="opacity"?"__alphaForOpacity":u];d&&d.applyVisual(e,c,f)}return s.color;function c(h){return s[h]}function f(h,m){s[h]=m}}var fU=oe;function h5e(r){var t=r&&r.visualMap;Ge(t)||(t=t?[t]:[]),fU(t,function(e){if(e){h0(e,"splitList")&&!h0(e,"pieces")&&(e.pieces=e.splitList,delete e.splitList);var n=e.pieces;n&&Ge(n)&&fU(n,function(i){At(i)&&(h0(i,"start")&&!h0(i,"min")&&(i.min=i.start),h0(i,"end")&&!h0(i,"max")&&(i.max=i.end))})}})}function h0(r,t){return r&&r.hasOwnProperty&&r.hasOwnProperty(t)}var hU=!1;function Lj(r){hU||(hU=!0,r.registerSubTypeDefaulter("visualMap",function(t){return!t.categories&&(!(t.pieces?t.pieces.length>0:t.splitNumber>0)||t.calculable)?"continuous":"piecewise"}),r.registerAction(u5e,d5e),oe(c5e,function(t){r.registerVisual(r.PRIORITY.VISUAL.COMPONENT,t)}),r.registerPreprocessor(h5e))}function Bj(r){r.registerComponentModel(n5e),r.registerComponentView(o5e),Lj(r)}var m5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e._pieceList=[],e}return t.prototype.optionUpdated=function(e,n){r.prototype.optionUpdated.apply(this,arguments),this.resetExtent();var i=this._mode=this._determineMode();this._pieceList=[],p5e[this._mode].call(this,this._pieceList),this._resetSelected(e,n);var a=this.option.categories;this.resetVisual(function(s,o){i==="categories"?(s.mappingMethod="category",s.categories=kt(a)):(s.dataExtent=this.getExtent(),s.mappingMethod="piecewise",s.pieceList=Ze(this._pieceList,function(l){return l=kt(l),o!=="inRange"&&(l.visual=null),l}))})},t.prototype.completeVisualOption=function(){var e=this.option,n={},i=ai.listVisualTypes(),a=this.isCategory();oe(e.pieces,function(o){oe(i,function(l){o.hasOwnProperty(l)&&(n[l]=1)})}),oe(n,function(o,l){var u=!1;oe(this.stateList,function(d){u=u||s(e,d,l)||s(e.target,d,l)},this),!u&&oe(this.stateList,function(d){(e[d]||(e[d]={}))[l]=Uj.get(l,d==="inRange"?"active":"inactive",a)})},this);function s(o,l,u){return o&&o[l]&&o[l].hasOwnProperty(u)}r.prototype.completeVisualOption.apply(this,arguments)},t.prototype._resetSelected=function(e,n){var i=this.option,a=this._pieceList,s=(n?i:e).selected||{};if(i.selected=s,oe(a,function(l,u){var d=this.getSelectedMapKey(l);s.hasOwnProperty(d)||(s[d]=!0)},this),i.selectedMode==="single"){var o=!1;oe(a,function(l,u){var d=this.getSelectedMapKey(l);s[d]&&(o?s[d]=!1:o=!0)},this)}},t.prototype.getItemSymbol=function(){return this.get("itemSymbol")},t.prototype.getSelectedMapKey=function(e){return this._mode==="categories"?e.value+"":e.index+""},t.prototype.getPieceList=function(){return this._pieceList},t.prototype._determineMode=function(){var e=this.option;return e.pieces&&e.pieces.length>0?"pieces":this.option.categories?"categories":"splitNumber"},t.prototype.setSelected=function(e){this.option.selected=kt(e)},t.prototype.getValueState=function(e){var n=ai.findPieceIndex(e,this._pieceList);return n!=null&&this.option.selected[this.getSelectedMapKey(this._pieceList[n])]?"inRange":"outOfRange"},t.prototype.findTargetDataIndices=function(e){var n=[],i=this._pieceList;return this.eachTargetSeries(function(a){var s=[],o=a.getData();o.each(this.getDataDimensionIndex(o),function(l,u){var d=ai.findPieceIndex(l,i);d===e&&s.push(u)},this),n.push({seriesId:a.id,dataIndex:s})},this),n},t.prototype.getRepresentValue=function(e){var n;if(this.isCategory())n=e.value;else if(e.value!=null)n=e.value;else{var i=e.interval||[];n=i[0]===-1/0&&i[1]===1/0?0:(i[0]+i[1])/2}return n},t.prototype.getVisualMeta=function(e){if(this.isCategory())return;var n=[],i=["",""],a=this;function s(d,c){var f=a.getRepresentValue({interval:d});c||(c=a.getValueState(f));var h=e(f,c);d[0]===-1/0?i[0]=h:d[1]===1/0?i[1]=h:n.push({value:d[0],color:h},{value:d[1],color:h})}var o=this._pieceList.slice();if(!o.length)o.push({interval:[-1/0,1/0]});else{var l=o[0].interval[0];l!==-1/0&&o.unshift({interval:[-1/0,l]}),l=o[o.length-1].interval[1],l!==1/0&&o.push({interval:[l,1/0]})}var u=-1/0;return oe(o,function(d){var c=d.interval;c&&(c[0]>u&&s([u,c[0]],"outOfRange"),s(c.slice()),u=c[1])},this),{stops:n,outerColors:i}},t.type="visualMap.piecewise",t.defaultOption=cd(nb.defaultOption,{selected:null,minOpen:!1,maxOpen:!1,align:"auto",itemWidth:20,itemHeight:14,itemSymbol:"roundRect",pieces:null,categories:null,splitNumber:5,selectedMode:"multiple",itemGap:10,hoverLink:!0}),t})(nb),p5e={splitNumber:function(r){var t=this.option,e=Math.min(t.precision,20),n=this.getExtent(),i=t.splitNumber;i=Math.max(parseInt(i,10),1),t.splitNumber=i;for(var a=(n[1]-n[0])/i;+a.toFixed(e)!==a&&e<5;)e++;t.precision=e,a=+a.toFixed(e),t.minOpen&&r.push({interval:[-1/0,n[0]],close:[0,0]});for(var s=0,o=n[0];s<i;o+=a,s++){var l=s===i-1?n[1]:o+a;r.push({interval:[o,l],close:[1,1]})}t.maxOpen&&r.push({interval:[n[1],1/0],close:[0,0]}),j5(r),oe(r,function(u,d){u.index=d,u.text=this.formatValueText(u.interval)},this)},categories:function(r){var t=this.option;oe(t.categories,function(e){r.push({text:this.formatValueText(e,!0),value:e})},this),mU(t,r)},pieces:function(r){var t=this.option;oe(t.pieces,function(e,n){At(e)||(e={value:e});var i={text:"",index:n};if(e.label!=null&&(i.text=e.label),e.hasOwnProperty("value")){var a=i.value=e.value;i.interval=[a,a],i.close=[1,1]}else{for(var s=i.interval=[],o=i.close=[0,0],l=[1,0,1],u=[-1/0,1/0],d=[],c=0;c<2;c++){for(var f=[["gte","gt","min"],["lte","lt","max"]][c],h=0;h<3&&s[c]==null;h++)s[c]=e[f[h]],o[c]=l[h],d[c]=h===2;s[c]==null&&(s[c]=u[c])}d[0]&&s[1]===1/0&&(o[0]=0),d[1]&&s[0]===-1/0&&(o[1]=0),s[0]===s[1]&&o[0]&&o[1]&&(i.value=s[0])}i.visual=ai.retrieveVisuals(e),r.push(i)},this),mU(t,r),j5(r),oe(r,function(e){var n=e.close,i=[["<","≤"][n[1]],[">","≥"][n[0]]];e.text=e.text||this.formatValueText(e.value!=null?e.value:e.interval,!1,i)},this)}};function mU(r,t){var e=r.inverse;(r.orient==="vertical"?!e:e)&&t.reverse()}var g5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.doRender=function(){var e=this.group;e.removeAll();var n=this.visualMapModel,i=n.get("textGap"),a=n.textStyleModel,s=a.getFont(),o=a.getTextColor(),l=this._getItemAlign(),u=n.itemSize,d=this._getViewData(),c=d.endsText,f=ni(n.get("showLabel",!0),!c),h=!n.get("selectedMode");c&&this._renderEndsText(e,c[0],u,f,l),oe(d.viewPieceList,function(m){var p=m.piece,g=new zt;g.onclick=ht(this._onItemClick,this,p),this._enableHoverLink(g,m.indexInModelPieceList);var v=n.getRepresentValue(p);if(this._createItemSymbol(g,v,[0,0,u[0],u[1]],h),f){var x=this.visualMapModel.getValueState(v);g.add(new dr({style:{x:l==="right"?-i:u[0]+i,y:u[1]/2,text:p.text,verticalAlign:"middle",align:l,font:s,fill:o,opacity:x==="outOfRange"?.5:1},silent:h}))}e.add(g)},this),c&&this._renderEndsText(e,c[1],u,f,l),Fc(n.get("orient"),e,n.get("itemGap")),this.renderBackground(e),this.positionGroup(e)},t.prototype._enableHoverLink=function(e,n){var i=this;e.on("mouseover",function(){return a("highlight")}).on("mouseout",function(){return a("downplay")});var a=function(s){var o=i.visualMapModel;o.option.hoverLink&&i.api.dispatchAction({type:s,batch:Z2(o.findTargetDataIndices(n),o)})}},t.prototype._getItemAlign=function(){var e=this.visualMapModel,n=e.option;if(n.orient==="vertical")return Rj(e,this.api,e.itemSize);var i=n.align;return(!i||i==="auto")&&(i="left"),i},t.prototype._renderEndsText=function(e,n,i,a,s){if(n){var o=new zt,l=this.visualMapModel.textStyleModel;o.add(new dr({style:en(l,{x:a?s==="right"?i[0]:0:i[0]/2,y:i[1]/2,verticalAlign:"middle",align:a?s:"center",text:n})})),e.add(o)}},t.prototype._getViewData=function(){var e=this.visualMapModel,n=Ze(e.getPieceList(),function(o,l){return{piece:o,indexInModelPieceList:l}}),i=e.get("text"),a=e.get("orient"),s=e.get("inverse");return(a==="horizontal"?s:!s)?n.reverse():i&&(i=i.slice().reverse()),{viewPieceList:n,endsText:i}},t.prototype._createItemSymbol=function(e,n,i,a){var s=On(this.getControllerVisual(n,"symbol"),i[0],i[1],i[2],i[3],this.getControllerVisual(n,"color"));s.silent=a,e.add(s)},t.prototype._onItemClick=function(e){var n=this.visualMapModel,i=n.option,a=i.selectedMode;if(a){var s=kt(i.selected),o=n.getSelectedMapKey(e);a==="single"||a===!0?(s[o]=!0,oe(s,function(l,u){s[u]=u===o})):s[o]=!s[o],this.api.dispatchAction({type:"selectDataRange",from:this.uid,visualMapId:this.visualMapModel.id,selected:s})}},t.type="visualMap.piecewise",t})(Ij);function Nj(r){r.registerComponentModel(m5e),r.registerComponentView(g5e),Lj(r)}function v5e(r){Qt(Bj),Qt(Nj)}var x5e={label:{enabled:!0},decal:{show:!1}},pU=mr(),b5e={};function y5e(r,t){var e=r.getModel("aria");if(!e.get("enabled"))return;var n=kt(x5e);Bt(n.label,r.getLocaleModel().get("aria"),!1),Bt(e.option,n,!1),i(),a();function i(){var u=e.getModel("decal"),d=u.get("show");if(d){var c=wt();r.eachSeries(function(f){if(!f.isColorBySeries()){var h=c.get(f.type);h||(h={},c.set(f.type,h)),pU(f).scope=h}}),r.eachRawSeries(function(f){if(r.isSeriesFiltered(f))return;if(Tt(f.enableAriaDecal)){f.enableAriaDecal();return}var h=f.getData();if(f.isColorBySeries()){var x=s6(f.ecModel,f.name,b5e,r.getSeriesCount()),y=h.getVisual("decal");h.setVisual("decal",w(y,x))}else{var m=f.getRawData(),p={},g=pU(f).scope;h.each(function(_){var D=h.getRawIndex(_);p[D]=_});var v=m.count();m.each(function(_){var D=p[_],P=m.getName(_)||_+"",O=s6(f.ecModel,P,g,v),U=h.getItemVisual(D,"decal");h.setItemVisual(D,"decal",w(U,O))})}function w(_,D){var P=_?We(We({},D),_):D;return P.dirty=!0,P}})}}function a(){var u=t.getZr().dom;if(u){var d=r.getLocaleModel().get("aria"),c=e.getModel("label");if(c.option=Ct(c.option,d),!!c.get("enabled")){if(u.setAttribute("role","img"),c.get("description")){u.setAttribute("aria-label",c.get("description"));return}var f=r.getSeriesCount(),h=c.get(["data","maxCount"])||10,m=c.get(["series","maxCount"])||10,p=Math.min(f,m),g;if(!(f<1)){var v=o();if(v){var x=c.get(["general","withTitle"]);g=s(x,{title:v})}else g=c.get(["general","withoutTitle"]);var y=[],w=f>1?c.get(["series","multiple","prefix"]):c.get(["series","single","prefix"]);g+=s(w,{seriesCount:f}),r.eachSeries(function(O,U){if(U<p){var L=void 0,W=O.get("name"),B=W?"withName":"withoutName";L=f>1?c.get(["series","multiple",B]):c.get(["series","single",B]),L=s(L,{seriesId:O.seriesIndex,seriesName:O.get("name"),seriesType:l(O.subType)});var z=O.getData();if(z.count()>h){var E=c.get(["data","partialData"]);L+=s(E,{displayCnt:h})}else L+=c.get(["data","allData"]);for(var k=c.get(["data","separator","middle"]),S=c.get(["data","separator","end"]),C=c.get(["data","excludeDimensionId"]),F=[],A=0;A<z.count();A++)if(A<h){var N=z.getName(A),H=C?Cr(z.getValues(A),function(Y,Z){return Vt(C,Z)===-1}):z.getValues(A),R=c.get(["data",N?"withName":"withoutName"]);F.push(s(R,{name:N,value:H.join(k)}))}L+=F.join(k)+S,y.push(L)}});var _=c.getModel(["series","multiple","separator"]),D=_.get("middle"),P=_.get("end");g+=y.join(D)+P,u.setAttribute("aria-label",g)}}}}function s(u,d){if(!ct(u))return u;var c=u;return oe(d,function(f,h){c=c.replace(new RegExp("\\{\\s*"+h+"\\s*\\}","g"),f)}),c}function o(){var u=r.get("title");return u&&u.length&&(u=u[0]),u&&u.text}function l(u){var d=r.getLocaleModel().get(["series","typeNames"]);return d[u]||d.chart}}function M5e(r){if(!(!r||!r.aria)){var t=r.aria;t.show!=null&&(t.enabled=t.show),t.label=t.label||{},oe(["description","general","series","data"],function(e){t[e]!=null&&(t.label[e]=t[e])})}}function w5e(r){r.registerPreprocessor(M5e),r.registerVisual(r.PRIORITY.VISUAL.ARIA,y5e)}var gU={value:"eq","<":"lt","<=":"lte",">":"gt",">=":"gte","=":"eq","!=":"ne","<>":"ne"},S5e=(function(){function r(t){var e=this._condVal=ct(t)?new RegExp(t):cL(t)?t:null;if(e==null){var n="";Ir(n)}}return r.prototype.evaluate=function(t){var e=typeof t;return ct(e)?this._condVal.test(t):xr(e)?this._condVal.test(t+""):!1},r})(),_5e=(function(){function r(){}return r.prototype.evaluate=function(){return this.value},r})(),T5e=(function(){function r(){}return r.prototype.evaluate=function(){for(var t=this.children,e=0;e<t.length;e++)if(!t[e].evaluate())return!1;return!0},r})(),C5e=(function(){function r(){}return r.prototype.evaluate=function(){for(var t=this.children,e=0;e<t.length;e++)if(t[e].evaluate())return!0;return!1},r})(),A5e=(function(){function r(){}return r.prototype.evaluate=function(){return!this.child.evaluate()},r})(),k5e=(function(){function r(){}return r.prototype.evaluate=function(){for(var t=!!this.valueParser,e=this.getValue,n=e(this.valueGetterParam),i=t?this.valueParser(n):null,a=0;a<this.subCondList.length;a++)if(!this.subCondList[a].evaluate(t?i:n))return!1;return!0},r})();function _T(r,t){if(r===!0||r===!1){var e=new _5e;return e.value=r,e}var n="";return Hj(r)||Ir(n),r.and?vU("and",r,t):r.or?vU("or",r,t):r.not?D5e(r,t):F5e(r,t)}function vU(r,t,e){var n=t[r],i="";Ge(n)||Ir(i),n.length||Ir(i);var a=r==="and"?new T5e:new C5e;return a.children=Ze(n,function(s){return _T(s,e)}),a.children.length||Ir(i),a}function D5e(r,t){var e=r.not,n="";Hj(e)||Ir(n);var i=new A5e;return i.child=_T(e,t),i.child||Ir(n),i}function F5e(r,t){for(var e="",n=t.prepareGetValue(r),i=[],a=ir(r),s=r.parser,o=s?bN(s):null,l=0;l<a.length;l++){var u=a[l];if(!(u==="parser"||t.valueGetterAttrMap.get(u))){var d=vt(gU,u)?gU[u]:u,c=r[u],f=o?o(c):c,h=tfe(d,f)||d==="reg"&&new S5e(f);h||Ir(e),i.push(h)}}i.length||Ir(e);var m=new k5e;return m.valueGetterParam=n,m.valueParser=o,m.getValue=t.getValue,m.subCondList=i,m}function Hj(r){return At(r)&&!Ci(r)}var E5e=(function(){function r(t,e){this._cond=_T(t,e)}return r.prototype.evaluate=function(){return this._cond.evaluate()},r})();function z5e(r,t){return new E5e(r,t)}var P5e={type:"echarts:filter",transform:function(r){for(var t=r.upstream,e,n=z5e(r.config,{valueGetterAttrMap:wt({dimension:!0}),prepareGetValue:function(o){var l="",u=o.dimension;vt(o,"dimension")||Ir(l);var d=t.getDimensionInfo(u);return d||Ir(l),{dimIdx:d.index}},getValue:function(o){return t.retrieveValueFromItem(e,o.dimIdx)}}),i=[],a=0,s=t.count();a<s;a++)e=t.getRawDataItem(a),n.evaluate()&&i.push(e);return{data:i}}},O5e={type:"echarts:sort",transform:function(r){var t=r.upstream,e=r.config,n="",i=qr(e);i.length||Ir(n);var a=[];oe(i,function(d){var c=d.dimension,f=d.order,h=d.parser,m=d.incomparable;if(c==null&&Ir(n),f!=="asc"&&f!=="desc"&&Ir(n),m&&m!=="min"&&m!=="max"){var p="";Ir(p)}if(f!=="asc"&&f!=="desc"){var g="";Ir(g)}var v=t.getDimensionInfo(c);v||Ir(n);var x=h?bN(h):null;h&&!x&&Ir(n),a.push({dimIdx:v.index,parser:x,comparator:new MN(f,m)})});var s=t.sourceFormat;s!==qi&&s!==Ps&&Ir(n);for(var o=[],l=0,u=t.count();l<u;l++)o.push(t.getRawDataItem(l));return o.sort(function(d,c){for(var f=0;f<a.length;f++){var h=a[f],m=t.retrieveValueFromItem(d,h.dimIdx),p=t.retrieveValueFromItem(c,h.dimIdx);h.parser&&(m=h.parser(m),p=h.parser(p));var g=h.comparator.evaluate(m,p);if(g!==0)return g}return 0}),{data:o}}};function U5e(r){r.registerTransform(P5e),r.registerTransform(O5e)}var I5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type="dataset",e}return t.prototype.init=function(e,n,i){r.prototype.init.call(this,e,n,i),this._sourceManager=new TN(this),yF(this)},t.prototype.mergeOption=function(e,n){r.prototype.mergeOption.call(this,e,n),yF(this)},t.prototype.optionUpdated=function(){this._sourceManager.dirty()},t.prototype.getSourceManager=function(){return this._sourceManager},t.type="dataset",t.defaultOption={seriesLayoutBy:Ro},t})(tr),R5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type="dataset",e}return t.type="dataset",t})(ln);function L5e(r){r.registerComponentModel(I5e),r.registerComponentView(R5e)}var wo=Ho.CMD;function A0(r,t){return Math.abs(r-t)<1e-5}function l8(r){var t=r.data,e=r.len(),n=[],i,a=0,s=0,o=0,l=0;function u(z,E){i&&i.length>2&&n.push(i),i=[z,E]}function d(z,E,k,S){A0(z,k)&&A0(E,S)||i.push(z,E,k,S,k,S)}function c(z,E,k,S,C,F){var A=Math.abs(E-z),N=Math.tan(A/4)*4/3,H=E<z?-1:1,R=Math.cos(z),Y=Math.sin(z),Z=Math.cos(E),ee=Math.sin(E),V=R*C+k,re=Y*F+S,j=Z*C+k,X=ee*F+S,Q=C*N*H,ae=F*N*H;i.push(V-Q*Y,re+ae*R,j+Q*ee,X-ae*Z,j,X)}for(var f,h,m,p,g=0;g<e;){var v=t[g++],x=g===1;switch(x&&(a=t[g],s=t[g+1],o=a,l=s,(v===wo.L||v===wo.C||v===wo.Q)&&(i=[o,l])),v){case wo.M:a=o=t[g++],s=l=t[g++],u(o,l);break;case wo.L:f=t[g++],h=t[g++],d(a,s,f,h),a=f,s=h;break;case wo.C:i.push(t[g++],t[g++],t[g++],t[g++],a=t[g++],s=t[g++]);break;case wo.Q:f=t[g++],h=t[g++],m=t[g++],p=t[g++],i.push(a+2/3*(f-a),s+2/3*(h-s),m+2/3*(f-m),p+2/3*(h-p),m,p),a=m,s=p;break;case wo.A:var y=t[g++],w=t[g++],_=t[g++],D=t[g++],P=t[g++],O=t[g++]+P;g+=1;var U=!t[g++];f=Math.cos(P)*_+y,h=Math.sin(P)*D+w,x?(o=f,l=h,u(o,l)):d(a,s,f,h),a=Math.cos(O)*_+y,s=Math.sin(O)*D+w;for(var L=(U?-1:1)*Math.PI/2,W=P;U?W>O:W<O;W+=L){var B=U?Math.max(W+L,O):Math.min(W+L,O);c(W,B,y,w,_,D)}break;case wo.R:o=a=t[g++],l=s=t[g++],f=o+t[g++],h=l+t[g++],u(f,l),d(f,l,f,h),d(f,h,o,h),d(o,h,o,l),d(o,l,f,l);break;case wo.Z:i&&d(a,s,o,l),a=o,s=l;break}}return i&&i.length>2&&n.push(i),n}function u8(r,t,e,n,i,a,s,o,l,u){if(A0(r,e)&&A0(t,n)&&A0(i,s)&&A0(a,o)){l.push(s,o);return}var d=2/u,c=d*d,f=s-r,h=o-t,m=Math.sqrt(f*f+h*h);f/=m,h/=m;var p=e-r,g=n-t,v=i-s,x=a-o,y=p*p+g*g,w=v*v+x*x;if(y<c&&w<c){l.push(s,o);return}var _=f*p+h*g,D=-f*v-h*x,P=y-_*_,O=w-D*D;if(P<c&&_>=0&&O<c&&D>=0){l.push(s,o);return}var U=[],L=[];ed(r,e,i,s,.5,U),ed(t,n,a,o,.5,L),u8(U[0],L[0],U[1],L[1],U[2],L[2],U[3],L[3],l,u),u8(U[4],L[4],U[5],L[5],U[6],L[6],U[7],L[7],l,u)}function B5e(r,t){var e=l8(r),n=[];t=t||1;for(var i=0;i<e.length;i++){var a=e[i],s=[],o=a[0],l=a[1];s.push(o,l);for(var u=2;u<a.length;){var d=a[u++],c=a[u++],f=a[u++],h=a[u++],m=a[u++],p=a[u++];u8(o,l,d,c,f,h,m,p,s,t),o=m,l=p}n.push(s)}return n}function Wj(r,t,e){var n=r[t],i=r[1-t],a=Math.abs(n/i),s=Math.ceil(Math.sqrt(a*e)),o=Math.floor(e/s);o===0&&(o=1,s=e);for(var l=[],u=0;u<s;u++)l.push(o);var d=s*o,c=e-d;if(c>0)for(var u=0;u<c;u++)l[u%s]+=1;return l}function xU(r,t,e){for(var n=r.r0,i=r.r,a=r.startAngle,s=r.endAngle,o=Math.abs(s-a),l=o*i,u=i-n,d=l>Math.abs(u),c=Wj([l,u],d?0:1,t),f=(d?o:u)/c.length,h=0;h<c.length;h++)for(var m=(d?u:o)/c[h],p=0;p<c[h];p++){var g={};d?(g.startAngle=a+f*h,g.endAngle=a+f*(h+1),g.r0=n+m*p,g.r=n+m*(p+1)):(g.startAngle=a+m*p,g.endAngle=a+m*(p+1),g.r0=n+f*h,g.r=n+f*(h+1)),g.clockwise=r.clockwise,g.cx=r.cx,g.cy=r.cy,e.push(g)}}function N5e(r,t,e){for(var n=r.width,i=r.height,a=n>i,s=Wj([n,i],a?0:1,t),o=a?"width":"height",l=a?"height":"width",u=a?"x":"y",d=a?"y":"x",c=r[o]/s.length,f=0;f<s.length;f++)for(var h=r[l]/s[f],m=0;m<s[f];m++){var p={};p[u]=f*c,p[d]=m*h,p[o]=c,p[l]=h,p.x+=r.x,p.y+=r.y,e.push(p)}}function bU(r,t,e,n){return r*n-e*t}function H5e(r,t,e,n,i,a,s,o){var l=e-r,u=n-t,d=s-i,c=o-a,f=bU(d,c,l,u);if(Math.abs(f)<1e-6)return null;var h=r-i,m=t-a,p=bU(h,m,d,c)/f;return p<0||p>1?null:new Xt(p*l+r,p*u+t)}function W5e(r,t,e){var n=new Xt;Xt.sub(n,e,t),n.normalize();var i=new Xt;Xt.sub(i,r,t);var a=i.dot(n);return a}function m0(r,t){var e=r[r.length-1];e&&e[0]===t[0]&&e[1]===t[1]||r.push(t)}function X5e(r,t,e){for(var n=r.length,i=[],a=0;a<n;a++){var s=r[a],o=r[(a+1)%n],l=H5e(s[0],s[1],o[0],o[1],t.x,t.y,e.x,e.y);l&&i.push({projPt:W5e(l,t,e),pt:l,idx:a})}if(i.length<2)return[{points:r},{points:r}];i.sort(function(g,v){return g.projPt-v.projPt});var u=i[0],d=i[i.length-1];if(d.idx<u.idx){var c=u;u=d,d=c}for(var f=[u.pt.x,u.pt.y],h=[d.pt.x,d.pt.y],m=[f],p=[h],a=u.idx+1;a<=d.idx;a++)m0(m,r[a].slice());m0(m,h),m0(m,f);for(var a=d.idx+1;a<=u.idx+n;a++)m0(p,r[a%n].slice());return m0(p,f),m0(p,h),[{points:m},{points:p}]}function yU(r){var t=r.points,e=[],n=[];Ob(t,e,n);var i=new jt(e[0],e[1],n[0]-e[0],n[1]-e[1]),a=i.width,s=i.height,o=i.x,l=i.y,u=new Xt,d=new Xt;return a>s?(u.x=d.x=o+a/2,u.y=l,d.y=l+s):(u.y=d.y=l+s/2,u.x=o,d.x=o+a),X5e(t,u,d)}function ib(r,t,e,n){if(e===1)n.push(t);else{var i=Math.floor(e/2),a=r(t);ib(r,a[0],i,n),ib(r,a[1],e-i,n)}return n}function j5e(r,t){for(var e=[],n=0;n<t;n++)e.push(ES(r));return e}function V5e(r,t){t.setStyle(r.style),t.z=r.z,t.z2=r.z2,t.zlevel=r.zlevel}function G5e(r){for(var t=[],e=0;e<r.length;)t.push([r[e++],r[e++]]);return t}function Z5e(r,t){var e=[],n=r.shape,i;switch(r.type){case"rect":N5e(n,t,e),i=cr;break;case"sector":xU(n,t,e),i=Yi;break;case"circle":xU({r0:0,r:n.r,startAngle:0,endAngle:Math.PI*2,cx:n.cx,cy:n.cy},t,e),i=Yi;break;default:var a=r.getComputedTransform(),s=a?Math.sqrt(Math.max(a[0]*a[0]+a[1]*a[1],a[2]*a[2]+a[3]*a[3])):1,o=Ze(B5e(r.getUpdatedPathProxy(),s),function(v){return G5e(v)}),l=o.length;if(l===0)ib(yU,{points:o[0]},t,e);else if(l===t)for(var u=0;u<l;u++)e.push({points:o[u]});else{var d=0,c=Ze(o,function(v){var x=[],y=[];Ob(v,x,y);var w=(y[1]-x[1])*(y[0]-x[0]);return d+=w,{poly:v,area:w}});c.sort(function(v,x){return x.area-v.area});for(var f=t,u=0;u<l;u++){var h=c[u];if(f<=0)break;var m=u===l-1?f:Math.ceil(h.area/d*t);m<0||(ib(yU,{points:h.poly},m,e),f-=m)}}i=$i;break}if(!i)return j5e(r,t);for(var p=[],u=0;u<e.length;u++){var g=new i;g.setShape(e[u]),V5e(r,g),p.push(g)}return p}function Y5e(r,t){var e=r.length,n=t.length;if(e===n)return[r,t];for(var i=[],a=[],s=e<n?r:t,o=Math.min(e,n),l=Math.abs(n-e)/6,u=(o-2)/6,d=Math.ceil(l/u)+1,c=[s[0],s[1]],f=l,h=2;h<o;){var m=s[h-2],p=s[h-1],g=s[h++],v=s[h++],x=s[h++],y=s[h++],w=s[h++],_=s[h++];if(f<=0){c.push(g,v,x,y,w,_);continue}for(var D=Math.min(f,d-1)+1,P=1;P<=D;P++){var O=P/D;ed(m,g,x,w,O,i),ed(p,v,y,_,O,a),m=i[3],p=a[3],c.push(i[1],a[1],i[2],a[2],m,p),g=i[5],v=a[5],x=i[6],y=a[6]}f-=D-1}return s===r?[c,t]:[r,c]}function MU(r,t){for(var e=r.length,n=r[e-2],i=r[e-1],a=[],s=0;s<t.length;)a[s++]=n,a[s++]=i;return a}function $5e(r,t){for(var e,n,i,a=[],s=[],o=0;o<Math.max(r.length,t.length);o++){var l=r[o],u=t[o],d=void 0,c=void 0;l?u?(e=Y5e(l,u),d=e[0],c=e[1],n=d,i=c):(c=MU(i||l,l),d=l):(d=MU(n||u,u),c=u),a.push(d),s.push(c)}return[a,s]}function wU(r){for(var t=0,e=0,n=0,i=r.length,a=0,s=i-2;a<i;s=a,a+=2){var o=r[s],l=r[s+1],u=r[a],d=r[a+1],c=o*d-u*l;t+=c,e+=(o+u)*c,n+=(l+d)*c}return t===0?[r[0]||0,r[1]||0]:[e/t/3,n/t/3,t]}function q5e(r,t,e,n){for(var i=(r.length-2)/6,a=1/0,s=0,o=r.length,l=o-2,u=0;u<i;u++){for(var d=u*6,c=0,f=0;f<o;f+=2){var h=f===0?d:(d+f-2)%l+2,m=r[h]-e[0],p=r[h+1]-e[1],g=t[f]-n[0],v=t[f+1]-n[1],x=g-m,y=v-p;c+=x*x+y*y}c<a&&(a=c,s=u)}return s}function K5e(r){for(var t=[],e=r.length,n=0;n<e;n+=2)t[n]=r[e-n-2],t[n+1]=r[e-n-1];return t}function Q5e(r,t,e,n){for(var i=[],a,s=0;s<r.length;s++){var o=r[s],l=t[s],u=wU(o),d=wU(l);a==null&&(a=u[2]<0!=d[2]<0);var c=[],f=[],h=0,m=1/0,p=[],g=o.length;a&&(o=K5e(o));for(var v=q5e(o,l,u,d)*6,x=g-2,y=0;y<x;y+=2){var w=(v+y)%x+2;c[y+2]=o[w]-u[0],c[y+3]=o[w+1]-u[1]}c[0]=o[v]-u[0],c[1]=o[v+1]-u[1];for(var _=n/e,D=-n/2;D<=n/2;D+=_){for(var P=Math.sin(D),O=Math.cos(D),U=0,y=0;y<o.length;y+=2){var L=c[y],W=c[y+1],B=l[y]-d[0],z=l[y+1]-d[1],E=B*O-z*P,k=B*P+z*O;p[y]=E,p[y+1]=k;var S=E-L,C=k-W;U+=S*S+C*C}if(U<m){m=U,h=D;for(var F=0;F<p.length;F++)f[F]=p[F]}}i.push({from:c,to:f,fromCp:u,toCp:d,rotation:-h})}return i}function ab(r){return r.__isCombineMorphing}var Xj="__mOriginal_";function sb(r,t,e){var n=Xj+t,i=r[n]||r[t];r[n]||(r[n]=r[t]);var a=e.replace,s=e.after,o=e.before;r[t]=function(){var l=arguments,u;return o&&o.apply(this,l),a?u=a.apply(this,l):u=i.apply(this,l),s&&s.apply(this,l),u}}function Up(r,t){var e=Xj+t;r[e]&&(r[t]=r[e],r[e]=null)}function SU(r,t){for(var e=0;e<r.length;e++)for(var n=r[e],i=0;i<n.length;){var a=n[i],s=n[i+1];n[i++]=t[0]*a+t[2]*s+t[4],n[i++]=t[1]*a+t[3]*s+t[5]}}function jj(r,t){var e=r.getUpdatedPathProxy(),n=t.getUpdatedPathProxy(),i=$5e(l8(e),l8(n)),a=i[0],s=i[1],o=r.getComputedTransform(),l=t.getComputedTransform();function u(){this.transform=null}o&&SU(a,o),l&&SU(s,l),sb(t,"updateTransform",{replace:u}),t.transform=null;var d=Q5e(a,s,10,Math.PI),c=[];sb(t,"buildPath",{replace:function(f){for(var h=t.__morphT,m=1-h,p=[],g=0;g<d.length;g++){var v=d[g],x=v.from,y=v.to,w=v.rotation*h,_=v.fromCp,D=v.toCp,P=Math.sin(w),O=Math.cos(w);Mp(p,_,D,h);for(var U=0;U<x.length;U+=2){var L=x[U],W=x[U+1],B=y[U],z=y[U+1],E=L*m+B*h,k=W*m+z*h;c[U]=E*O-k*P+p[0],c[U+1]=E*P+k*O+p[1]}var S=c[0],C=c[1];f.moveTo(S,C);for(var U=2;U<x.length;){var B=c[U++],z=c[U++],F=c[U++],A=c[U++],N=c[U++],H=c[U++];S===B&&C===z&&F===N&&A===H?f.lineTo(N,H):f.bezierCurveTo(B,z,F,A,N,H),S=N,C=H}}}})}function TT(r,t,e){if(!r||!t)return t;var n=e.done,i=e.during;jj(r,t),t.__morphT=0;function a(){Up(t,"buildPath"),Up(t,"updateTransform"),t.__morphT=-1,t.createPathProxy(),t.dirtyShape()}return t.animateTo({__morphT:1},Ct({during:function(s){t.dirtyShape(),i&&i(s)},done:function(){a(),n&&n()}},e)),t}function J5e(r,t,e,n,i,a){var s=16;r=i===e?0:Math.round(32767*(r-e)/(i-e)),t=a===n?0:Math.round(32767*(t-n)/(a-n));for(var o=0,l,u=(1<<s)/2;u>0;u/=2){var d=0,c=0;(r&u)>0&&(d=1),(t&u)>0&&(c=1),o+=u*u*(3*d^c),c===0&&(d===1&&(r=u-1-r,t=u-1-t),l=r,r=t,t=l)}return o}function ob(r){var t=1/0,e=1/0,n=-1/0,i=-1/0,a=Ze(r,function(o){var l=o.getBoundingRect(),u=o.getComputedTransform(),d=l.x+l.width/2+(u?u[4]:0),c=l.y+l.height/2+(u?u[5]:0);return t=Math.min(d,t),e=Math.min(c,e),n=Math.max(d,n),i=Math.max(c,i),[d,c]}),s=Ze(a,function(o,l){return{cp:o,z:J5e(o[0],o[1],t,e,n,i),path:r[l]}});return s.sort(function(o,l){return o.z-l.z}).map(function(o){return o.path})}function Vj(r){return Z5e(r.path,r.count)}function d8(){return{fromIndividuals:[],toIndividuals:[],count:0}}function e6e(r,t,e){var n=[];function i(_){for(var D=0;D<_.length;D++){var P=_[D];ab(P)?i(P.childrenRef()):P instanceof nr&&n.push(P)}}i(r);var a=n.length;if(!a)return d8();var s=e.dividePath||Vj,o=s({path:t,count:a});if(o.length!==a)return console.error("Invalid morphing: unmatched splitted path"),d8();n=ob(n),o=ob(o);for(var l=e.done,u=e.during,d=e.individualDelay,c=new Ml,f=0;f<a;f++){var h=n[f],m=o[f];m.parent=t,m.copyTransform(c),d||jj(h,m)}t.__isCombineMorphing=!0,t.childrenRef=function(){return o};function p(_){for(var D=0;D<o.length;D++)o[D].addSelfToZr(_)}sb(t,"addSelfToZr",{after:function(_){p(_)}}),sb(t,"removeSelfFromZr",{after:function(_){for(var D=0;D<o.length;D++)o[D].removeSelfFromZr(_)}});function g(){t.__isCombineMorphing=!1,t.__morphT=-1,t.childrenRef=null,Up(t,"addSelfToZr"),Up(t,"removeSelfFromZr")}var v=o.length;if(d)for(var x=v,y=function(){x--,x===0&&(g(),l&&l())},f=0;f<v;f++){var w=d?Ct({delay:(e.delay||0)+d(f,v,n[f],o[f]),done:y},e):e;TT(n[f],o[f],w)}else t.__morphT=0,t.animateTo({__morphT:1},Ct({during:function(_){for(var D=0;D<v;D++){var P=o[D];P.__morphT=t.__morphT,P.dirtyShape()}u&&u(_)},done:function(){g();for(var _=0;_<r.length;_++)Up(r[_],"updateTransform");l&&l()}},e));return t.__zr&&p(t.__zr),{fromIndividuals:n,toIndividuals:o,count:v}}function t6e(r,t,e){var n=t.length,i=[],a=e.dividePath||Vj;function s(h){for(var m=0;m<h.length;m++){var p=h[m];ab(p)?s(p.childrenRef()):p instanceof nr&&i.push(p)}}if(ab(r)){s(r.childrenRef());var o=i.length;if(o<n)for(var l=0,u=o;u<n;u++)i.push(ES(i[l++%o]));i.length=n}else{i=a({path:r,count:n});for(var d=r.getComputedTransform(),u=0;u<i.length;u++)i[u].setLocalTransform(d);if(i.length!==n)return console.error("Invalid morphing: unmatched splitted path"),d8()}i=ob(i),t=ob(t);for(var c=e.individualDelay,u=0;u<n;u++){var f=c?Ct({delay:(e.delay||0)+c(u,n,i[u],t[u])},e):e;TT(i[u],t[u],f)}return{fromIndividuals:i,toIndividuals:t,count:t.length}}function _U(r){return Ge(r[0])}function TU(r,t){for(var e=[],n=r.length,i=0;i<n;i++)e.push({one:r[i],many:[]});for(var i=0;i<t.length;i++){var a=t[i].length,s=void 0;for(s=0;s<a;s++)e[s%n].many.push(t[i][s])}for(var o=0,i=n-1;i>=0;i--)if(!e[i].many.length){var l=e[o].many;if(l.length<=1)if(o)o=0;else return e;var a=l.length,u=Math.ceil(a/2);e[i].many=l.slice(u,a),e[o].many=l.slice(0,u),o++}return e}var r6e={clone:function(r){for(var t=[],e=1-Math.pow(1-r.path.style.opacity,1/r.count),n=0;n<r.count;n++){var i=ES(r.path);i.setStyle("opacity",e),t.push(i)}return t},split:null};function a5(r,t,e,n,i,a){if(!r.length||!t.length)return;var s=fh("update",n,i);if(!(s&&s.duration>0))return;var o=n.getModel("universalTransition").get("delay"),l=Object.assign({setToFinal:!0},s),u,d;_U(r)&&(u=r,d=t),_U(t)&&(u=t,d=r);function c(v,x,y,w,_){var D=v.many,P=v.one;if(D.length===1&&!_){var O=x?D[0]:P,U=x?P:D[0];if(ab(O))c({many:[O],one:U},!0,y,w,!0);else{var L=o?Ct({delay:o(y,w)},l):l;TT(O,U,L),a(O,U,O,U,L)}}else for(var W=Ct({dividePath:r6e[e],individualDelay:o&&function(C,F,A,N){return o(C+y,w)}},l),B=x?e6e(D,P,W):t6e(P,D,W),z=B.fromIndividuals,E=B.toIndividuals,k=z.length,S=0;S<k;S++){var L=o?Ct({delay:o(S,k)},l):l;a(z[S],E[S],x?D[S]:v.one,x?v.one:D[S],L)}}for(var f=u?u===r:r.length>t.length,h=u?TU(d,u):TU(f?t:r,[f?r:t]),m=0,p=0;p<h.length;p++)m+=h[p].many.length;for(var g=0,p=0;p<h.length;p++)c(h[p],f,g,m),g+=h[p].many.length}function uc(r){if(!r)return[];if(Ge(r)){for(var t=[],e=0;e<r.length;e++)t.push(uc(r[e]));return t}var n=[];return r.traverse(function(i){i instanceof nr&&!i.disableMorphing&&!i.invisible&&!i.ignore&&n.push(i)}),n}var Gj=1e4,n6e=0,CU=1,AU=2,i6e=mr();function a6e(r,t){for(var e=r.dimensions,n=0;n<e.length;n++){var i=r.getDimensionInfo(e[n]);if(i&&i.otherDims[t]===0)return e[n]}}function s6e(r,t,e){var n=r.getDimensionInfo(e),i=n&&n.ordinalMeta;if(n){var a=r.get(n.name,t);return i&&i.categories[a]||a+""}}function kU(r,t,e,n){var i=n?"itemChildGroupId":"itemGroupId",a=a6e(r,i);if(a){var s=s6e(r,t,a);return s}var o=r.getRawDataItem(t),l=n?"childGroupId":"groupId";if(o&&o[l])return o[l]+"";if(!n)return e||r.getId(t)}function DU(r){var t=[];return oe(r,function(e){var n=e.data,i=e.dataGroupId;if(!(n.count()>Gj))for(var a=n.getIndices(),s=0;s<a.length;s++)t.push({data:n,groupId:kU(n,s,i,!1),childGroupId:kU(n,s,i,!0),divide:e.divide,dataIndex:s})}),t}function s5(r,t,e){r.traverse(function(n){n instanceof nr&&hn(n,{style:{opacity:0}},t,{dataIndex:e,isFrom:!0})})}function o5(r){if(r.parent){var t=r.getComputedTransform();r.setLocalTransform(t),r.parent.remove(r)}}function p0(r){r.stopAnimation(),r.isGroup&&r.traverse(function(t){t.stopAnimation()})}function o6e(r,t,e){var n=fh("update",e,t);n&&r.traverse(function(i){if(i instanceof ks){var a=Bde(i);a&&i.animateFrom({style:a},n)}})}function l6e(r,t){var e=r.length;if(e!==t.length)return!1;for(var n=0;n<e;n++){var i=r[n],a=t[n];if(i.data.getId(i.dataIndex)!==a.data.getId(a.dataIndex))return!1}return!0}function Zj(r,t,e){var n=DU(r),i=DU(t);function a(y,w,_,D,P){(_||y)&&w.animateFrom({style:_&&_!==y?We(We({},_.style),y.style):y.style},P)}var s=!1,o=n6e,l=wt(),u=wt();n.forEach(function(y){y.groupId&&l.set(y.groupId,!0),y.childGroupId&&u.set(y.childGroupId,!0)});for(var d=0;d<i.length;d++){var c=i[d].groupId;if(u.get(c)){o=CU;break}var f=i[d].childGroupId;if(f&&l.get(f)){o=AU;break}}function h(y,w){return function(_){var D=_.data,P=_.dataIndex;return w?D.getId(P):y?o===CU?_.childGroupId:_.groupId:o===AU?_.childGroupId:_.groupId}}var m=l6e(n,i),p={};if(!m)for(var d=0;d<i.length;d++){var g=i[d],v=g.data.getItemGraphicEl(g.dataIndex);v&&(p[v.id]=!0)}function x(y,w){var _=n[w],D=i[y],P=D.data.hostModel,O=_.data.getItemGraphicEl(_.dataIndex),U=D.data.getItemGraphicEl(D.dataIndex);if(O===U){U&&o6e(U,D.dataIndex,P);return}O&&p[O.id]||U&&(p0(U),O?(p0(O),o5(O),s=!0,a5(uc(O),uc(U),D.divide,P,y,a)):s5(U,P,y))}new El(n,i,h(!0,m),h(!1,m),null,"multiple").update(x).updateManyToOne(function(y,w){var _=i[y],D=_.data,P=D.hostModel,O=D.getItemGraphicEl(_.dataIndex),U=Cr(Ze(w,function(L){return n[L].data.getItemGraphicEl(n[L].dataIndex)}),function(L){return L&&L!==O&&!p[L.id]});O&&(p0(O),U.length?(oe(U,function(L){p0(L),o5(L)}),s=!0,a5(uc(U),uc(O),_.divide,P,y,a)):s5(O,P,_.dataIndex))}).updateOneToMany(function(y,w){var _=n[w],D=_.data.getItemGraphicEl(_.dataIndex);if(!(D&&p[D.id])){var P=Cr(Ze(y,function(U){return i[U].data.getItemGraphicEl(i[U].dataIndex)}),function(U){return U&&U!==D}),O=i[y[0]].data.hostModel;P.length&&(oe(P,function(U){return p0(U)}),D?(p0(D),o5(D),s=!0,a5(uc(D),uc(P),_.divide,O,y[0],a)):oe(P,function(U){return s5(U,O,y[0])}))}}).updateManyToMany(function(y,w){new El(w,y,function(_){return n[_].data.getId(n[_].dataIndex)},function(_){return i[_].data.getId(i[_].dataIndex)}).update(function(_,D){x(y[_],w[D])}).execute()}).execute(),s&&oe(t,function(y){var w=y.data,_=w.hostModel,D=_&&e.getViewOfSeriesModel(_),P=fh("update",_,0);D&&_.isAnimationEnabled()&&P&&P.duration>0&&D.group.traverse(function(O){O instanceof nr&&!O.animators.length&&O.animateFrom({style:{opacity:0}},P)})})}function FU(r){var t=r.getModel("universalTransition").get("seriesKey");return t||r.id}function EU(r){return Ge(r)?r.sort().join(","):r}function ku(r){if(r.hostModel)return r.hostModel.getModel("universalTransition").get("divideShape")}function u6e(r,t){var e=wt(),n=wt(),i=wt();return oe(r.oldSeries,function(a,s){var o=r.oldDataGroupIds[s],l=r.oldData[s],u=FU(a),d=EU(u);n.set(d,{dataGroupId:o,data:l}),Ge(u)&&oe(u,function(c){i.set(c,{key:d,dataGroupId:o,data:l})})}),oe(t.updatedSeries,function(a){if(a.isUniversalTransitionEnabled()&&a.isAnimationEnabled()){var s=a.get("dataGroupId"),o=a.getData(),l=FU(a),u=EU(l),d=n.get(u);if(d)e.set(u,{oldSeries:[{dataGroupId:d.dataGroupId,divide:ku(d.data),data:d.data}],newSeries:[{dataGroupId:s,divide:ku(o),data:o}]});else if(Ge(l)){var c=[];oe(l,function(m){var p=n.get(m);p.data&&c.push({dataGroupId:p.dataGroupId,divide:ku(p.data),data:p.data})}),c.length&&e.set(u,{oldSeries:c,newSeries:[{dataGroupId:s,data:o,divide:ku(o)}]})}else{var f=i.get(l);if(f){var h=e.get(f.key);h||(h={oldSeries:[{dataGroupId:f.dataGroupId,data:f.data,divide:ku(f.data)}],newSeries:[]},e.set(f.key,h)),h.newSeries.push({dataGroupId:s,data:o,divide:ku(o)})}}}}),e}function zU(r,t){for(var e=0;e<r.length;e++){var n=t.seriesIndex!=null&&t.seriesIndex===r[e].seriesIndex||t.seriesId!=null&&t.seriesId===r[e].id;if(n)return e}}function d6e(r,t,e,n){var i=[],a=[];oe(qr(r.from),function(s){var o=zU(t.oldSeries,s);o>=0&&i.push({dataGroupId:t.oldDataGroupIds[o],data:t.oldData[o],divide:ku(t.oldData[o]),groupIdDim:s.dimension})}),oe(qr(r.to),function(s){var o=zU(e.updatedSeries,s);if(o>=0){var l=e.updatedSeries[o].getData();a.push({dataGroupId:t.oldDataGroupIds[o],data:l,divide:ku(l),groupIdDim:s.dimension})}}),i.length>0&&a.length>0&&Zj(i,a,n)}function c6e(r){r.registerUpdateLifecycle("series:beforeupdate",function(t,e,n){oe(qr(n.seriesTransition),function(i){oe(qr(i.to),function(a){for(var s=n.updatedSeries,o=0;o<s.length;o++)(a.seriesIndex!=null&&a.seriesIndex===s[o].seriesIndex||a.seriesId!=null&&a.seriesId===s[o].id)&&(s[o][N2]=!0)})})}),r.registerUpdateLifecycle("series:transition",function(t,e,n){var i=i6e(e);if(i.oldSeries&&n.updatedSeries&&n.optionChanged){var a=n.seriesTransition;if(a)oe(qr(a),function(h){d6e(h,i,n,e)});else{var s=u6e(i,n);oe(s.keys(),function(h){var m=s.get(h);Zj(m.oldSeries,m.newSeries,e)})}oe(n.updatedSeries,function(h){h[N2]&&(h[N2]=!1)})}for(var o=t.getSeries(),l=i.oldSeries=[],u=i.oldDataGroupIds=[],d=i.oldData=[],c=0;c<o.length;c++){var f=o[c].getData();f.count()<Gj&&(l.push(o[c]),u.push(o[c].get("dataGroupId")),d.push(f))}})}Qt([Mpe]);Qt([gpe]);Qt([Hpe,r1e,f1e,V1e,rge,Wge,gve,Jve,M2e,A2e,I2e,Fxe,tbe,fbe,kbe,zbe,Wbe,$be,sye,fye,wye,aMe]);Qt(_Me);Qt(qMe);Qt(VW);Qt(u4e);Qt(FX);Qt(h4e);Qt(w4e);Qt(uwe);Qt(kwe);Qt(ig);Qt(Vwe);Qt(Ywe);Qt(i3e);Qt(c3e);Qt(v3e);Qt(S3e);Qt(P3e);Qt(K3e);Qt(Pj);Qt(Oj);Qt(v5e);Qt(Bj);Qt(Nj);Qt(w5e);Qt(U5e);Qt(L5e);Qt(c6e);Qt(Ime);const f6e=Object.freeze(Object.defineProperty({__proto__:null,Axis:Os,ChartView:Vr,ComponentModel:tr,ComponentView:ln,List:Vi,Model:Ar,PRIORITY:eH,SeriesModel:Kr,color:ile,connect:V0e,dataTool:Q0e,dependencies:A0e,disConnect:G0e,disconnect:lH,dispose:Z0e,env:rr,extendChartView:Sme,extendComponentModel:yme,extendComponentView:Mme,extendSeriesModel:wme,format:ume,getCoordinateSystemDimensions:$0e,getInstanceByDom:l_,getInstanceById:Y0e,getMap:K0e,graphic:lme,helper:eme,init:j0e,innerDrawElementOnCanvas:i_,matrix:Ioe,number:sme,parseGeoJSON:M6,parseGeoJson:M6,registerAction:so,registerCoordinateSystem:cH,registerLayout:fH,registerLoading:h_,registerLocale:NS,registerMap:hH,registerPostInit:uH,registerPostUpdate:dH,registerPreprocessor:d_,registerProcessor:c_,registerTheme:u_,registerTransform:mH,registerUpdateLifecycle:Kb,registerVisual:fd,setCanvasCreator:q0e,setPlatformAPI:sL,throttle:$b,time:ome,use:Qt,util:dme,vector:woe,version:C0e,zrUtil:poe,zrender:Ble},Symbol.toStringTag,{value:"Module"})),h6e=`<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>测量数据相关性判断器</title>
-
-<style>
-* { box-sizing: border-box; }
-:root {
-  /* AOI LAB 设计令牌 */
-  --navy: #072F50;
-  --ink: #08304F;
-  --cream: #FFF9E8;
-  --paper: #FFFAEA;
-  --cyan: #24D4D3;
-  --cyan-soft: #9CE7DF;
-  --orange: #FF9D2E;
-  --grid: rgba(112,190,220,0.14);
-  --mono: "Geist Mono","PingFang SC","Microsoft YaHei",Consolas,Menlo,monospace;
-  --sans: "Geist","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
-  /* 兼容旧内联样式变量 */
-  --primary: #24D4D3;
-  --success: #0d9894;
-  --danger: #c0392b;
-  --text: #08304F;
-  --sub: #557a8a;
-  --border: #08304F;
-  --card: #FFFAEA;
-}
-html { scroll-behavior: smooth; }
-body {
-  margin: 0;
-  background-color: var(--navy);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 28px 28px;
-  color: var(--cream);
-  font-family: var(--sans);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
-/* ─── 顶部 AOI LAB 标识条（嵌入工作台时由宿主隐藏） ─── */
-.lab-topbar {
-  position: sticky; top: 0; z-index: 50;
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 14px 28px;
-  background: var(--navy);
-  border-bottom: 2px solid #ffffff22;
-}
-.lab-brand { display: flex; align-items: center; gap: 12px; color: var(--cream); }
-.lab-brand-mark {
-  display: grid; width: 40px; height: 40px; place-items: center;
-  border: 2px solid var(--cream); color: var(--cyan);
-  font: 900 1rem/1 var(--mono); letter-spacing: .02em; transform: rotate(-2deg);
-}
-.lab-brand-name { font: 900 1.15rem/1 var(--mono); letter-spacing: .04em; }
-.lab-breadcrumb { display: flex; align-items: center; gap: 8px; font: 700 .8rem/1 var(--mono); color: #fff9e8b0; }
-.lab-breadcrumb .sep { color: var(--cyan); }
-.lab-breadcrumb [aria-current] { color: var(--cream); }
-
-/* ─── 工具页面纸张 ─── */
-.container {
-  max-width: 1320px; margin: 28px auto 56px;
-  background: var(--paper); color: var(--ink);
-  border: 3px solid var(--ink);
-  box-shadow: 9px 9px 0 rgba(1,20,34,.55);
-  counter-reset: cardno;
-}
-/* ─── 卡片（分节面板，自动编号 01/02/03） ─── */
-.card {
-  position: relative; background: #fffdf5; color: var(--ink);
-  border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--cyan);
-  padding: 22px 24px; margin-top: 22px;
-}
-.card > h2 {
-  display: flex; align-items: center; gap: 14px; margin: 0 0 18px;
-  padding-bottom: 12px; border-bottom: 2px solid #08304f2e;
-  font-size: 1.2rem; font-weight: 900; line-height: 1.2;
-}
-.card > h2::before {
-  flex: 0 0 auto; content: counter(cardno, decimal-leading-zero);
-  display: grid; place-items: center; width: 34px; height: 34px;
-  background: var(--cyan); color: var(--ink); border: 2px solid var(--ink);
-  box-shadow: 3px 3px 0 var(--ink); font: 900 .8rem/1 var(--mono);
-}
-.card > h2 .dot { display: none; }
-.card > h2 .badge {
-  margin-left: auto; font: 800 .72rem/1 var(--mono); letter-spacing: .02em;
-  color: var(--ink); background: var(--cyan-soft); border: 1px solid var(--ink);
-  padding: 6px 12px; white-space: nowrap;
-}
-
-/* ─── 结论条 ─── */
-.conclusion {
-  border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--cyan);
-  padding: 16px 20px; background: #fffdf5; margin-top: 22px;
-}
-/* 去掉了工具标题头后，结论条作为页面首个元素顶到纸张顶部 */
-.conclusion:first-child { margin-top: 0; }
-.conclusion .main { font: 800 1.05rem/1.3 var(--sans); margin-bottom: 6px; color: var(--ink); }
-.conclusion .detail { font-size: 13px; color: #4e6b7a; line-height: 1.6; }
-.conclusion.pass { border-left: 8px solid var(--cyan); }
-.conclusion.pass .main { color: #0d6b66; }
-.conclusion.warn { border-left: 8px solid var(--orange); }
-.conclusion.warn .main { color: #b5640a; }
-.conclusion.fail { border-left: 8px solid var(--danger); }
-.conclusion.fail .main { color: #a3331f; }
-
-/* ─── 表单元素 ─── */
-label { display: block; font-size: 12.5px; color: var(--ink); margin-bottom: 6px; font-weight: 800; }
-input[type=number], input[type=text] {
-  width: 100%; height: 46px; padding: 0 12px; outline: none;
-  font-family: var(--mono); font-size: 13px; color: var(--ink);
-  background: #fffdf5; border: 2px solid var(--ink); border-radius: 0;
-}
-select {
-  height: 46px; padding: 0 10px; border: 2px solid var(--ink); border-radius: 0;
-  background: #fffdf5; color: var(--ink); font-family: var(--sans); font-size: 13px; cursor: pointer;
-  width: 100%;
-}
-input:focus, select:focus {
-  border-color: var(--cyan); outline: 3px solid var(--orange); outline-offset: 2px;
-}
-
-button { font-family: var(--sans); }
-.btn-primary {
-  background: var(--orange); color: var(--ink); border: 2px solid var(--ink);
-  box-shadow: 3px 3px 0 var(--ink); padding: 11px 20px; font: 850 .9rem/1 var(--mono);
-  cursor: pointer; transition: transform 160ms, box-shadow 160ms, background 160ms;
-}
-.btn-primary:hover { background: #ffb255; transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--ink); }
-.btn-primary:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--ink); }
-.btn-primary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
-.btn-ghost {
-  background: transparent; color: var(--ink); border: 2px solid var(--ink);
-  padding: 10px 16px; font: 700 .85rem/1 var(--sans); cursor: pointer; transition: background 160ms;
-}
-.btn-ghost:hover { background: #08304f0d; }
-.btn-ghost:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
-.btn-ghost-sm { font-size: .78rem; padding: 6px 12px; }
-
-.param-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin-top: 18px; }
-.btn-row { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
-.muted { color: var(--sub); }
-
-/* ─── 拖拽导入区 ─── */
-.drop-hint {
-  border: 2px dashed var(--ink); padding: 30px 16px; text-align: center;
-  color: var(--sub); font-size: 14px; font-weight: 700; cursor: pointer;
-  background: #fffdf5; margin-top: 4px;
-  transition: background 160ms, border-color 160ms, transform 160ms;
-}
-.drop-hint .drop-icon { display: block; font-size: 34px; margin-bottom: 10px; line-height: 1; }
-.drop-hint .drop-sub { display: block; font-size: 11.5px; font-weight: 500; color: var(--sub); margin-top: 4px; }
-.drop-hint.dragover { border-color: var(--cyan); background: #dff9f3; color: var(--ink); transform: scale(1.01); }
-.file-info { margin-top: 12px; font-size: 13px; line-height: 1.6; }
-.scope-note {
-  margin-top: 14px; font-size: 12.5px; color: #4e6b7a;
-  background: #08304f0a; border-left: 4px solid var(--cyan);
-  padding: 9px 13px; line-height: 1.6;
-}
-
-/* ─── 图表 ─── */
-.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.chart-box { height: 380px; background: #fffdf5; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--cyan); }
-.chart-title { font: 800 .72rem/1 var(--mono); color: var(--ink); letter-spacing: .04em; text-align: center; padding: 8px 0 0; }
-
-/* ─── 表格 ─── */
-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #08304f1f; }
-th {
-  color: var(--ink); font-weight: 800; font-size: 11.5px; background: var(--cyan-soft);
-  border-bottom: 2px solid var(--ink); position: sticky; top: 0; z-index: 1; font-family: var(--mono);
-}
-td.mono { font-family: var(--mono); }
-
-/* ─── 状态标签（不只靠颜色，加描边） ─── */
-.tag { display: inline-block; padding: 2px 9px; border-radius: 0; border: 1px solid var(--ink); font: 800 .72rem/1 var(--mono); white-space: nowrap; }
-.tag.ok { background: var(--cyan-soft); color: var(--ink); }
-.tag.bad { background: #f6d9d2; color: #a3331f; }
-.tag.warn { background: #ffe1ad; color: #b5640a; }
-
-.err { color: #a3331f; font-size: 12.5px; margin-top: 12px; display: none; background: #f6d9d2; border: 2px solid var(--danger); border-left-width: 6px; padding: 8px 10px; }
-.err.show { display: block; }
-
-.footer { text-align: center; color: #557a8a; font: 700 .78rem/1.4 var(--mono); margin-top: 28px; padding-bottom: 8px; }
-
-/* ─── 乘坐块 ─── */
-.seat-block { margin-bottom: 18px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 4px 4px 0 var(--cyan); overflow: hidden; }
-.seat-title { background: var(--cyan-soft); padding: 12px 16px; font-weight: 800; font-size: 14px; color: var(--ink); border-bottom: 2px solid var(--ink); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.seat-title .sub { font-weight: 700; font-size: 12px; color: #4e6b7a; }
-.seat-func { padding: 10px 16px; background: #fffdf5; border-bottom: 2px solid var(--ink); font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.seat-block table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.seat-block th { background: var(--cyan-soft); color: var(--ink); font-weight: 800; font-size: 11.5px; text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--ink); font-family: var(--mono); }
-.seat-block td { padding: 8px 12px; border-bottom: 1px solid #08304f1f; }
-.formula-chip { display: inline-block; background: var(--ink); color: var(--cream); font-family: var(--mono); font-size: 12px; padding: 3px 10px; border: 2px solid var(--ink); }
-
-/* ─── 产品块（每个产品展开逐点明细） ─── */
-.prod-block { border-top: 2px solid var(--ink); }
-.prod-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; cursor: pointer; user-select: none; font-weight: 700; font-size: 13px; background: #fffdf5; }
-.prod-head:hover { background: var(--cyan-soft); }
-.prod-head .arrow { display: inline-block; font-size: 10px; color: var(--ink); width: 12px; transition: transform .15s; }
-.prod-head.collapsed .arrow { transform: rotate(-90deg); }
-.prod-head .link { font-weight: 800; font-size: 12px; color: var(--ink); cursor: pointer; border-bottom: 2px solid var(--cyan); padding-bottom: 1px; }
-.prod-head .link:hover { color: #0d6b66; border-color: var(--orange); }
-.prod-points { padding: 4px 16px 12px; overflow-x: auto; }
-.prod-points table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.prod-points th { background: #eef4f3; color: var(--ink); font-weight: 800; font-size: 11px; text-align: right; padding: 6px 10px; border-bottom: 2px solid var(--ink); white-space: nowrap; font-family: var(--mono); }
-.prod-points th:first-child, .prod-points td:first-child { text-align: center; }
-.prod-points td { padding: 5px 10px; border-bottom: 1px solid #08304f14; text-align: right; font-family: var(--mono); white-space: nowrap; }
-.prod-points tr:hover td { background: #f1f8f6; }
-.pt-ok { color: #0d6b66; font-weight: 700; }
-.pt-fail { color: #a3331f; font-weight: 700; }
-.pt-fail-cell { background: #f6d9d2 !important; color: #a3331f; font-weight: 700; }
-
-/* ─── 散点图弹窗 ─── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(7,47,80,.88); z-index: 1000; display: none; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow-y: auto; }
-.modal-overlay.show { display: flex; }
-.modal-box { background: var(--paper); border: 3px solid var(--ink); box-shadow: 9px 9px 0 var(--cyan); width: min(96vw, 1100px); padding: 18px 22px 22px; }
-.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.modal-head h3 { margin: 0; font-size: 16px; font-weight: 900; color: var(--ink); }
-.modal-close { border: none; background: var(--ink); color: var(--paper); width: 36px; height: 36px; font-size: 16px; cursor: pointer; line-height: 1; font-family: var(--mono); }
-.modal-close:hover { background: var(--orange); color: var(--ink); }
-
-/* ─── 响应式 ─── */
-@media (max-width: 980px) {
-  .charts { grid-template-columns: 1fr; }
-  .param-row { grid-template-columns: 1fr 1fr; }
-}
-@media (max-width: 680px) {
-  .lab-topbar { padding: 12px 16px; }
-  .param-row { grid-template-columns: 1fr; }
-  .container { margin: 16px 12px 40px; box-shadow: 6px 6px 0 rgba(1,20,34,.55); }
-  .card { padding: 18px 16px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
-}
-</style>
-</head>
-<body>
-<div class="lab-topbar">
-  <a class="lab-brand" href="#top" aria-label="AOI LAB 首页">
-    <span class="lab-brand-mark" aria-hidden="true">AOI</span>
-    <span class="lab-brand-name">AOI LAB</span>
-  </a>
-  <nav class="lab-breadcrumb" aria-label="面包屑">
-    <span>工具箱</span><span class="sep">/</span><span aria-current="page">相关性判断</span>
-  </nav>
-</div>
-
-<div class="container" id="top">
-  <!-- 汇总统计条 -->
-  <div class="conclusion" id="multiSummaryBar">
-    <div class="main" id="multiSummaryMain">导入 Excel 文件后点击 [开始分析]</div>
-    <div class="detail" id="multiSummaryDetail">Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列</div>
-  </div>
-
-  <!-- Excel 导入 -->
-  <div class="card">
-    <h2><span class="dot"></span>Excel 文件导入 <span class="badge">每个 sheet 一个乘坐</span></h2>
-    <div class="drop-hint" id="excelDropHint">
-      <span class="drop-icon" aria-hidden="true">📁</span>
-      拖拽 .xlsx 文件到这里，或点击选择文件
-      <span class="drop-sub">每个 sheet = 一个乘坐 · sheet 内 1#~10# = 10 个产品</span>
-    </div>
-    <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none" />
-    <div id="excelFileInfo" class="file-info muted">未加载文件</div>
-
-    <div class="param-row">
-      <div>
-        <label for="multiTolerance">容差（gap 上限）</label>
-        <input type="number" id="multiTolerance" value="0.015" min="0" step="0.001" />
-      </div>
-      <div>
-        <label for="multiTransformType">变换类型</label>
-        <select id="multiTransformType">
-          <option value="linear">线性拟合 y = ax + b（推荐）</option>
-          <option value="offset">固定 a=1（仅补偿 y = x + b）</option>
-          <option value="none">不变换（只看原始 gap）</option>
-        </select>
-      </div>
-      <div>
-        <label for="multiATol">分辨率缩放容差 |a−1|</label>
-        <input type="number" id="multiATol" value="0.1" min="0" step="0.001" />
-      </div>
-      <div>
-        <label for="multiCompTol">补偿值上限</label>
-        <input type="number" id="multiCompTol" value="0.03" min="0" step="0.001" />
-      </div>
-    </div>
-    <div class="scope-note">每个乘坐共用一个变换函数（该乘坐 10 个产品同一套 y = ax + b）；a 表示分辨率缩放（最好趋近 1），b 表示补偿值（尽量 ≤0.03）</div>
-
-    <div class="err" id="multiErr"></div>
-    <div class="btn-row">
-      <button class="btn-primary" id="multiAnalyzeBtn">▶ 开始分析</button>
-      <button class="btn-ghost" id="multiClearBtn">清空</button>
-    </div>
-  </div>
-
-  <!-- 比对结果：每个乘坐一个表格 -->
-  <div class="card">
-    <h2><span class="dot"></span>比对结果 <span class="badge" id="multiSummaryBadge">—</span></h2>
-    <div class="btn-row" style="margin:0 0 10px">
-      <button class="btn-ghost" id="multiExportCsv">导出 CSV</button>
-      <button class="btn-ghost" id="multiCopyTable">复制汇总表</button>
-      <button class="btn-ghost btn-ghost-sm" id="multiExpandAll">展开全部点位</button>
-      <button class="btn-ghost btn-ghost-sm" id="multiCollapseAll">收起全部点位</button>
-    </div>
-    <div id="multiResultContainer"></div>
-  </div>
-
-  <!-- 散点图弹窗 -->
-  <div class="modal-overlay" id="multiDetailCard">
-    <div class="modal-box">
-      <div class="modal-head">
-        <h3>散点图 · <span id="multiDetailName">—</span></h3>
-        <button class="modal-close" id="multiModalClose" type="button">✕</button>
-      </div>
-      <div class="charts">
-        <div>
-          <div class="chart-title">原始：测量值(CCD) → 标准值(QV)</div>
-          <div class="chart-box" id="multiChartRaw" style="height:340px"></div>
-        </div>
-        <div>
-          <div class="chart-title">变换后：校准值 → 标准值(QV)</div>
-          <div class="chart-box" id="multiChartFit" style="height:340px"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="footer">相关性判断 · 偏移校准 + 内点分析 · 数据不上传</div>
-</div>
-
-<script>
-'use strict';
-const $ = id => document.getElementById(id);
-
-/* ==================== 算法 ==================== */
-
-function fitLinear(xs, ys) {
-  const n = xs.length;
-  if (n < 2) throw new Error('至少需要 2 个数据点');
-  let sx = 0, sy = 0, sxy = 0, sxx = 0;
-  for (let i = 0; i < n; i++) { sx += xs[i]; sy += ys[i]; sxy += xs[i]*ys[i]; sxx += xs[i]*xs[i]; }
-  const mx = sx/n, my = sy/n;
-  const denom = sxx - n*mx*mx;
-  const a = Math.abs(denom) < 1e-15 ? 0 : (sxy - n*mx*my)/denom;
-  const b = my - a*mx;
-  let st = 0, sr = 0;
-  for (let i = 0; i < n; i++) { const yh = a*xs[i]+b; sr += (ys[i]-yh)**2; st += (ys[i]-my)**2; }
-  const r2 = st < 1e-15 ? 1 : 1 - sr/st;
-  return { a, b, r2 };
-}
-
-function theilSen(xs, ys) {
-  const n = xs.length;
-  const slopes = [];
-  for (let i = 0; i < n; i++)
-    for (let j = i+1; j < n; j++) {
-      const dx = xs[j]-xs[i];
-      if (Math.abs(dx) < 1e-15) continue;
-      slopes.push((ys[j]-ys[i])/dx);
-    }
-  let a = 0;
-  if (slopes.length > 0) {
-    slopes.sort((p,q) => p-q);
-    a = slopes[Math.floor(slopes.length/2)];
-  }
-  const ints = xs.map((x,i) => ys[i]-a*x).sort((p,q)=>p-q);
-  const b = ints[Math.floor(ints.length/2)];
-  return { a, b };
-}
-
-function fmt(x) {
-  if (!isFinite(x)) return '0';
-  if (Math.abs(x) < 1e-10) return '0';
-  return Number(x.toPrecision(8)).toString();
-}
-
-// 格式化变换函数 y = a·x + b（正确处理负号、a=1 简化）
-function fmtFunc(a, b) {
-  const aPart = Math.abs(a - 1) < 1e-12 ? 'x' : \`\${Number(a.toFixed(4))}·x\`;
-  if (Math.abs(b) < 1e-12) return \`y = \${aPart}\`;
-  const bSign = b < 0 ? ' − ' : ' + ';
-  return \`y = \${aPart}\${bSign}\${Number(Math.abs(b).toFixed(4))}\`;
-}
-
-/* ==================== 图表 ==================== */
-
-function renderAlignmentChart(el, xs, ys, tol) {
-  const lo = Math.min(...xs, ...ys), hi = Math.max(...xs, ...ys);
-  const pad = (hi - lo) * 0.08 || 1;
-  const L = lo - pad, H = hi + pad;
-  const pass = [], fail = [];
-  for (let i = 0; i < xs.length; i++) {
-    if (Math.abs(xs[i]-ys[i]) <= tol) pass.push([xs[i], ys[i]]);
-    else fail.push([xs[i], ys[i]]);
-  }
-  const option = {
-    grid: { top: 30, left: 55, right: 20, bottom: 45 },
-    tooltip: { trigger: 'item', formatter: p => \`X=\${p.data[0]}<br/>Y=\${p.data[1]}\` },
-    xAxis: { type: 'value', name: 'X', min: L, max: H, scale: true },
-    yAxis: { type: 'value', name: 'Y', min: L, max: H, scale: true },
-    series: [
-      { name: '≤ 容差', type: 'scatter', data: pass, symbolSize: 8, itemStyle: { color: '#24D4D3', opacity: 0.85 } },
-      { name: '> 容差', type: 'scatter', data: fail, symbolSize: 10, itemStyle: { color: '#c0392b', borderColor: '#7a1f12', borderWidth: 1 } },
-      { name: 'y=x', type: 'line', data: [[L,L],[H,H]], showSymbol: false, lineStyle: { color: '#557a8a', width: 1, type: 'dashed' } }
-    ],
-    legend: { top: 0 }
-  };
-  el.setOption(option, true);
-}
-
-/* ==================== 多产品批量比对 ==================== */
-
-let multiSeats = null;      // 解析后的乘坐 [{name, products:[{name,meas,qv}]}]
-let multiResult = null;     // analyzeSeats 结果
-let multiChartRaw = null, multiChartFit = null;
-let multiSelectedIdx = -1;
-
-// 解析 Excel workbook → 乘坐列表
-// 真实结构：每个 sheet 一个乘坐；sheet 内 10 个产品（1#~10#）横向 3 个并排、纵向多块。
-// 每个产品块有表头行 "offest QV CCD CCD+ GAP"，只需 QV 列（标准值）和 CCD 列（测量值）。
-function parseWorkbook(wb) {
-  const seats = [];
-  wb.SheetNames.forEach(sheetName => {
-    const ws = wb.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-    const products = [];
-    // 遍历所有单元格，找产品标签 "N#"（如 1#、2#…10#）
-    for (let r = 0; r < rows.length; r++) {
-      const row = rows[r] || [];
-      for (let c = 0; c < row.length; c++) {
-        const cell = row[c];
-        if (cell != null && /^\\d+#$/.test(String(cell).trim())) {
-          const name = String(cell).trim();
-          let qvCol = -1, ccdCol = -1, headerRow = -1;
-
-          // 模式1：标签同一行右边找 QV/CCD（新表格：N# QV CCD GAP 横向并排）
-          for (let cc = c + 1; cc < Math.min(c + 5, row.length); cc++) {
-            const s = String(row[cc] ?? '').trim();
-            if (s === 'QV' && qvCol < 0) qvCol = cc;
-            if (s === 'CCD' && ccdCol < 0) ccdCol = cc;
-            if (qvCol >= 0 && ccdCol >= 0) break;
-          }
-          if (qvCol >= 0 && ccdCol >= 0) headerRow = r;
-
-          // 模式2：标签下方几行找 QV/CCD（旧表格：表头在标签下方，精确匹配排除 "CCD+"）
-          if (headerRow < 0) {
-            for (let h = r + 1; h < Math.min(r + 6, rows.length); h++) {
-              const hrow = rows[h] || [];
-              for (let cc = c; cc < Math.min(c + 8, hrow.length); cc++) {
-                const s = String(hrow[cc] ?? '').trim();
-                if (s === 'QV' && qvCol < 0) qvCol = cc;
-                if (s === 'CCD' && ccdCol < 0) ccdCol = cc;
-              }
-              if (qvCol >= 0 && ccdCol >= 0) { headerRow = h; break; }
-            }
-          }
-
-          if (headerRow < 0) continue;
-          // 数据从表头行 +1 开始，遇到空单元格即停止
-          const meas = [], qv = [];
-          for (let d = headerRow + 1; d < rows.length; d++) {
-            const drow = rows[d] || [];
-            const rawM = drow[ccdCol], rawQ = drow[qvCol];
-            if (rawM == null || rawQ == null || rawM === '' || rawQ === '') break;
-            const m = Number(rawM), q = Number(rawQ);
-            if (isFinite(m) && isFinite(q)) { meas.push(m); qv.push(q); }
-            else break;
-          }
-          if (meas.length >= 2) products.push({ name, meas, qv });
-        }
-      }
-    }
-    seats.push({ name: sheetName, products });
-  });
-  return seats;
-}
-
-function median(arr) { const a = [...arr].sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; }
-
-// 稳健线性拟合 y = ax + b：Theil-Sen 初值 → 内点 OLS 细化
-function robustFit(xs, ys, tol) {
-  const ts = theilSen(xs, ys);
-  const thresh = Math.max(tol * 2, 0.02);
-  const ix = [], iy = [];
-  for (let i = 0; i < xs.length; i++) {
-    if (Math.abs(ts.a * xs[i] + ts.b - ys[i]) <= thresh) { ix.push(xs[i]); iy.push(ys[i]); }
-  }
-  if (ix.length >= 3) {
-    const o = fitLinear(ix, iy);
-    return { a: o.a, b: o.b };
-  }
-  return { a: ts.a, b: ts.b };
-}
-
-// 分析：每个乘坐一个统一变换函数（该乘坐 10 个产品共用一个 y=ax+b）
-// 物理含义：a = 分辨率缩放系数（最好趋近 1，但不强制）；b = 补偿值（尽量小）。
-// transformType: 'linear' 线性拟合 y=ax+b | 'offset' 固定 a=1 | 'none' 不变换
-function analyzeBySeat(seats, tol, transformType, compTol, aTol) {
-  seats.forEach(seat => {
-    const nProds = seat.products.length;
-
-    // 该乘坐唯一的变换函数
-    let a = 1, b = 0;
-    if (transformType === 'linear') {
-      const allXs = [], allYs = [];
-      seat.products.forEach(p => { allXs.push(...p.meas); allYs.push(...p.qv); });
-      const fit = robustFit(allXs, allYs, tol);
-      a = fit.a; b = fit.b;
-    } else if (transformType === 'offset') {
-      const allD = [];
-      seat.products.forEach(p => p.meas.forEach((m, i) => allD.push(p.qv[i] - m)));
-      b = median(allD);
-    }
-    seat.a = a; seat.b = b;
-    seat.aOk = Math.abs(a - 1) <= aTol;   // 分辨率缩放是否趋近 1
-    seat.compOk = Math.abs(b) <= compTol; // 补偿值是否在 ±compTol 内
-
-    // 用这个唯一函数评估每个产品
-    seat.products.forEach(p => {
-      const rawErrs = p.meas.map((m, i) => m - p.qv[i]);
-      p.rawFail = rawErrs.filter(e => Math.abs(e) > tol).length;
-      p.rawPass = p.rawFail === 0;
-      if (transformType === 'none') {
-        p.fitFail = p.rawFail; p.fitPass = p.rawPass;
-      } else {
-        const fitErrs = p.meas.map((m, i) => a * m + b - p.qv[i]);
-        p.fitFail = fitErrs.filter(e => Math.abs(e) > tol).length;
-        p.fitPass = p.fitFail === 0;
-      }
-    });
-
-    seat.rawOkCount = seat.products.filter(p => p.rawPass).length;
-    seat.fitOkCount = seat.products.filter(p => p.fitPass).length;
-  });
-
-  const nProds = seats.length ? seats[0].products.length : 10;
-  return { seats, tol, transformType, compTol, aTol, threshold: Math.ceil(nProds * 0.5), nProds };
-}
-
-// 汇总统计条
-function renderMultiSummaryBar(result) {
-  const { seats, tol, transformType, threshold, nProds } = result;
-  const bar = $('multiSummaryBar');
-  const verdict = s => s.rawOkCount >= threshold ? 'pass' : (s.fitOkCount >= threshold ? 'warn' : 'fail');
-  const pass = seats.filter(s => verdict(s) === 'pass').length;
-  const warn = seats.filter(s => verdict(s) === 'warn').length;
-  const fail = seats.filter(s => verdict(s) === 'fail').length;
-
-  let main, detail;
-  if (transformType === 'none') {
-    main = \`\${pass}/\${seats.length} 个乘坐原始达标（≥\${threshold} 个产品 gap ≤ \${tol}）\`;
-    detail = seats.map(s => \`\${s.name}：\${s.rawOkCount}/\${nProds} 个产品达标\`).join('，');
-  } else {
-    main = \`\${pass + warn}/\${seats.length} 个乘坐达标（\${pass} 无需变换，\${warn} 需变换，\${fail} 不达标）\`;
-    detail = \`每个乘坐 \${nProds} 个产品共用一个变换函数（见下方各乘坐表格）。目标：≥\${threshold} 个产品完全达标。\`;
-  }
-  const cls = fail > 0 ? (pass + warn > 0 ? 'warn' : 'fail') : (warn > 0 ? 'warn' : 'pass');
-  bar.className = 'conclusion ' + cls;
-  $('multiSummaryMain').textContent = main;
-  $('multiSummaryDetail').textContent = detail;
-  $('multiSummaryBadge').textContent = \`\${pass + warn} 达标 / \${seats.length} 乘坐\`;
-}
-
-// 渲染：每个乘坐一个表格，逐点展开每个产品的明细
-function renderMultiSummary(result) {
-  const container = $('multiResultContainer');
-  container.innerHTML = '';
-  const { seats, transformType, tol, threshold, nProds } = result;
-
-  seats.forEach((seat, si) => {
-    const block = document.createElement('div');
-    block.className = 'seat-block';
-
-    // 是否需要变换：原始已达阈值就无需变换（不显示函数）
-    const needTransform = transformType !== 'none' && seat.rawOkCount < threshold;
-
-    // 乘坐标题
-    let html = \`<div class="seat-title">▎乘坐：\${seat.name}<span class="sub">\${nProds} 个产品</span></div>\`;
-
-    // 结论条：无需变换就不给函数；需变换才给函数
-    const aTag = seat.aOk
-      ? \`<span class="tag ok">缩放 a=\${Number(seat.a.toFixed(4))}（|a−1|=\${Number(Math.abs(seat.a - 1).toFixed(4))} ≤ \${fmt(result.aTol)} ✓）</span>\`
-      : \`<span class="tag bad">缩放 a=\${Number(seat.a.toFixed(4))}（|a−1|=\${Number(Math.abs(seat.a - 1).toFixed(4))} > \${fmt(result.aTol)} ✗）</span>\`;
-    const compTag = seat.compOk
-      ? \`<span class="tag ok">补偿 |b|=\${Number(Math.abs(seat.b).toFixed(4))} ≤ \${fmt(result.compTol)} ✓</span>\`
-      : \`<span class="tag bad">补偿 |b|=\${Number(Math.abs(seat.b).toFixed(4))} > \${fmt(result.compTol)} ✗</span>\`;
-
-    if (needTransform) {
-      const verdict = seat.fitOkCount >= threshold
-        ? \`<span class="tag warn">⚠️ 变换后 \${seat.fitOkCount}/\${nProds} 达标（≥\${threshold}）</span>\`
-        : \`<span class="tag bad">❌ 变换后仅 \${seat.fitOkCount}/\${nProds} 达标（&lt;\${threshold}）</span>\`;
-      html += \`<div class="seat-func">统一变换函数：<span class="formula-chip">\${fmtFunc(seat.a, seat.b)}</span>\${verdict}\${aTag}\${compTag}</div>\`;
-    } else if (transformType === 'none') {
-      const verdict = seat.rawOkCount >= threshold
-        ? \`<span class="tag ok">✅ 原始 \${seat.rawOkCount}/\${nProds} 达标</span>\`
-        : \`<span class="tag bad">❌ 原始仅 \${seat.rawOkCount}/\${nProds} 达标（&lt;\${threshold}）</span>\`;
-      html += \`<div class="seat-func">\${verdict}<span class="muted" style="font-size:12px">（未启用变换）</span></div>\`;
-    } else {
-      html += \`<div class="seat-func"><span class="tag ok">✅ 原始 \${seat.rawOkCount}/\${nProds} 达标，无需变换</span>\${aTag}\${compTag}</div>\`;
-    }
-
-    // 每个产品展开成逐点明细
-    seat.products.forEach((p, pi) => {
-      const rawGaps = p.meas.map((m, i) => m - p.qv[i]);
-      const rawMax = Math.max(...rawGaps.map(Math.abs));
-
-      // 产品状态
-      let statusText, statusCls;
-      if (p.rawPass) { statusText = '✅ 原始达标'; statusCls = 'ok'; }
-      else if (needTransform && p.fitPass) { statusText = '⚠️ 变换后达标'; statusCls = 'warn'; }
-      else { statusText = '❌ 不达标'; statusCls = 'bad'; }
-
-      const rawTag = p.rawPass
-        ? \`<span class="tag ok">原始 0 点超差</span>\`
-        : \`<span class="tag bad">原始 \${p.rawFail} 点超差</span> <span class="muted">(最大 \${rawMax.toFixed(4)})</span>\`;
-
-      let fitTag = '';
-      if (needTransform) {
-        const fitMax = Math.max(...p.meas.map((m, i) => Math.abs(seat.a * m + seat.b - p.qv[i])));
-        fitTag = p.fitPass
-          ? \`<span class="tag ok">变换后 0 点超差</span>\`
-          : \`<span class="tag bad">变换后 \${p.fitFail} 点超差</span> <span class="muted">(最大 \${fitMax.toFixed(4)})</span>\`;
-      }
-
-      html += \`<div class="prod-block">\`;
-      html += \`<div class="prod-head" data-si="\${si}" data-pi="\${pi}">\`;
-      html += \`<span class="arrow">▼</span><span>产品 \${p.name}</span>\${rawTag}\${fitTag}\`;
-      html += \`<span class="tag \${statusCls}">\${statusText}</span>\`;
-      html += \`<span class="link" data-chart="1" data-si="\${si}" data-pi="\${pi}">📊 查看散点图</span>\`;
-      html += \`</div>\`;
-
-      // 逐点明细表
-      html += \`<div class="prod-points"><table><thead><tr>\`;
-      html += \`<th>点#</th><th>标准值 QV</th><th>测量值 CCD</th><th>原始 gap</th><th>原始是否达标</th>\`;
-      if (needTransform) html += \`<th>变换后值</th><th>变换后 gap</th><th>变换后是否达标</th>\`;
-      html += \`</tr></thead><tbody>\`;
-
-      for (let i = 0; i < p.meas.length; i++) {
-        const rawGap = p.meas[i] - p.qv[i];
-        const rawOk = Math.abs(rawGap) <= tol;
-        let row = \`<tr>\`;
-        row += \`<td>\${i + 1}</td>\`;
-        row += \`<td>\${fmt(p.qv[i])}</td>\`;
-        row += \`<td>\${fmt(p.meas[i])}</td>\`;
-        row += \`<td class="\${rawOk ? 'pt-ok' : 'pt-fail-cell'}">\${rawGap >= 0 ? '+' : ''}\${fmt(rawGap)}</td>\`;
-        row += \`<td>\${rawOk ? '<span class="pt-ok">✓</span>' : '<span class="pt-fail">✗</span>'}</td>\`;
-        if (needTransform) {
-          const yh = seat.a * p.meas[i] + seat.b;
-          const fitGap = yh - p.qv[i];
-          const fitOk = Math.abs(fitGap) <= tol;
-          row += \`<td>\${fmt(yh)}</td>\`;
-          row += \`<td class="\${fitOk ? 'pt-ok' : 'pt-fail-cell'}">\${fitGap >= 0 ? '+' : ''}\${fmt(fitGap)}</td>\`;
-          row += \`<td>\${fitOk ? '<span class="pt-ok">✓</span>' : '<span class="pt-fail">✗</span>'}</td>\`;
-        }
-        row += \`</tr>\`;
-        html += row;
-      }
-      html += \`</tbody></table></div></div>\`;
-    });
-
-    block.innerHTML = html;
-    container.appendChild(block);
-
-    // 折叠/展开产品块
-    block.querySelectorAll('.prod-head').forEach(head => {
-      head.addEventListener('click', (e) => {
-        if (e.target.closest('.link')) return; // 点"查看散点图"不折叠
-        head.classList.toggle('collapsed');
-        const points = head.nextElementSibling;
-        if (points) points.style.display = head.classList.contains('collapsed') ? 'none' : '';
-      });
-    });
-
-    // 查看散点图
-    block.querySelectorAll('.link[data-chart]').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showMultiDetail(Number(link.dataset.si), Number(link.dataset.pi));
-      });
-    });
-  });
-}
-
-// 详情：查看某产品在某乘坐的散点图 + 逐点明细
-function showMultiDetail(si, pi) {
-  const result = multiResult;
-  if (!result) return;
-  const seat = result.seats[si];
-  const p = seat && seat.products[pi];
-  if (!seat || !p) return;
-  multiSelectedIdx = pi;
-
-  const needTransform = result.transformType !== 'none' && seat.rawOkCount < result.threshold;
-  $('multiDetailName').textContent = \`\${seat.name} · \${p.name}\${needTransform ? \`（函数 \${fmtFunc(seat.a, seat.b)}）\` : '（无需变换）'}\`;
-  $('multiDetailCard').classList.add('show');
-
-  const tol = result.tol;
-  if (typeof echarts !== 'undefined') {
-    try {
-      if (!multiChartRaw) multiChartRaw = echarts.init($('multiChartRaw'));
-      if (!multiChartFit) multiChartFit = echarts.init($('multiChartFit'));
-      renderAlignmentChart(multiChartRaw, p.meas, p.qv, tol);
-      renderAlignmentChart(multiChartFit, p.meas.map(x => seat.a * x + seat.b), p.qv, tol);
-      // 弹窗刚显示，布局完成后强制 resize，确保图表正确渲染
-      setTimeout(() => { multiChartRaw && multiChartRaw.resize(); multiChartFit && multiChartFit.resize(); }, 60);
-    } catch (e) {
-      console.warn('散点图渲染失败:', e);
-    }
-  } else {
-    ['multiChartRaw', 'multiChartFit'].forEach(id => {
-      const el = $(id);
-      if (el) el.innerHTML = '<div style="padding:60px;text-align:center;color:#557a8a;font-size:13px">图表库未加载，不影响逐点数据查看</div>';
-    });
-  }
-}
-
-// 关闭散点图弹窗
-function closeMultiDetail() {
-  const card = $('multiDetailCard');
-  if (card) card.classList.remove('show');
-}
-$('multiModalClose').addEventListener('click', closeMultiDetail);
-$('multiDetailCard').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeMultiDetail(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMultiDetail(); });
-
-function multiShowError(msg) { const el = $('multiErr'); el.textContent = '⚠ ' + msg; el.classList.add('show'); }
-function multiClearError() { $('multiErr').classList.remove('show'); }
-
-// 展开/收起全部点位
-function setAllPoints(collapsed) {
-  document.querySelectorAll('#multiResultContainer .prod-head').forEach(head => {
-    if (collapsed) head.classList.add('collapsed');
-    else head.classList.remove('collapsed');
-    const points = head.nextElementSibling;
-    if (points) points.style.display = collapsed ? 'none' : '';
-  });
-}
-$('multiExpandAll').addEventListener('click', () => setAllPoints(false));
-$('multiCollapseAll').addEventListener('click', () => setAllPoints(true));
-
-// 开始分析
-$('multiAnalyzeBtn').addEventListener('click', () => {
-  multiClearError();
-  try {
-    const tol = Number($('multiTolerance').value);
-    const transformType = $('multiTransformType').value;
-    const compTol = Number($('multiCompTol').value);
-    const aTol = Number($('multiATol').value);
-    if (!isFinite(tol) || tol < 0) throw new Error('容差需为非负数字');
-    if (!isFinite(compTol) || compTol < 0) throw new Error('补偿值上限需为非负数字');
-    if (!isFinite(aTol) || aTol < 0) throw new Error('分辨率缩放容差需为非负数字');
-    if (!multiSeats) throw new Error('请先导入 Excel 文件');
-    multiResult = analyzeBySeat(multiSeats, tol, transformType, compTol, aTol);
-    renderMultiSummaryBar(multiResult);
-    renderMultiSummary(multiResult);
-    closeMultiDetail();
-    multiSelectedIdx = -1;
-  } catch (e) { multiShowError(e.message); }
-});
-
-// Excel 文件导入
-function loadExcelFile(file) {
-  if (!file) return;
-  if (typeof XLSX === 'undefined') { alert('Excel 解析库加载失败，请检查网络后刷新重试'); return; }
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const data = new Uint8Array(reader.result);
-      const wb = XLSX.read(data, { type: 'array' });
-      const seats = parseWorkbook(wb);
-      const totalProds = seats.reduce((s, x) => s + x.products.length, 0);
-      if (totalProds === 0) throw new Error('未在 Excel 中找到 CCD/QV 列');
-      multiSeats = seats;
-      const seatInfo = seats.map(s => \`\${s.name}(\${s.products.length}产品)\`).join('、');
-      $('excelFileInfo').textContent = \`已加载 \${file.name}：\${seats.length} 个乘坐 → \${seatInfo}\`;
-      $('excelFileInfo').style.color = 'var(--success)';
-    } catch (e) {
-      multiShowError(e.message);
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-const excelDrop = $('excelDropHint');
-excelDrop.addEventListener('click', () => $('excelFileInput').click());
-excelDrop.addEventListener('dragover', (e) => { e.preventDefault(); excelDrop.classList.add('dragover'); });
-excelDrop.addEventListener('dragleave', () => excelDrop.classList.remove('dragover'));
-excelDrop.addEventListener('drop', (e) => {
-  e.preventDefault(); excelDrop.classList.remove('dragover');
-  loadExcelFile(e.dataTransfer.files[0]);
-});
-$('excelFileInput').addEventListener('change', (e) => { loadExcelFile(e.target.files[0]); e.target.value = ''; });
-
-// 清空
-$('multiClearBtn').addEventListener('click', () => {
-  $('multiResultContainer').innerHTML = '';
-  $('multiSummaryBadge').textContent = '—';
-  closeMultiDetail();
-  $('excelFileInfo').textContent = '未加载文件';
-  $('excelFileInfo').style.color = '';
-  const bar = $('multiSummaryBar');
-  bar.className = 'conclusion';
-  $('multiSummaryMain').textContent = '导入 Excel 文件后点击 [开始分析]';
-  $('multiSummaryDetail').textContent = 'Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列';
-  multiClearError();
-  multiSeats = null; multiResult = null; multiSelectedIdx = -1;
-});
-
-// 导出 CSV（含每个产品的每个检测点明细）
-$('multiExportCsv').addEventListener('click', () => {
-  if (!multiResult) { alert('请先完成分析'); return; }
-  const { seats, transformType, threshold, tol, compTol, aTol } = multiResult;
-  const lines = ['乘坐,产品,变换函数,分辨率缩放a,缩放是否达标,补偿b,补偿是否达标,原始达标,变换后达标'];
-  seats.forEach(seat => {
-    const needTransform = transformType !== 'none' && seat.rawOkCount < threshold;
-    const func = needTransform ? fmtFunc(seat.a, seat.b) : '无需变换';
-    const aOk = seat.aOk ? '达标' : '超限';
-    const compOk = seat.compOk ? '达标' : '超限';
-    lines.push(\`\${seat.name},全部,\${func},\${fmt(seat.a)},\${aOk},\${fmt(seat.b)},\${compOk},\${seat.rawOkCount}/\${seat.products.length},\${seat.fitOkCount}/\${seat.products.length}\`);
-    seat.products.forEach(p => {
-      const res = p.rawPass ? '原始达标' : (needTransform && p.fitPass ? '变换后达标' : '不达标');
-      lines.push(\`\${seat.name},\${p.name},\${func},\${fmt(seat.a)},\${aOk},\${fmt(seat.b)},\${compOk},\${p.rawFail}点超差,\${p.fitFail}点超差\`);
-    });
-  });
-  lines.push('');
-  lines.push('逐点明细');
-  lines.push(\`gap容差,\${tol}\`);
-  lines.push(\`分辨率缩放容差|a-1|,\${aTol}\`);
-  lines.push(\`补偿值上限,\${compTol}\`);
-  const header = needTransformHeader(seats, transformType, threshold);
-  lines.push(header);
-  seats.forEach(seat => {
-    const needTransform = transformType !== 'none' && seat.rawOkCount < threshold;
-    seat.products.forEach(p => {
-      p.meas.forEach((m, i) => {
-        const rawGap = m - p.qv[i];
-        const rawOk = Math.abs(rawGap) <= tol;
-        let row = \`\${seat.name},\${p.name},\${i + 1},\${p.qv[i]},\${m},\${rawGap},\${rawOk ? '达标' : '超差'}\`;
-        if (needTransform) {
-          const yh = seat.a * m + seat.b;
-          const fitGap = yh - p.qv[i];
-          const fitOk = Math.abs(fitGap) <= tol;
-          row += \`,\${yh},\${fitGap},\${fitOk ? '达标' : '超差'}\`;
-        }
-        lines.push(row);
-      });
-    });
-  });
-  const csv = lines.join('\\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const aEl = document.createElement('a');
-  aEl.href = url;
-  aEl.download = \`乘坐比对_\${new Date().toISOString().slice(0, 10)}.csv\`;
-  aEl.click();
-  URL.revokeObjectURL(url);
-});
-
-function needTransformHeader(seats, transformType, threshold) {
-  const anyTransform = seats.some(seat => transformType !== 'none' && seat.rawOkCount < threshold);
-  return anyTransform
-    ? '乘坐,产品,点#,标准值QV,测量值CCD,原始gap,原始是否达标,变换后值,变换后gap,变换后是否达标'
-    : '乘坐,产品,点#,标准值QV,测量值CCD,原始gap,原始是否达标';
-}
-
-// 复制汇总表（每个乘坐一个函数）
-$('multiCopyTable').addEventListener('click', () => {
-  if (!multiResult) { alert('请先完成分析'); return; }
-  const { seats, transformType, threshold, compTol, aTol } = multiResult;
-  const lines = [];
-  seats.forEach(seat => {
-    const needTransform = transformType !== 'none' && seat.rawOkCount < threshold;
-    const func = needTransform ? fmtFunc(seat.a, seat.b) : '无需变换';
-    const aInfo = \`缩放 a=\${fmt(seat.a)}（|a−1|=\${fmt(Math.abs(seat.a - 1))} \${seat.aOk ? '≤' : '>'}\${fmt(aTol)} \${seat.aOk ? '✓' : '✗'}）\`;
-    const compInfo = \`补偿 b=\${seat.b >= 0 ? '+' : ''}\${fmt(seat.b)}（\${seat.compOk ? '≤' : '>'}\${fmt(compTol)} \${seat.compOk ? '✓' : '✗'}）\`;
-    lines.push(\`\${seat.name}\\t\${needTransform ? '统一函数：' + func : '无需变换'}\\t\${aInfo}，\${compInfo}\\t原始 \${seat.rawOkCount}/\${seat.products.length} 达标 → 变换后 \${seat.fitOkCount}/\${seat.products.length}（目标≥\${threshold}）\`);
-    lines.push('产品\\t原始 gap\\t变换后 gap\\t结果');
-    seat.products.forEach(p => {
-      const res = p.rawPass ? '原始达标' : (needTransform && p.fitPass ? '变换后达标' : '不达标');
-      lines.push(\`\${p.name}\\t\${p.rawPass ? '✓全部' : '✗' + p.rawFail + '点'}\\t\${needTransform ? (p.fitPass ? '✓全部' : '✗' + p.fitFail + '点') : '—'}\\t\${res}\`);
-    });
-    lines.push('');
-  });
-  copyText(lines.join('\\n')).then(() => flashBtn($('multiCopyTable'), '已复制 ✓'));
-});
-
-function copyText(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
-  const ta = document.createElement('textarea');
-  ta.value = text; document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); } catch(e) {}
-  document.body.removeChild(ta);
-  return Promise.resolve();
-}
-
-function flashBtn(btn, txt) {
-  const o = btn.textContent;
-  btn.textContent = txt;
-  setTimeout(() => btn.textContent = o, 1500);
-}
-<\/script>
-</body>
-</html>
+`||i==="")){var a=r.isSelected(i);vt(e,i)?e[i]=e[i]&&a:e[i]=a}}),e}function k3e(r){r.registerAction("legendToggleSelect","legendselectchanged",Rt(Zm,"toggleSelected")),r.registerAction("legendAllSelect","legendselectall",Rt(Zm,"allSelect")),r.registerAction("legendInverseSelect","legendinverseselect",Rt(Zm,"inverseSelect")),r.registerAction("legendSelect","legendselected",Rt(Zm,"select")),r.registerAction("legendUnSelect","legendunselected",Rt(Zm,"unSelect"))}function Ej(r){r.registerComponentModel(i8),r.registerComponentView(Dj),r.registerProcessor(r.PRIORITY.PROCESSOR.SERIES_FILTER,A3e),r.registerSubTypeDefaulter("legend",function(){return"plain"}),k3e(r)}var D3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.setScrollDataIndex=function(e){this.option.scrollDataIndex=e},t.prototype.init=function(e,n,i){var a=gh(e);r.prototype.init.call(this,e,n,i),KO(this,e,a)},t.prototype.mergeOption=function(e,n){r.prototype.mergeOption.call(this,e,n),KO(this,this.option,e)},t.type="legend.scroll",t.defaultOption=cd(i8.defaultOption,{scrollDataIndex:0,pageButtonItemGap:5,pageButtonGap:null,pageButtonPosition:"end",pageFormatter:"{current}/{total}",pageIcons:{horizontal:["M0,0L12,-10L12,10z","M0,0L-12,-10L-12,10z"],vertical:["M0,0L20,0L10,-20z","M0,0L20,0L10,20z"]},pageIconColor:"#2f4554",pageIconInactiveColor:"#aaa",pageIconSize:15,pageTextStyle:{color:"#333"},animationDurationUpdate:800}),t})(i8);function KO(r,t,e){var n=r.getOrient(),i=[1,1];i[n.index]=0,rd(t,e,{type:"box",ignoreSize:!!i})}var QO=zt,J3=["width","height"],e5=["x","y"],F3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.newlineDisabled=!0,e._currentIndex=0,e}return t.prototype.init=function(){r.prototype.init.call(this),this.group.add(this._containerGroup=new QO),this._containerGroup.add(this.getContentGroup()),this.group.add(this._controllerGroup=new QO)},t.prototype.resetInner=function(){r.prototype.resetInner.call(this),this._controllerGroup.removeAll(),this._containerGroup.removeClipPath(),this._containerGroup.__rectSize=null},t.prototype.renderInner=function(e,n,i,a,s,o,l){var u=this;r.prototype.renderInner.call(this,e,n,i,a,s,o,l);var d=this._controllerGroup,c=n.get("pageIconSize",!0),f=Ge(c)?c:[c,c];m("pagePrev",0);var h=n.getModel("pageTextStyle");d.add(new dr({name:"pageText",style:{text:"xx/xx",fill:h.getTextColor(),font:h.getFont(),verticalAlign:"middle",align:"center"},silent:!0})),m("pageNext",1);function m(p,g){var v=p+"DataIndex",x=hh(n.get("pageIcons",!0)[n.getOrient().name][g],{onclick:ht(u._pageGo,u,v,n,a)},{x:-f[0]/2,y:-f[1]/2,width:f[0],height:f[1]});x.name=p,d.add(x)}},t.prototype.layoutInner=function(e,n,i,a,s,o){var l=this.getSelectorGroup(),u=e.getOrient().index,d=J3[u],c=e5[u],f=J3[1-u],h=e5[1-u];s&&Fc("horizontal",l,e.get("selectorItemGap",!0));var m=e.get("selectorButtonGap",!0),p=l.getBoundingRect(),g=[-p.x,-p.y],v=kt(i);s&&(v[d]=i[d]-p[d]-m);var x=this._layoutContentAndController(e,a,v,u,d,f,h,c);if(s){if(o==="end")g[u]+=x[d]+m;else{var y=p[d]+m;g[u]-=y,x[c]-=y}x[d]+=p[d]+m,g[1-u]+=x[h]+x[f]/2-p[f]/2,x[f]=Math.max(x[f],p[f]),x[h]=Math.min(x[h],p[h]+g[1-u]),l.x=g[0],l.y=g[1],l.markRedraw()}return x},t.prototype._layoutContentAndController=function(e,n,i,a,s,o,l,u){var d=this.getContentGroup(),c=this._containerGroup,f=this._controllerGroup;Fc(e.get("orient"),d,e.get("itemGap"),a?i.width:null,a?null:i.height),Fc("horizontal",f,e.get("pageButtonItemGap",!0));var h=d.getBoundingRect(),m=f.getBoundingRect(),p=this._showController=h[s]>i[s],g=[-h.x,-h.y];n||(g[a]=d[u]);var v=[0,0],x=[-m.x,-m.y],y=Ut(e.get("pageButtonGap",!0),e.get("itemGap",!0));if(p){var w=e.get("pageButtonPosition",!0);w==="end"?x[a]+=i[s]-m[s]:v[a]+=m[s]+y}x[1-a]+=h[o]/2-m[o]/2,d.setPosition(g),c.setPosition(v),f.setPosition(x);var _={x:0,y:0};if(_[s]=p?i[s]:h[s],_[o]=Math.max(h[o],m[o]),_[l]=Math.min(0,m[l]+x[1-a]),c.__rectSize=i[s],p){var D={x:0,y:0};D[s]=Math.max(i[s]-m[s]-y,0),D[o]=_[o],c.setClipPath(new cr({shape:D})),c.__rectSize=D[s]}else f.eachChild(function(O){O.attr({invisible:!0,silent:!0})});var P=this._getPageInfo(e);return P.pageIndex!=null&&Mr(d,{x:P.contentPosition[0],y:P.contentPosition[1]},p?e:null),this._updatePageInfoView(e,P),_},t.prototype._pageGo=function(e,n,i){var a=this._getPageInfo(n)[e];a!=null&&i.dispatchAction({type:"legendScroll",scrollDataIndex:a,legendId:n.id})},t.prototype._updatePageInfoView=function(e,n){var i=this._controllerGroup;oe(["pagePrev","pageNext"],function(d){var c=d+"DataIndex",f=n[c]!=null,h=i.childOfName(d);h&&(h.setStyle("fill",f?e.get("pageIconColor",!0):e.get("pageIconInactiveColor",!0)),h.cursor=f?"pointer":"default")});var a=i.childOfName("pageText"),s=e.get("pageFormatter"),o=n.pageIndex,l=o!=null?o+1:0,u=n.pageCount;a&&s&&a.setStyle("text",ct(s)?s.replace("{current}",l==null?"":l+"").replace("{total}",u==null?"":u+""):s({current:l,total:u}))},t.prototype._getPageInfo=function(e){var n=e.get("scrollDataIndex",!0),i=this.getContentGroup(),a=this._containerGroup.__rectSize,s=e.getOrient().index,o=J3[s],l=e5[s],u=this._findTargetItemIndex(n),d=i.children(),c=d[u],f=d.length,h=f?1:0,m={contentPosition:[i.x,i.y],pageCount:h,pageIndex:h-1,pagePrevDataIndex:null,pageNextDataIndex:null};if(!c)return m;var p=w(c);m.contentPosition[s]=-p.s;for(var g=u+1,v=p,x=p,y=null;g<=f;++g)y=w(d[g]),(!y&&x.e>v.s+a||y&&!_(y,v.s))&&(x.i>v.i?v=x:v=y,v&&(m.pageNextDataIndex==null&&(m.pageNextDataIndex=v.i),++m.pageCount)),x=y;for(var g=u-1,v=p,x=p,y=null;g>=-1;--g)y=w(d[g]),(!y||!_(x,y.s))&&v.i<x.i&&(x=v,m.pagePrevDataIndex==null&&(m.pagePrevDataIndex=v.i),++m.pageCount,++m.pageIndex),v=y;return m;function w(D){if(D){var P=D.getBoundingRect(),O=P[l]+D[l];return{s:O,e:O+P[o],i:D.__legendDataIndex}}}function _(D,P){return D.e>=P&&D.s<=P+a}},t.prototype._findTargetItemIndex=function(e){if(!this._showController)return 0;var n,i=this.getContentGroup(),a;return i.eachChild(function(s,o){var l=s.__legendDataIndex;a==null&&l!=null&&(a=o),l===e&&(n=o)}),n??a},t.type="legend.scroll",t})(Dj);function E3e(r){r.registerAction("legendScroll","legendscroll",function(t,e){var n=t.scrollDataIndex;n!=null&&e.eachComponent({mainType:"legend",subType:"scroll",query:t},function(i){i.setScrollDataIndex(n)})})}function z3e(r){Qt(Ej),r.registerComponentModel(D3e),r.registerComponentView(F3e),E3e(r)}function P3e(r){Qt(Ej),Qt(z3e)}var O3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.type="dataZoom.inside",t.defaultOption=cd(_1.defaultOption,{disabled:!1,zoomLock:!1,zoomOnMouseWheel:!0,moveOnMouseMove:!0,moveOnMouseWheel:!1,preventDefaultMouseMove:!0}),t})(_1),ST=mr();function U3e(r,t,e){ST(r).coordSysRecordMap.each(function(n){var i=n.dataZoomInfoMap.get(t.uid);i&&(i.getRange=e)})}function I3e(r,t){for(var e=ST(r).coordSysRecordMap,n=e.keys(),i=0;i<n.length;i++){var a=n[i],s=e.get(a),o=s.dataZoomInfoMap;if(o){var l=t.uid,u=o.get(l);u&&(o.removeKey(l),o.keys().length||zj(e,s))}}}function zj(r,t){if(t){r.removeKey(t.model.uid);var e=t.controller;e&&e.dispose()}}function R3e(r,t){var e={model:t,containsPoint:Rt(B3e,t),dispatchAction:Rt(L3e,r),dataZoomInfoMap:null,controller:null},n=e.controller=new rg(r.getZr());return oe(["pan","zoom","scrollMove"],function(i){n.on(i,function(a){var s=[];e.dataZoomInfoMap.each(function(o){if(a.isAvailableBehavior(o.model.option)){var l=(o.getRange||{})[i],u=l&&l(o.dzReferCoordSysInfo,e.model.mainType,e.controller,a);!o.model.get("disabled",!0)&&u&&s.push({dataZoomId:o.model.id,start:u[0],end:u[1]})}}),s.length&&e.dispatchAction(s)})}),e}function L3e(r,t){r.isDisposed()||r.dispatchAction({type:"dataZoom",animation:{easing:"cubicOut",duration:100},batch:t})}function B3e(r,t,e,n){return r.coordinateSystem.containPoint([e,n])}function N3e(r){var t,e="type_",n={type_true:2,type_move:1,type_false:0,type_undefined:-1},i=!0;return r.each(function(a){var s=a.model,o=s.get("disabled",!0)?!1:s.get("zoomLock",!0)?"move":!0;n[e+o]>n[e+t]&&(t=o),i=i&&s.get("preventDefaultMouseMove",!0)}),{controlType:t,opt:{zoomOnMouseWheel:!0,moveOnMouseMove:!0,moveOnMouseWheel:!0,preventDefaultMouseMove:!!i}}}function H3e(r){r.registerProcessor(r.PRIORITY.PROCESSOR.FILTER,function(t,e){var n=ST(e),i=n.coordSysRecordMap||(n.coordSysRecordMap=wt());i.each(function(a){a.dataZoomInfoMap=null}),t.eachComponent({mainType:"dataZoom",subType:"inside"},function(a){var s=mj(a);oe(s.infoList,function(o){var l=o.model.uid,u=i.get(l)||i.set(l,R3e(e,o.model)),d=u.dataZoomInfoMap||(u.dataZoomInfoMap=wt());d.set(a.uid,{dzReferCoordSysInfo:o,model:a,getRange:null})})}),i.each(function(a){var s=a.controller,o,l=a.dataZoomInfoMap;if(l){var u=l.keys()[0];u!=null&&(o=l.get(u))}if(!o){zj(i,a);return}var d=N3e(l);s.enable(d.controlType,d.opt),s.setPointerChecker(a.containsPoint),yh(a,"dispatchAction",o.model.get("throttle",!0),"fixRate")})})}var W3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type="dataZoom.inside",e}return t.prototype.render=function(e,n,i){if(r.prototype.render.apply(this,arguments),e.noTarget()){this._clear();return}this.range=e.getPercentRange(),U3e(i,e,{pan:ht(t5.pan,this),zoom:ht(t5.zoom,this),scrollMove:ht(t5.scrollMove,this)})},t.prototype.dispose=function(){this._clear(),r.prototype.dispose.apply(this,arguments)},t.prototype._clear=function(){I3e(this.api,this.dataZoomModel),this.range=null},t.type="dataZoom.inside",t})(mT),t5={zoom:function(r,t,e,n){var i=this.range,a=i.slice(),s=r.axisModels[0];if(s){var o=r5[t](null,[n.originX,n.originY],s,e,r),l=(o.signal>0?o.pixelStart+o.pixelLength-o.pixel:o.pixel-o.pixelStart)/o.pixelLength*(a[1]-a[0])+a[0],u=Math.max(1/n.scale,0);a[0]=(a[0]-l)*u+l,a[1]=(a[1]-l)*u+l;var d=this.dataZoomModel.findRepresentativeAxisProxy().getMinMaxSpan();if(ff(0,a,[0,100],0,d.minSpan,d.maxSpan),this.range=a,i[0]!==a[0]||i[1]!==a[1])return a}},pan:JO(function(r,t,e,n,i,a){var s=r5[n]([a.oldX,a.oldY],[a.newX,a.newY],t,i,e);return s.signal*(r[1]-r[0])*s.pixel/s.pixelLength}),scrollMove:JO(function(r,t,e,n,i,a){var s=r5[n]([0,0],[a.scrollDelta,a.scrollDelta],t,i,e);return s.signal*(r[1]-r[0])*a.scrollDelta})};function JO(r){return function(t,e,n,i){var a=this.range,s=a.slice(),o=t.axisModels[0];if(o){var l=r(s,o,t,e,n,i);if(ff(l,s,[0,100],"all"),this.range=s,a[0]!==s[0]||a[1]!==s[1])return s}}}var r5={grid:function(r,t,e,n,i){var a=e.axis,s={},o=i.model.coordinateSystem.getRect();return r=r||[0,0],a.dim==="x"?(s.pixel=t[0]-r[0],s.pixelLength=o.width,s.pixelStart=o.x,s.signal=a.inverse?1:-1):(s.pixel=t[1]-r[1],s.pixelLength=o.height,s.pixelStart=o.y,s.signal=a.inverse?-1:1),s},polar:function(r,t,e,n,i){var a=e.axis,s={},o=i.model.coordinateSystem,l=o.getRadiusAxis().getExtent(),u=o.getAngleAxis().getExtent();return r=r?o.pointToCoord(r):[0,0],t=o.pointToCoord(t),e.mainType==="radiusAxis"?(s.pixel=t[0]-r[0],s.pixelLength=l[1]-l[0],s.pixelStart=l[0],s.signal=a.inverse?1:-1):(s.pixel=t[1]-r[1],s.pixelLength=u[1]-u[0],s.pixelStart=u[0],s.signal=a.inverse?-1:1),s},singleAxis:function(r,t,e,n,i){var a=e.axis,s=i.model.coordinateSystem.getRect(),o={};return r=r||[0,0],a.orient==="horizontal"?(o.pixel=t[0]-r[0],o.pixelLength=s.width,o.pixelStart=s.x,o.signal=a.inverse?1:-1):(o.pixel=t[1]-r[1],o.pixelLength=s.height,o.pixelStart=s.y,o.signal=a.inverse?-1:1),o}};function Pj(r){pT(r),r.registerComponentModel(O3e),r.registerComponentView(W3e),H3e(r)}var X3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.type="dataZoom.slider",t.layoutMode="box",t.defaultOption=cd(_1.defaultOption,{show:!0,right:"ph",top:"ph",width:"ph",height:"ph",left:null,bottom:null,borderColor:"#d2dbee",borderRadius:3,backgroundColor:"rgba(47,69,84,0)",dataBackground:{lineStyle:{color:"#d2dbee",width:.5},areaStyle:{color:"#d2dbee",opacity:.2}},selectedDataBackground:{lineStyle:{color:"#8fb0f7",width:.5},areaStyle:{color:"#8fb0f7",opacity:.2}},fillerColor:"rgba(135,175,274,0.2)",handleIcon:"path://M-9.35,34.56V42m0-40V9.5m-2,0h4a2,2,0,0,1,2,2v21a2,2,0,0,1-2,2h-4a2,2,0,0,1-2-2v-21A2,2,0,0,1-11.35,9.5Z",handleSize:"100%",handleStyle:{color:"#fff",borderColor:"#ACB8D1"},moveHandleSize:7,moveHandleIcon:"path://M-320.9-50L-320.9-50c18.1,0,27.1,9,27.1,27.1V85.7c0,18.1-9,27.1-27.1,27.1l0,0c-18.1,0-27.1-9-27.1-27.1V-22.9C-348-41-339-50-320.9-50z M-212.3-50L-212.3-50c18.1,0,27.1,9,27.1,27.1V85.7c0,18.1-9,27.1-27.1,27.1l0,0c-18.1,0-27.1-9-27.1-27.1V-22.9C-239.4-41-230.4-50-212.3-50z M-103.7-50L-103.7-50c18.1,0,27.1,9,27.1,27.1V85.7c0,18.1-9,27.1-27.1,27.1l0,0c-18.1,0-27.1-9-27.1-27.1V-22.9C-130.9-41-121.8-50-103.7-50z",moveHandleStyle:{color:"#D2DBEE",opacity:.7},showDetail:!0,showDataShadow:"auto",realtime:!0,zoomLock:!1,textStyle:{color:"#6E7079"},brushSelect:!0,brushStyle:{color:"rgba(135,175,274,0.15)"},emphasis:{handleLabel:{show:!0},handleStyle:{borderColor:"#8FB0F7"},moveHandleStyle:{color:"#8FB0F7"}}}),t})(_1),Ym=cr,eU=7,j3e=1,n5=30,V3e=7,$m="horizontal",tU="vertical",G3e=5,Z3e=["line","bar","candlestick","scatter"],Y3e={easing:"cubicOut",duration:100,delay:0},$3e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e._displayables={},e}return t.prototype.init=function(e,n){this.api=n,this._onBrush=ht(this._onBrush,this),this._onBrushEnd=ht(this._onBrushEnd,this)},t.prototype.render=function(e,n,i,a){if(r.prototype.render.apply(this,arguments),yh(this,"_dispatchZoomAction",e.get("throttle"),"fixRate"),this._orient=e.getOrient(),e.get("show")===!1){this.group.removeAll();return}if(e.noTarget()){this._clear(),this.group.removeAll();return}(!a||a.type!=="dataZoom"||a.from!==this.uid)&&this._buildView(),this._updateView()},t.prototype.dispose=function(){this._clear(),r.prototype.dispose.apply(this,arguments)},t.prototype._clear=function(){c1(this,"_dispatchZoomAction");var e=this.api.getZr();e.off("mousemove",this._onBrush),e.off("mouseup",this._onBrushEnd)},t.prototype._buildView=function(){var e=this.group;e.removeAll(),this._brushing=!1,this._displayables.brushRect=null,this._resetLocation(),this._resetInterval();var n=this._displayables.sliderGroup=new zt;this._renderBackground(),this._renderHandle(),this._renderDataShadow(),e.add(n),this._positionGroup()},t.prototype._resetLocation=function(){var e=this.dataZoomModel,n=this.api,i=e.get("brushSelect"),a=i?V3e:0,s=this._findCoordRect(),o={width:n.getWidth(),height:n.getHeight()},l=this._orient===$m?{right:o.width-s.x-s.width,top:o.height-n5-eU-a,width:s.width,height:n5}:{right:eU,top:s.y,width:n5,height:s.height},u=gh(e.option);oe(["right","top","width","height"],function(c){u[c]==="ph"&&(u[c]=l[c])});var d=Hn(u,o);this._location={x:d.x,y:d.y},this._size=[d.width,d.height],this._orient===tU&&this._size.reverse()},t.prototype._positionGroup=function(){var e=this.group,n=this._location,i=this._orient,a=this.dataZoomModel.getFirstTargetAxisModel(),s=a&&a.get("inverse"),o=this._displayables.sliderGroup,l=(this._dataShadowInfo||{}).otherAxisInverse;o.attr(i===$m&&!s?{scaleY:l?1:-1,scaleX:1}:i===$m&&s?{scaleY:l?1:-1,scaleX:-1}:i===tU&&!s?{scaleY:l?-1:1,scaleX:1,rotation:Math.PI/2}:{scaleY:l?-1:1,scaleX:-1,rotation:Math.PI/2});var u=e.getBoundingRect([o]);e.x=n.x-u.x,e.y=n.y-u.y,e.markRedraw()},t.prototype._getViewExtent=function(){return[0,this._size[0]]},t.prototype._renderBackground=function(){var e=this.dataZoomModel,n=this._size,i=this._displayables.sliderGroup,a=e.get("brushSelect");i.add(new Ym({silent:!0,shape:{x:0,y:0,width:n[0],height:n[1]},style:{fill:e.get("backgroundColor")},z2:-40}));var s=new Ym({shape:{x:0,y:0,width:n[0],height:n[1]},style:{fill:"transparent"},z2:0,onclick:ht(this._onClickPanel,this)}),o=this.api.getZr();a?(s.on("mousedown",this._onBrushStart,this),s.cursor="crosshair",o.on("mousemove",this._onBrush),o.on("mouseup",this._onBrushEnd)):(o.off("mousemove",this._onBrush),o.off("mouseup",this._onBrushEnd)),i.add(s)},t.prototype._renderDataShadow=function(){var e=this._dataShadowInfo=this._prepareDataShadowInfo();if(this._displayables.dataShadowSegs=[],!e)return;var n=this._size,i=this._shadowSize||[],a=e.series,s=a.getRawData(),o=a.getShadowDim&&a.getShadowDim(),l=o&&s.getDimensionInfo(o)?a.getShadowDim():e.otherDim;if(l==null)return;var u=this._shadowPolygonPts,d=this._shadowPolylinePts;if(s!==this._shadowData||l!==this._shadowDim||n[0]!==i[0]||n[1]!==i[1]){var c=s.getDataExtent(l),f=(c[1]-c[0])*.3;c=[c[0]-f,c[1]+f];var h=[0,n[1]],m=[0,n[0]],p=[[n[0],0],[0,0]],g=[],v=m[1]/(s.count()-1),x=0,y=Math.round(s.count()/n[0]),w;s.each([l],function(U,L){if(y>0&&L%y){x+=v;return}var W=U==null||isNaN(U)||U==="",B=W?0:Ur(U,c,h,!0);W&&!w&&L?(p.push([p[p.length-1][0],0]),g.push([g[g.length-1][0],0])):!W&&w&&(p.push([x,0]),g.push([x,0])),p.push([x,B]),g.push([x,B]),x+=v,w=W}),u=this._shadowPolygonPts=p,d=this._shadowPolylinePts=g}this._shadowData=s,this._shadowDim=l,this._shadowSize=[n[0],n[1]];var _=this.dataZoomModel;function D(U){var L=_.getModel(U?"selectedDataBackground":"dataBackground"),W=new zt,B=new $i({shape:{points:u},segmentIgnoreThreshold:1,style:L.getModel("areaStyle").getAreaStyle(),silent:!0,z2:-20}),z=new Qi({shape:{points:d},segmentIgnoreThreshold:1,style:L.getModel("lineStyle").getLineStyle(),silent:!0,z2:-19});return W.add(B),W.add(z),W}for(var P=0;P<3;P++){var O=D(P===1);this._displayables.sliderGroup.add(O),this._displayables.dataShadowSegs.push(O)}},t.prototype._prepareDataShadowInfo=function(){var e=this.dataZoomModel,n=e.get("showDataShadow");if(n!==!1){var i,a=this.ecModel;return e.eachTargetAxis(function(s,o){var l=e.getAxisProxy(s,o).getTargetSeriesModels();oe(l,function(u){if(!i&&!(n!==!0&&Vt(Z3e,u.get("type"))<0)){var d=a.getComponent(Hu(s),o).axis,c=q3e(s),f,h=u.coordinateSystem;c!=null&&h.getOtherAxis&&(f=h.getOtherAxis(d).inverse),c=u.getData().mapDimension(c),i={thisAxis:d,series:u,thisDim:s,otherDim:c,otherAxisInverse:f}}},this)},this),i}},t.prototype._renderHandle=function(){var e=this.group,n=this._displayables,i=n.handles=[null,null],a=n.handleLabels=[null,null],s=this._displayables.sliderGroup,o=this._size,l=this.dataZoomModel,u=this.api,d=l.get("borderRadius")||0,c=l.get("brushSelect"),f=n.filler=new Ym({silent:c,style:{fill:l.get("fillerColor")},textConfig:{position:"inside"}});s.add(f),s.add(new Ym({silent:!0,subPixelOptimize:!0,shape:{x:0,y:0,width:o[0],height:o[1],r:d},style:{stroke:l.get("dataBackgroundColor")||l.get("borderColor"),lineWidth:j3e,fill:"rgba(0,0,0,0)"}})),oe([0,1],function(y){var w=l.get("handleIcon");!Ex[w]&&w.indexOf("path://")<0&&w.indexOf("image://")<0&&(w="path://"+w);var _=On(w,-1,0,2,2,null,!0);_.attr({cursor:rU(this._orient),draggable:!0,drift:ht(this._onDragMove,this,y),ondragend:ht(this._onDragEnd,this),onmouseover:ht(this._showDataInfo,this,!0),onmouseout:ht(this._showDataInfo,this,!1),z2:5});var D=_.getBoundingRect(),P=l.get("handleSize");this._handleHeight=ut(P,this._size[1]),this._handleWidth=D.width/D.height*this._handleHeight,_.setStyle(l.getModel("handleStyle").getItemStyle()),_.style.strokeNoScale=!0,_.rectHover=!0,_.ensureState("emphasis").style=l.getModel(["emphasis","handleStyle"]).getItemStyle(),ju(_);var O=l.get("handleColor");O!=null&&(_.style.fill=O),s.add(i[y]=_);var U=l.getModel("textStyle"),L=l.get("handleLabel")||{},W=L.show||!1;e.add(a[y]=new dr({silent:!0,invisible:!W,style:en(U,{x:0,y:0,text:"",verticalAlign:"middle",align:"center",fill:U.getTextColor(),font:U.getFont()}),z2:10}))},this);var h=f;if(c){var m=ut(l.get("moveHandleSize"),o[1]),p=n.moveHandle=new cr({style:l.getModel("moveHandleStyle").getItemStyle(),silent:!0,shape:{r:[0,0,2,2],y:o[1]-.5,height:m}}),g=m*.8,v=n.moveHandleIcon=On(l.get("moveHandleIcon"),-g/2,-g/2,g,g,"#fff",!0);v.silent=!0,v.y=o[1]+m/2-.5,p.ensureState("emphasis").style=l.getModel(["emphasis","moveHandleStyle"]).getItemStyle();var x=Math.min(o[1]/2,Math.max(m,10));h=n.moveZone=new cr({invisible:!0,shape:{y:o[1]-x,height:m+x}}),h.on("mouseover",function(){u.enterEmphasis(p)}).on("mouseout",function(){u.leaveEmphasis(p)}),s.add(p),s.add(v),s.add(h)}h.attr({draggable:!0,cursor:rU(this._orient),drift:ht(this._onDragMove,this,"all"),ondragstart:ht(this._showDataInfo,this,!0),ondragend:ht(this._onDragEnd,this),onmouseover:ht(this._showDataInfo,this,!0),onmouseout:ht(this._showDataInfo,this,!1)})},t.prototype._resetInterval=function(){var e=this._range=this.dataZoomModel.getPercentRange(),n=this._getViewExtent();this._handleEnds=[Ur(e[0],[0,100],n,!0),Ur(e[1],[0,100],n,!0)]},t.prototype._updateInterval=function(e,n){var i=this.dataZoomModel,a=this._handleEnds,s=this._getViewExtent(),o=i.findRepresentativeAxisProxy().getMinMaxSpan(),l=[0,100];ff(n,a,s,i.get("zoomLock")?"all":e,o.minSpan!=null?Ur(o.minSpan,l,s,!0):null,o.maxSpan!=null?Ur(o.maxSpan,l,s,!0):null);var u=this._range,d=this._range=Xa([Ur(a[0],s,l,!0),Ur(a[1],s,l,!0)]);return!u||u[0]!==d[0]||u[1]!==d[1]},t.prototype._updateView=function(e){var n=this._displayables,i=this._handleEnds,a=Xa(i.slice()),s=this._size;oe([0,1],function(h){var m=n.handles[h],p=this._handleHeight;m.attr({scaleX:p/2,scaleY:p/2,x:i[h]+(h?-1:1),y:s[1]/2-p/2})},this),n.filler.setShape({x:a[0],y:0,width:a[1]-a[0],height:s[1]});var o={x:a[0],width:a[1]-a[0]};n.moveHandle&&(n.moveHandle.setShape(o),n.moveZone.setShape(o),n.moveZone.getBoundingRect(),n.moveHandleIcon&&n.moveHandleIcon.attr("x",o.x+o.width/2));for(var l=n.dataShadowSegs,u=[0,a[0],a[1],s[0]],d=0;d<l.length;d++){var c=l[d],f=c.getClipPath();f||(f=new cr,c.setClipPath(f)),f.setShape({x:u[d],y:0,width:u[d+1]-u[d],height:s[1]})}this._updateDataInfo(e)},t.prototype._updateDataInfo=function(e){var n=this.dataZoomModel,i=this._displayables,a=i.handleLabels,s=this._orient,o=["",""];if(n.get("showDetail")){var l=n.findRepresentativeAxisProxy();if(l){var u=l.getAxisModel().axis,d=this._range,c=e?l.calculateDataWindow({start:d[0],end:d[1]}).valueWindow:l.getDataValueWindow();o=[this._formatLabel(c[0],u),this._formatLabel(c[1],u)]}}var f=Xa(this._handleEnds.slice());h.call(this,0),h.call(this,1);function h(m){var p=Vu(i.handles[m].parent,this.group),g=Bb(m===0?"right":"left",p),v=this._handleWidth/2+G3e,x=to([f[m]+(m===0?-v:v),this._size[1]/2],p);a[m].setStyle({x:x[0],y:x[1],verticalAlign:s===$m?"middle":g,align:s===$m?g:"center",text:o[m]})}},t.prototype._formatLabel=function(e,n){var i=this.dataZoomModel,a=i.get("labelFormatter"),s=i.get("labelPrecision");(s==null||s==="auto")&&(s=n.getPixelPrecision());var o=e==null||isNaN(e)?"":n.type==="category"||n.type==="time"?n.scale.getLabel({value:Math.round(e)}):e.toFixed(Math.min(s,20));return Tt(a)?a(e,o):ct(a)?a.replace("{value}",o):o},t.prototype._showDataInfo=function(e){var n=this.dataZoomModel.get("handleLabel")||{},i=n.show||!1,a=this.dataZoomModel.getModel(["emphasis","handleLabel"]),s=a.get("show")||!1,o=e||this._dragging?s:i,l=this._displayables,u=l.handleLabels;u[0].attr("invisible",!o),u[1].attr("invisible",!o),l.moveHandle&&this.api[o?"enterEmphasis":"leaveEmphasis"](l.moveHandle,1)},t.prototype._onDragMove=function(e,n,i,a){this._dragging=!0,kl(a.event);var s=this._displayables.sliderGroup.getLocalTransform(),o=to([n,i],s,!0),l=this._updateInterval(e,o[0]),u=this.dataZoomModel.get("realtime");this._updateView(!u),l&&u&&this._dispatchZoomAction(!0)},t.prototype._onDragEnd=function(){this._dragging=!1,this._showDataInfo(!1);var e=this.dataZoomModel.get("realtime");!e&&this._dispatchZoomAction(!1)},t.prototype._onClickPanel=function(e){var n=this._size,i=this._displayables.sliderGroup.transformCoordToLocal(e.offsetX,e.offsetY);if(!(i[0]<0||i[0]>n[0]||i[1]<0||i[1]>n[1])){var a=this._handleEnds,s=(a[0]+a[1])/2,o=this._updateInterval("all",i[0]-s);this._updateView(),o&&this._dispatchZoomAction(!1)}},t.prototype._onBrushStart=function(e){var n=e.offsetX,i=e.offsetY;this._brushStart=new Xt(n,i),this._brushing=!0,this._brushStartTime=+new Date},t.prototype._onBrushEnd=function(e){if(this._brushing){var n=this._displayables.brushRect;if(this._brushing=!1,!!n){n.attr("ignore",!0);var i=n.shape,a=+new Date;if(!(a-this._brushStartTime<200&&Math.abs(i.width)<5)){var s=this._getViewExtent(),o=[0,100];this._range=Xa([Ur(i.x,s,o,!0),Ur(i.x+i.width,s,o,!0)]),this._handleEnds=[i.x,i.x+i.width],this._updateView(),this._dispatchZoomAction(!1)}}}},t.prototype._onBrush=function(e){this._brushing&&(kl(e.event),this._updateBrushRect(e.offsetX,e.offsetY))},t.prototype._updateBrushRect=function(e,n){var i=this._displayables,a=this.dataZoomModel,s=i.brushRect;s||(s=i.brushRect=new Ym({silent:!0,style:a.getModel("brushStyle").getItemStyle()}),i.sliderGroup.add(s)),s.attr("ignore",!1);var o=this._brushStart,l=this._displayables.sliderGroup,u=l.transformCoordToLocal(e,n),d=l.transformCoordToLocal(o.x,o.y),c=this._size;u[0]=Math.max(Math.min(c[0],u[0]),0),s.setShape({x:d[0],y:0,width:u[0]-d[0],height:c[1]})},t.prototype._dispatchZoomAction=function(e){var n=this._range;this.api.dispatchAction({type:"dataZoom",from:this.uid,dataZoomId:this.dataZoomModel.id,animation:e?Y3e:null,start:n[0],end:n[1]})},t.prototype._findCoordRect=function(){var e,n=mj(this.dataZoomModel).infoList;if(!e&&n.length){var i=n[0].model.coordinateSystem;e=i.getRect&&i.getRect()}if(!e){var a=this.api.getWidth(),s=this.api.getHeight();e={x:a*.2,y:s*.2,width:a*.6,height:s*.6}}return e},t.type="dataZoom.slider",t})(mT);function q3e(r){var t={x:"y",y:"x",radius:"angle",angle:"radius"};return t[r]}function rU(r){return r==="vertical"?"ns-resize":"ew-resize"}function Oj(r){r.registerComponentModel(X3e),r.registerComponentView($3e),pT(r)}function K3e(r){Qt(Pj),Qt(Oj)}var Uj={get:function(r,t,e){var n=kt((Q3e[r]||{})[t]);return e&&Ge(n)?n[n.length-1]:n}},Q3e={color:{active:["#006edd","#e0ffff"],inactive:["rgba(0,0,0,0)"]},colorHue:{active:[0,360],inactive:[0,0]},colorSaturation:{active:[.3,1],inactive:[0,0]},colorLightness:{active:[.9,.5],inactive:[0,0]},colorAlpha:{active:[.3,1],inactive:[0,0]},opacity:{active:[.3,1],inactive:[0,0]},symbol:{active:["circle","roundRect","diamond"],inactive:["none"]},symbolSize:{active:[10,50],inactive:[0,0]}},nU=ai.mapVisual,J3e=ai.eachVisual,e5e=Ge,iU=oe,t5e=Xa,r5e=Ur,nb=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.stateList=["inRange","outOfRange"],e.replacableOptionKeys=["inRange","outOfRange","target","controller","color"],e.layoutMode={type:"box",ignoreSize:!0},e.dataBound=[-1/0,1/0],e.targetVisuals={},e.controllerVisuals={},e}return t.prototype.init=function(e,n,i){this.mergeDefaultAndTheme(e,i)},t.prototype.optionUpdated=function(e,n){var i=this.option;!n&&_j(i,e,this.replacableOptionKeys),this.textStyleModel=this.getModel("textStyle"),this.resetItemSize(),this.completeVisualOption()},t.prototype.resetVisual=function(e){var n=this.stateList;e=ht(e,this),this.controllerVisuals=t8(this.option.controller,n,e),this.targetVisuals=t8(this.option.target,n,e)},t.prototype.getItemSymbol=function(){return null},t.prototype.getTargetSeriesIndices=function(){var e=this.option.seriesIndex,n=[];return e==null||e==="all"?this.ecModel.eachSeries(function(i,a){n.push(a)}):n=qr(e),n},t.prototype.eachTargetSeries=function(e,n){oe(this.getTargetSeriesIndices(),function(i){var a=this.ecModel.getSeriesByIndex(i);a&&e.call(n,a)},this)},t.prototype.isTargetSeries=function(e){var n=!1;return this.eachTargetSeries(function(i){i===e&&(n=!0)}),n},t.prototype.formatValueText=function(e,n,i){var a=this.option,s=a.precision,o=this.dataBound,l=a.formatter,u;i=i||["<",">"],Ge(e)&&(e=e.slice(),u=!0);var d=n?e:u?[c(e[0]),c(e[1])]:c(e);if(ct(l))return l.replace("{value}",u?d[0]:d).replace("{value2}",u?d[1]:d);if(Tt(l))return u?l(e[0],e[1]):l(e);if(u)return e[0]===o[0]?i[0]+" "+d[1]:e[1]===o[1]?i[1]+" "+d[0]:d[0]+" - "+d[1];return d;function c(f){return f===o[0]?"min":f===o[1]?"max":(+f).toFixed(Math.min(s,20))}},t.prototype.resetExtent=function(){var e=this.option,n=t5e([e.min,e.max]);this._dataExtent=n},t.prototype.getDataDimensionIndex=function(e){var n=this.option.dimension;if(n!=null)return e.getDimensionIndex(n);for(var i=e.dimensions,a=i.length-1;a>=0;a--){var s=i[a],o=e.getDimensionInfo(s);if(!o.isCalculationCoord)return o.storeDimIndex}},t.prototype.getExtent=function(){return this._dataExtent.slice()},t.prototype.completeVisualOption=function(){var e=this.ecModel,n=this.option,i={inRange:n.inRange,outOfRange:n.outOfRange},a=n.target||(n.target={}),s=n.controller||(n.controller={});Bt(a,i),Bt(s,i);var o=this.isCategory();l.call(this,a),l.call(this,s),u.call(this,a,"inRange","outOfRange"),d.call(this,s);function l(c){e5e(n.color)&&!c.inRange&&(c.inRange={color:n.color.slice().reverse()}),c.inRange=c.inRange||{color:e.get("gradientColor")}}function u(c,f,h){var m=c[f],p=c[h];m&&!p&&(p=c[h]={},iU(m,function(g,v){if(ai.isValidType(v)){var x=Uj.get(v,"inactive",o);x!=null&&(p[v]=x,v==="color"&&!p.hasOwnProperty("opacity")&&!p.hasOwnProperty("colorAlpha")&&(p.opacity=[0,0]))}}))}function d(c){var f=(c.inRange||{}).symbol||(c.outOfRange||{}).symbol,h=(c.inRange||{}).symbolSize||(c.outOfRange||{}).symbolSize,m=this.get("inactiveColor"),p=this.getItemSymbol(),g=p||"roundRect";iU(this.stateList,function(v){var x=this.itemSize,y=c[v];y||(y=c[v]={color:o?m:[m]}),y.symbol==null&&(y.symbol=f&&kt(f)||(o?g:[g])),y.symbolSize==null&&(y.symbolSize=h&&kt(h)||(o?x[0]:[x[0],x[0]])),y.symbol=nU(y.symbol,function(D){return D==="none"?g:D});var w=y.symbolSize;if(w!=null){var _=-1/0;J3e(w,function(D){D>_&&(_=D)}),y.symbolSize=nU(w,function(D){return r5e(D,[0,_],[0,x[0]],!0)})}},this)}},t.prototype.resetItemSize=function(){this.itemSize=[parseFloat(this.get("itemWidth")),parseFloat(this.get("itemHeight"))]},t.prototype.isCategory=function(){return!!this.option.categories},t.prototype.setSelected=function(e){},t.prototype.getSelected=function(){return null},t.prototype.getValueState=function(e){return null},t.prototype.getVisualMeta=function(e){return null},t.type="visualMap",t.dependencies=["series"],t.defaultOption={show:!0,z:4,seriesIndex:"all",min:0,max:200,left:0,right:null,top:null,bottom:0,itemWidth:null,itemHeight:null,inverse:!1,orient:"vertical",backgroundColor:"rgba(0,0,0,0)",borderColor:"#ccc",contentColor:"#5793f3",inactiveColor:"#aaa",borderWidth:0,padding:5,textGap:10,precision:0,textStyle:{color:"#333"}},t})(tr),aU=[20,140],n5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.optionUpdated=function(e,n){r.prototype.optionUpdated.apply(this,arguments),this.resetExtent(),this.resetVisual(function(i){i.mappingMethod="linear",i.dataExtent=this.getExtent()}),this._resetRange()},t.prototype.resetItemSize=function(){r.prototype.resetItemSize.apply(this,arguments);var e=this.itemSize;(e[0]==null||isNaN(e[0]))&&(e[0]=aU[0]),(e[1]==null||isNaN(e[1]))&&(e[1]=aU[1])},t.prototype._resetRange=function(){var e=this.getExtent(),n=this.option.range;!n||n.auto?(e.auto=1,this.option.range=e):Ge(n)&&(n[0]>n[1]&&n.reverse(),n[0]=Math.max(n[0],e[0]),n[1]=Math.min(n[1],e[1]))},t.prototype.completeVisualOption=function(){r.prototype.completeVisualOption.apply(this,arguments),oe(this.stateList,function(e){var n=this.option.controller[e].symbolSize;n&&n[0]!==n[1]&&(n[0]=n[1]/3)},this)},t.prototype.setSelected=function(e){this.option.range=e.slice(),this._resetRange()},t.prototype.getSelected=function(){var e=this.getExtent(),n=Xa((this.get("range")||[]).slice());return n[0]>e[1]&&(n[0]=e[1]),n[1]>e[1]&&(n[1]=e[1]),n[0]<e[0]&&(n[0]=e[0]),n[1]<e[0]&&(n[1]=e[0]),n},t.prototype.getValueState=function(e){var n=this.option.range,i=this.getExtent();return(n[0]<=i[0]||n[0]<=e)&&(n[1]>=i[1]||e<=n[1])?"inRange":"outOfRange"},t.prototype.findTargetDataIndices=function(e){var n=[];return this.eachTargetSeries(function(i){var a=[],s=i.getData();s.each(this.getDataDimensionIndex(s),function(o,l){e[0]<=o&&o<=e[1]&&a.push(l)},this),n.push({seriesId:i.id,dataIndex:a})},this),n},t.prototype.getVisualMeta=function(e){var n=sU(this,"outOfRange",this.getExtent()),i=sU(this,"inRange",this.option.range.slice()),a=[];function s(h,m){a.push({value:h,color:e(h,m)})}for(var o=0,l=0,u=i.length,d=n.length;l<d&&(!i.length||n[l]<=i[0]);l++)n[l]<i[o]&&s(n[l],"outOfRange");for(var c=1;o<u;o++,c=0)c&&a.length&&s(i[o],"outOfRange"),s(i[o],"inRange");for(var c=1;l<d;l++)(!i.length||i[i.length-1]<n[l])&&(c&&(a.length&&s(a[a.length-1].value,"outOfRange"),c=0),s(n[l],"outOfRange"));var f=a.length;return{stops:a,outerColors:[f?a[0].color:"transparent",f?a[f-1].color:"transparent"]}},t.type="visualMap.continuous",t.defaultOption=cd(nb.defaultOption,{align:"auto",calculable:!1,hoverLink:!0,realtime:!0,handleIcon:"path://M-11.39,9.77h0a3.5,3.5,0,0,1-3.5,3.5h-22a3.5,3.5,0,0,1-3.5-3.5h0a3.5,3.5,0,0,1,3.5-3.5h22A3.5,3.5,0,0,1-11.39,9.77Z",handleSize:"120%",handleStyle:{borderColor:"#fff",borderWidth:1},indicatorIcon:"circle",indicatorSize:"50%",indicatorStyle:{borderColor:"#fff",borderWidth:2,shadowBlur:2,shadowOffsetX:1,shadowOffsetY:1,shadowColor:"rgba(0,0,0,0.2)"}}),t})(nb);function sU(r,t,e){if(e[0]===e[1])return e.slice();for(var n=200,i=(e[1]-e[0])/n,a=e[0],s=[],o=0;o<=n&&a<e[1];o++)s.push(a),a+=i;return s.push(e[1]),s}var Ij=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e.autoPositionValues={left:1,right:1,top:1,bottom:1},e}return t.prototype.init=function(e,n){this.ecModel=e,this.api=n},t.prototype.render=function(e,n,i,a){if(this.visualMapModel=e,e.get("show")===!1){this.group.removeAll();return}this.doRender(e,n,i,a)},t.prototype.renderBackground=function(e){var n=this.visualMapModel,i=lf(n.get("padding")||0),a=e.getBoundingRect();e.add(new cr({z2:-1,silent:!0,shape:{x:a.x-i[3],y:a.y-i[0],width:a.width+i[3]+i[1],height:a.height+i[0]+i[2]},style:{fill:n.get("backgroundColor"),stroke:n.get("borderColor"),lineWidth:n.get("borderWidth")}}))},t.prototype.getControllerVisual=function(e,n,i){i=i||{};var a=i.forceState,s=this.visualMapModel,o={};if(n==="color"){var l=s.get("contentColor");o.color=l}function u(h){return o[h]}function d(h,m){o[h]=m}var c=s.controllerVisuals[a||s.getValueState(e)],f=ai.prepareVisualTypes(c);return oe(f,function(h){var m=c[h];i.convertOpacityToAlpha&&h==="opacity"&&(h="colorAlpha",m=c.__alphaForOpacity),ai.dependsOn(h,n)&&m&&m.applyVisual(e,u,d)}),o[n]},t.prototype.positionGroup=function(e){var n=this.visualMapModel,i=this.api;Vb(e,n.getBoxLayoutParams(),{width:i.getWidth(),height:i.getHeight()})},t.prototype.doRender=function(e,n,i,a){},t.type="visualMap",t})(ln),oU=[["left","right","width"],["top","bottom","height"]];function Rj(r,t,e){var n=r.option,i=n.align;if(i!=null&&i!=="auto")return i;for(var a={width:t.getWidth(),height:t.getHeight()},s=n.orient==="horizontal"?1:0,o=oU[s],l=[0,null,10],u={},d=0;d<3;d++)u[oU[1-s][d]]=l[d],u[o[d]]=d===2?e[0]:n[o[d]];var c=[["x","width",3],["y","height",0]][s],f=Hn(u,a,n.padding);return o[(f.margin[c[2]]||0)+f[c[0]]+f[c[1]]*.5<a[c[1]]*.5?0:1]}function Z2(r,t){return oe(r||[],function(e){e.dataIndex!=null&&(e.dataIndexInside=e.dataIndex,e.dataIndex=null),e.highlightKey="visualMap"+(t?t.componentIndex:"")}),r}var Co=Ur,i5e=oe,lU=Math.min,i5=Math.max,a5e=12,s5e=6,o5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e._shapes={},e._dataInterval=[],e._handleEnds=[],e._hoverLinkDataIndices=[],e}return t.prototype.init=function(e,n){r.prototype.init.call(this,e,n),this._hoverLinkFromSeriesMouseOver=ht(this._hoverLinkFromSeriesMouseOver,this),this._hideIndicator=ht(this._hideIndicator,this)},t.prototype.doRender=function(e,n,i,a){(!a||a.type!=="selectDataRange"||a.from!==this.uid)&&this._buildView()},t.prototype._buildView=function(){this.group.removeAll();var e=this.visualMapModel,n=this.group;this._orient=e.get("orient"),this._useHandle=e.get("calculable"),this._resetInterval(),this._renderBar(n);var i=e.get("text");this._renderEndsText(n,i,0),this._renderEndsText(n,i,1),this._updateView(!0),this.renderBackground(n),this._updateView(),this._enableHoverLinkToSeries(),this._enableHoverLinkFromSeries(),this.positionGroup(n)},t.prototype._renderEndsText=function(e,n,i){if(n){var a=n[1-i];a=a!=null?a+"":"";var s=this.visualMapModel,o=s.get("textGap"),l=s.itemSize,u=this._shapes.mainGroup,d=this._applyTransform([l[0]/2,i===0?-o:l[1]+o],u),c=this._applyTransform(i===0?"bottom":"top",u),f=this._orient,h=this.visualMapModel.textStyleModel;this.group.add(new dr({style:en(h,{x:d[0],y:d[1],verticalAlign:f==="horizontal"?"middle":c,align:f==="horizontal"?c:"center",text:a})}))}},t.prototype._renderBar=function(e){var n=this.visualMapModel,i=this._shapes,a=n.itemSize,s=this._orient,o=this._useHandle,l=Rj(n,this.api,a),u=i.mainGroup=this._createBarGroup(l),d=new zt;u.add(d),d.add(i.outOfRange=uU()),d.add(i.inRange=uU(null,o?cU(this._orient):null,ht(this._dragHandle,this,"all",!1),ht(this._dragHandle,this,"all",!0))),d.setClipPath(new cr({shape:{x:0,y:0,width:a[0],height:a[1],r:3}}));var c=n.textStyleModel.getTextRect("国"),f=i5(c.width,c.height);o&&(i.handleThumbs=[],i.handleLabels=[],i.handleLabelPoints=[],this._createHandle(n,u,0,a,f,s),this._createHandle(n,u,1,a,f,s)),this._createIndicator(n,u,a,f,s),e.add(u)},t.prototype._createHandle=function(e,n,i,a,s,o){var l=ht(this._dragHandle,this,i,!1),u=ht(this._dragHandle,this,i,!0),d=io(e.get("handleSize"),a[0]),c=On(e.get("handleIcon"),-d/2,-d/2,d,d,null,!0),f=cU(this._orient);c.attr({cursor:f,draggable:!0,drift:l,ondragend:u,onmousemove:function(v){kl(v.event)}}),c.x=a[0]/2,c.useStyle(e.getModel("handleStyle").getItemStyle()),c.setStyle({strokeNoScale:!0,strokeFirst:!0}),c.style.lineWidth*=2,c.ensureState("emphasis").style=e.getModel(["emphasis","handleStyle"]).getItemStyle(),vc(c,!0),n.add(c);var h=this.visualMapModel.textStyleModel,m=new dr({cursor:f,draggable:!0,drift:l,onmousemove:function(v){kl(v.event)},ondragend:u,style:en(h,{x:0,y:0,text:""})});m.ensureState("blur").style={opacity:.1},m.stateTransition={duration:200},this.group.add(m);var p=[d,0],g=this._shapes;g.handleThumbs[i]=c,g.handleLabelPoints[i]=p,g.handleLabels[i]=m},t.prototype._createIndicator=function(e,n,i,a,s){var o=io(e.get("indicatorSize"),i[0]),l=On(e.get("indicatorIcon"),-o/2,-o/2,o,o,null,!0);l.attr({cursor:"move",invisible:!0,silent:!0,x:i[0]/2});var u=e.getModel("indicatorStyle").getItemStyle();if(l instanceof ui){var d=l.style;l.useStyle(We({image:d.image,x:d.x,y:d.y,width:d.width,height:d.height},u))}else l.useStyle(u);n.add(l);var c=this.visualMapModel.textStyleModel,f=new dr({silent:!0,invisible:!0,style:en(c,{x:0,y:0,text:""})});this.group.add(f);var h=[(s==="horizontal"?a/2:s5e)+i[0]/2,0],m=this._shapes;m.indicator=l,m.indicatorLabel=f,m.indicatorLabelPoint=h,this._firstShowIndicator=!0},t.prototype._dragHandle=function(e,n,i,a){if(this._useHandle){if(this._dragging=!n,!n){var s=this._applyTransform([i,a],this._shapes.mainGroup,!0);this._updateInterval(e,s[1]),this._hideIndicator(),this._updateView()}n===!this.visualMapModel.get("realtime")&&this.api.dispatchAction({type:"selectDataRange",from:this.uid,visualMapId:this.visualMapModel.id,selected:this._dataInterval.slice()}),n?!this._hovering&&this._clearHoverLinkToSeries():dU(this.visualMapModel)&&this._doHoverLinkToSeries(this._handleEnds[e],!1)}},t.prototype._resetInterval=function(){var e=this.visualMapModel,n=this._dataInterval=e.getSelected(),i=e.getExtent(),a=[0,e.itemSize[1]];this._handleEnds=[Co(n[0],i,a,!0),Co(n[1],i,a,!0)]},t.prototype._updateInterval=function(e,n){n=n||0;var i=this.visualMapModel,a=this._handleEnds,s=[0,i.itemSize[1]];ff(n,a,s,e,0);var o=i.getExtent();this._dataInterval=[Co(a[0],s,o,!0),Co(a[1],s,o,!0)]},t.prototype._updateView=function(e){var n=this.visualMapModel,i=n.getExtent(),a=this._shapes,s=[0,n.itemSize[1]],o=e?s:this._handleEnds,l=this._createBarVisual(this._dataInterval,i,o,"inRange"),u=this._createBarVisual(i,i,s,"outOfRange");a.inRange.setStyle({fill:l.barColor}).setShape("points",l.barPoints),a.outOfRange.setStyle({fill:u.barColor}).setShape("points",u.barPoints),this._updateHandle(o,l)},t.prototype._createBarVisual=function(e,n,i,a){var s={forceState:a,convertOpacityToAlpha:!0},o=this._makeColorGradient(e,s),l=[this.getControllerVisual(e[0],"symbolSize",s),this.getControllerVisual(e[1],"symbolSize",s)],u=this._createBarPoints(i,l);return{barColor:new ch(0,0,0,1,o),barPoints:u,handlesColor:[o[0].color,o[o.length-1].color]}},t.prototype._makeColorGradient=function(e,n){var i=100,a=[],s=(e[1]-e[0])/i;a.push({color:this.getControllerVisual(e[0],"color",n),offset:0});for(var o=1;o<i;o++){var l=e[0]+s*o;if(l>e[1])break;a.push({color:this.getControllerVisual(l,"color",n),offset:o/i})}return a.push({color:this.getControllerVisual(e[1],"color",n),offset:1}),a},t.prototype._createBarPoints=function(e,n){var i=this.visualMapModel.itemSize;return[[i[0]-n[0],e[0]],[i[0],e[0]],[i[0],e[1]],[i[0]-n[1],e[1]]]},t.prototype._createBarGroup=function(e){var n=this._orient,i=this.visualMapModel.get("inverse");return new zt(n==="horizontal"&&!i?{scaleX:e==="bottom"?1:-1,rotation:Math.PI/2}:n==="horizontal"&&i?{scaleX:e==="bottom"?-1:1,rotation:-Math.PI/2}:n==="vertical"&&!i?{scaleX:e==="left"?1:-1,scaleY:-1}:{scaleX:e==="left"?1:-1})},t.prototype._updateHandle=function(e,n){if(this._useHandle){var i=this._shapes,a=this.visualMapModel,s=i.handleThumbs,o=i.handleLabels,l=a.itemSize,u=a.getExtent(),d=this._applyTransform("left",i.mainGroup);i5e([0,1],function(c){var f=s[c];f.setStyle("fill",n.handlesColor[c]),f.y=e[c];var h=Co(e[c],[0,l[1]],u,!0),m=this.getControllerVisual(h,"symbolSize");f.scaleX=f.scaleY=m/l[0],f.x=l[0]-m/2;var p=to(i.handleLabelPoints[c],Vu(f,this.group));if(this._orient==="horizontal"){var g=d==="left"||d==="top"?(l[0]-m)/2:(l[0]-m)/-2;p[1]+=g}o[c].setStyle({x:p[0],y:p[1],text:a.formatValueText(this._dataInterval[c]),verticalAlign:"middle",align:this._orient==="vertical"?this._applyTransform("left",i.mainGroup):"center"})},this)}},t.prototype._showIndicator=function(e,n,i,a){var s=this.visualMapModel,o=s.getExtent(),l=s.itemSize,u=[0,l[1]],d=this._shapes,c=d.indicator;if(c){c.attr("invisible",!1);var f={convertOpacityToAlpha:!0},h=this.getControllerVisual(e,"color",f),m=this.getControllerVisual(e,"symbolSize"),p=Co(e,o,u,!0),g=l[0]-m/2,v={x:c.x,y:c.y};c.y=p,c.x=g;var x=to(d.indicatorLabelPoint,Vu(c,this.group)),y=d.indicatorLabel;y.attr("invisible",!1);var w=this._applyTransform("left",d.mainGroup),_=this._orient,D=_==="horizontal";y.setStyle({text:(i||"")+s.formatValueText(n),verticalAlign:D?w:"middle",align:D?"center":w});var P={x:g,y:p,style:{fill:h}},O={style:{x:x[0],y:x[1]}};if(s.ecModel.isAnimationEnabled()&&!this._firstShowIndicator){var U={duration:100,easing:"cubicInOut",additive:!0};c.x=v.x,c.y=v.y,c.animateTo(P,U),y.animateTo(O,U)}else c.attr(P),y.attr(O);this._firstShowIndicator=!1;var L=this._shapes.handleLabels;if(L)for(var W=0;W<L.length;W++)this.api.enterBlur(L[W])}},t.prototype._enableHoverLinkToSeries=function(){var e=this;this._shapes.mainGroup.on("mousemove",function(n){if(e._hovering=!0,!e._dragging){var i=e.visualMapModel.itemSize,a=e._applyTransform([n.offsetX,n.offsetY],e._shapes.mainGroup,!0,!0);a[1]=lU(i5(0,a[1]),i[1]),e._doHoverLinkToSeries(a[1],0<=a[0]&&a[0]<=i[0])}}).on("mouseout",function(){e._hovering=!1,!e._dragging&&e._clearHoverLinkToSeries()})},t.prototype._enableHoverLinkFromSeries=function(){var e=this.api.getZr();this.visualMapModel.option.hoverLink?(e.on("mouseover",this._hoverLinkFromSeriesMouseOver,this),e.on("mouseout",this._hideIndicator,this)):this._clearHoverLinkFromSeries()},t.prototype._doHoverLinkToSeries=function(e,n){var i=this.visualMapModel,a=i.itemSize;if(i.option.hoverLink){var s=[0,a[1]],o=i.getExtent();e=lU(i5(s[0],e),s[1]);var l=l5e(i,o,s),u=[e-l,e+l],d=Co(e,s,o,!0),c=[Co(u[0],s,o,!0),Co(u[1],s,o,!0)];u[0]<s[0]&&(c[0]=-1/0),u[1]>s[1]&&(c[1]=1/0),n&&(c[0]===-1/0?this._showIndicator(d,c[1],"< ",l):c[1]===1/0?this._showIndicator(d,c[0],"> ",l):this._showIndicator(d,d,"≈ ",l));var f=this._hoverLinkDataIndices,h=[];(n||dU(i))&&(h=this._hoverLinkDataIndices=i.findTargetDataIndices(c));var m=eue(f,h);this._dispatchHighDown("downplay",Z2(m[0],i)),this._dispatchHighDown("highlight",Z2(m[1],i))}},t.prototype._hoverLinkFromSeriesMouseOver=function(e){var n;if(bc(e.target,function(l){var u=Pt(l);if(u.dataIndex!=null)return n=u,!0},!0),!!n){var i=this.ecModel.getSeriesByIndex(n.seriesIndex),a=this.visualMapModel;if(a.isTargetSeries(i)){var s=i.getData(n.dataType),o=s.getStore().get(a.getDataDimensionIndex(s),n.dataIndex);isNaN(o)||this._showIndicator(o,o)}}},t.prototype._hideIndicator=function(){var e=this._shapes;e.indicator&&e.indicator.attr("invisible",!0),e.indicatorLabel&&e.indicatorLabel.attr("invisible",!0);var n=this._shapes.handleLabels;if(n)for(var i=0;i<n.length;i++)this.api.leaveBlur(n[i])},t.prototype._clearHoverLinkToSeries=function(){this._hideIndicator();var e=this._hoverLinkDataIndices;this._dispatchHighDown("downplay",Z2(e,this.visualMapModel)),e.length=0},t.prototype._clearHoverLinkFromSeries=function(){this._hideIndicator();var e=this.api.getZr();e.off("mouseover",this._hoverLinkFromSeriesMouseOver),e.off("mouseout",this._hideIndicator)},t.prototype._applyTransform=function(e,n,i,a){var s=Vu(n,a?null:this.group);return Ge(e)?to(e,s,i):Bb(e,s,i)},t.prototype._dispatchHighDown=function(e,n){n&&n.length&&this.api.dispatchAction({type:e,batch:n})},t.prototype.dispose=function(){this._clearHoverLinkFromSeries(),this._clearHoverLinkToSeries()},t.type="visualMap.continuous",t})(Ij);function uU(r,t,e,n){return new $i({shape:{points:r},draggable:!!e,cursor:t,drift:e,onmousemove:function(i){kl(i.event)},ondragend:n})}function l5e(r,t,e){var n=a5e/2,i=r.get("hoverLinkDataSize");return i&&(n=Co(i,t,e,!0)/2),n}function dU(r){var t=r.get("hoverLinkOnHandle");return!!(t??r.get("realtime"))}function cU(r){return r==="vertical"?"ns-resize":"ew-resize"}var u5e={type:"selectDataRange",event:"dataRangeSelected",update:"update"},d5e=function(r,t){t.eachComponent({mainType:"visualMap",query:r},function(e){e.setSelected(r.selected)})},c5e=[{createOnAllSeries:!0,reset:function(r,t){var e=[];return t.eachComponent("visualMap",function(n){var i=r.pipelineContext;!n.isTargetSeries(r)||i&&i.large||e.push(Pwe(n.stateList,n.targetVisuals,ht(n.getValueState,n),n.getDataDimensionIndex(r.getData())))}),e}},{createOnAllSeries:!0,reset:function(r,t){var e=r.getData(),n=[];t.eachComponent("visualMap",function(i){if(i.isTargetSeries(r)){var a=i.getVisualMeta(ht(f5e,null,r,i))||{stops:[],outerColors:[]},s=i.getDataDimensionIndex(e);s>=0&&(a.dimension=s,n.push(a))}}),r.getData().setVisual("visualMeta",n)}}];function f5e(r,t,e,n){for(var i=t.targetVisuals[n],a=ai.prepareVisualTypes(i),s={color:Y1(r.getData(),"color")},o=0,l=a.length;o<l;o++){var u=a[o],d=i[u==="opacity"?"__alphaForOpacity":u];d&&d.applyVisual(e,c,f)}return s.color;function c(h){return s[h]}function f(h,m){s[h]=m}}var fU=oe;function h5e(r){var t=r&&r.visualMap;Ge(t)||(t=t?[t]:[]),fU(t,function(e){if(e){h0(e,"splitList")&&!h0(e,"pieces")&&(e.pieces=e.splitList,delete e.splitList);var n=e.pieces;n&&Ge(n)&&fU(n,function(i){At(i)&&(h0(i,"start")&&!h0(i,"min")&&(i.min=i.start),h0(i,"end")&&!h0(i,"max")&&(i.max=i.end))})}})}function h0(r,t){return r&&r.hasOwnProperty&&r.hasOwnProperty(t)}var hU=!1;function Lj(r){hU||(hU=!0,r.registerSubTypeDefaulter("visualMap",function(t){return!t.categories&&(!(t.pieces?t.pieces.length>0:t.splitNumber>0)||t.calculable)?"continuous":"piecewise"}),r.registerAction(u5e,d5e),oe(c5e,function(t){r.registerVisual(r.PRIORITY.VISUAL.COMPONENT,t)}),r.registerPreprocessor(h5e))}function Bj(r){r.registerComponentModel(n5e),r.registerComponentView(o5e),Lj(r)}var m5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e._pieceList=[],e}return t.prototype.optionUpdated=function(e,n){r.prototype.optionUpdated.apply(this,arguments),this.resetExtent();var i=this._mode=this._determineMode();this._pieceList=[],p5e[this._mode].call(this,this._pieceList),this._resetSelected(e,n);var a=this.option.categories;this.resetVisual(function(s,o){i==="categories"?(s.mappingMethod="category",s.categories=kt(a)):(s.dataExtent=this.getExtent(),s.mappingMethod="piecewise",s.pieceList=Ze(this._pieceList,function(l){return l=kt(l),o!=="inRange"&&(l.visual=null),l}))})},t.prototype.completeVisualOption=function(){var e=this.option,n={},i=ai.listVisualTypes(),a=this.isCategory();oe(e.pieces,function(o){oe(i,function(l){o.hasOwnProperty(l)&&(n[l]=1)})}),oe(n,function(o,l){var u=!1;oe(this.stateList,function(d){u=u||s(e,d,l)||s(e.target,d,l)},this),!u&&oe(this.stateList,function(d){(e[d]||(e[d]={}))[l]=Uj.get(l,d==="inRange"?"active":"inactive",a)})},this);function s(o,l,u){return o&&o[l]&&o[l].hasOwnProperty(u)}r.prototype.completeVisualOption.apply(this,arguments)},t.prototype._resetSelected=function(e,n){var i=this.option,a=this._pieceList,s=(n?i:e).selected||{};if(i.selected=s,oe(a,function(l,u){var d=this.getSelectedMapKey(l);s.hasOwnProperty(d)||(s[d]=!0)},this),i.selectedMode==="single"){var o=!1;oe(a,function(l,u){var d=this.getSelectedMapKey(l);s[d]&&(o?s[d]=!1:o=!0)},this)}},t.prototype.getItemSymbol=function(){return this.get("itemSymbol")},t.prototype.getSelectedMapKey=function(e){return this._mode==="categories"?e.value+"":e.index+""},t.prototype.getPieceList=function(){return this._pieceList},t.prototype._determineMode=function(){var e=this.option;return e.pieces&&e.pieces.length>0?"pieces":this.option.categories?"categories":"splitNumber"},t.prototype.setSelected=function(e){this.option.selected=kt(e)},t.prototype.getValueState=function(e){var n=ai.findPieceIndex(e,this._pieceList);return n!=null&&this.option.selected[this.getSelectedMapKey(this._pieceList[n])]?"inRange":"outOfRange"},t.prototype.findTargetDataIndices=function(e){var n=[],i=this._pieceList;return this.eachTargetSeries(function(a){var s=[],o=a.getData();o.each(this.getDataDimensionIndex(o),function(l,u){var d=ai.findPieceIndex(l,i);d===e&&s.push(u)},this),n.push({seriesId:a.id,dataIndex:s})},this),n},t.prototype.getRepresentValue=function(e){var n;if(this.isCategory())n=e.value;else if(e.value!=null)n=e.value;else{var i=e.interval||[];n=i[0]===-1/0&&i[1]===1/0?0:(i[0]+i[1])/2}return n},t.prototype.getVisualMeta=function(e){if(this.isCategory())return;var n=[],i=["",""],a=this;function s(d,c){var f=a.getRepresentValue({interval:d});c||(c=a.getValueState(f));var h=e(f,c);d[0]===-1/0?i[0]=h:d[1]===1/0?i[1]=h:n.push({value:d[0],color:h},{value:d[1],color:h})}var o=this._pieceList.slice();if(!o.length)o.push({interval:[-1/0,1/0]});else{var l=o[0].interval[0];l!==-1/0&&o.unshift({interval:[-1/0,l]}),l=o[o.length-1].interval[1],l!==1/0&&o.push({interval:[l,1/0]})}var u=-1/0;return oe(o,function(d){var c=d.interval;c&&(c[0]>u&&s([u,c[0]],"outOfRange"),s(c.slice()),u=c[1])},this),{stops:n,outerColors:i}},t.type="visualMap.piecewise",t.defaultOption=cd(nb.defaultOption,{selected:null,minOpen:!1,maxOpen:!1,align:"auto",itemWidth:20,itemHeight:14,itemSymbol:"roundRect",pieces:null,categories:null,splitNumber:5,selectedMode:"multiple",itemGap:10,hoverLink:!0}),t})(nb),p5e={splitNumber:function(r){var t=this.option,e=Math.min(t.precision,20),n=this.getExtent(),i=t.splitNumber;i=Math.max(parseInt(i,10),1),t.splitNumber=i;for(var a=(n[1]-n[0])/i;+a.toFixed(e)!==a&&e<5;)e++;t.precision=e,a=+a.toFixed(e),t.minOpen&&r.push({interval:[-1/0,n[0]],close:[0,0]});for(var s=0,o=n[0];s<i;o+=a,s++){var l=s===i-1?n[1]:o+a;r.push({interval:[o,l],close:[1,1]})}t.maxOpen&&r.push({interval:[n[1],1/0],close:[0,0]}),j5(r),oe(r,function(u,d){u.index=d,u.text=this.formatValueText(u.interval)},this)},categories:function(r){var t=this.option;oe(t.categories,function(e){r.push({text:this.formatValueText(e,!0),value:e})},this),mU(t,r)},pieces:function(r){var t=this.option;oe(t.pieces,function(e,n){At(e)||(e={value:e});var i={text:"",index:n};if(e.label!=null&&(i.text=e.label),e.hasOwnProperty("value")){var a=i.value=e.value;i.interval=[a,a],i.close=[1,1]}else{for(var s=i.interval=[],o=i.close=[0,0],l=[1,0,1],u=[-1/0,1/0],d=[],c=0;c<2;c++){for(var f=[["gte","gt","min"],["lte","lt","max"]][c],h=0;h<3&&s[c]==null;h++)s[c]=e[f[h]],o[c]=l[h],d[c]=h===2;s[c]==null&&(s[c]=u[c])}d[0]&&s[1]===1/0&&(o[0]=0),d[1]&&s[0]===-1/0&&(o[1]=0),s[0]===s[1]&&o[0]&&o[1]&&(i.value=s[0])}i.visual=ai.retrieveVisuals(e),r.push(i)},this),mU(t,r),j5(r),oe(r,function(e){var n=e.close,i=[["<","≤"][n[1]],[">","≥"][n[0]]];e.text=e.text||this.formatValueText(e.value!=null?e.value:e.interval,!1,i)},this)}};function mU(r,t){var e=r.inverse;(r.orient==="vertical"?!e:e)&&t.reverse()}var g5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type=t.type,e}return t.prototype.doRender=function(){var e=this.group;e.removeAll();var n=this.visualMapModel,i=n.get("textGap"),a=n.textStyleModel,s=a.getFont(),o=a.getTextColor(),l=this._getItemAlign(),u=n.itemSize,d=this._getViewData(),c=d.endsText,f=ni(n.get("showLabel",!0),!c),h=!n.get("selectedMode");c&&this._renderEndsText(e,c[0],u,f,l),oe(d.viewPieceList,function(m){var p=m.piece,g=new zt;g.onclick=ht(this._onItemClick,this,p),this._enableHoverLink(g,m.indexInModelPieceList);var v=n.getRepresentValue(p);if(this._createItemSymbol(g,v,[0,0,u[0],u[1]],h),f){var x=this.visualMapModel.getValueState(v);g.add(new dr({style:{x:l==="right"?-i:u[0]+i,y:u[1]/2,text:p.text,verticalAlign:"middle",align:l,font:s,fill:o,opacity:x==="outOfRange"?.5:1},silent:h}))}e.add(g)},this),c&&this._renderEndsText(e,c[1],u,f,l),Fc(n.get("orient"),e,n.get("itemGap")),this.renderBackground(e),this.positionGroup(e)},t.prototype._enableHoverLink=function(e,n){var i=this;e.on("mouseover",function(){return a("highlight")}).on("mouseout",function(){return a("downplay")});var a=function(s){var o=i.visualMapModel;o.option.hoverLink&&i.api.dispatchAction({type:s,batch:Z2(o.findTargetDataIndices(n),o)})}},t.prototype._getItemAlign=function(){var e=this.visualMapModel,n=e.option;if(n.orient==="vertical")return Rj(e,this.api,e.itemSize);var i=n.align;return(!i||i==="auto")&&(i="left"),i},t.prototype._renderEndsText=function(e,n,i,a,s){if(n){var o=new zt,l=this.visualMapModel.textStyleModel;o.add(new dr({style:en(l,{x:a?s==="right"?i[0]:0:i[0]/2,y:i[1]/2,verticalAlign:"middle",align:a?s:"center",text:n})})),e.add(o)}},t.prototype._getViewData=function(){var e=this.visualMapModel,n=Ze(e.getPieceList(),function(o,l){return{piece:o,indexInModelPieceList:l}}),i=e.get("text"),a=e.get("orient"),s=e.get("inverse");return(a==="horizontal"?s:!s)?n.reverse():i&&(i=i.slice().reverse()),{viewPieceList:n,endsText:i}},t.prototype._createItemSymbol=function(e,n,i,a){var s=On(this.getControllerVisual(n,"symbol"),i[0],i[1],i[2],i[3],this.getControllerVisual(n,"color"));s.silent=a,e.add(s)},t.prototype._onItemClick=function(e){var n=this.visualMapModel,i=n.option,a=i.selectedMode;if(a){var s=kt(i.selected),o=n.getSelectedMapKey(e);a==="single"||a===!0?(s[o]=!0,oe(s,function(l,u){s[u]=u===o})):s[o]=!s[o],this.api.dispatchAction({type:"selectDataRange",from:this.uid,visualMapId:this.visualMapModel.id,selected:s})}},t.type="visualMap.piecewise",t})(Ij);function Nj(r){r.registerComponentModel(m5e),r.registerComponentView(g5e),Lj(r)}function v5e(r){Qt(Bj),Qt(Nj)}var x5e={label:{enabled:!0},decal:{show:!1}},pU=mr(),b5e={};function y5e(r,t){var e=r.getModel("aria");if(!e.get("enabled"))return;var n=kt(x5e);Bt(n.label,r.getLocaleModel().get("aria"),!1),Bt(e.option,n,!1),i(),a();function i(){var u=e.getModel("decal"),d=u.get("show");if(d){var c=wt();r.eachSeries(function(f){if(!f.isColorBySeries()){var h=c.get(f.type);h||(h={},c.set(f.type,h)),pU(f).scope=h}}),r.eachRawSeries(function(f){if(r.isSeriesFiltered(f))return;if(Tt(f.enableAriaDecal)){f.enableAriaDecal();return}var h=f.getData();if(f.isColorBySeries()){var x=s6(f.ecModel,f.name,b5e,r.getSeriesCount()),y=h.getVisual("decal");h.setVisual("decal",w(y,x))}else{var m=f.getRawData(),p={},g=pU(f).scope;h.each(function(_){var D=h.getRawIndex(_);p[D]=_});var v=m.count();m.each(function(_){var D=p[_],P=m.getName(_)||_+"",O=s6(f.ecModel,P,g,v),U=h.getItemVisual(D,"decal");h.setItemVisual(D,"decal",w(U,O))})}function w(_,D){var P=_?We(We({},D),_):D;return P.dirty=!0,P}})}}function a(){var u=t.getZr().dom;if(u){var d=r.getLocaleModel().get("aria"),c=e.getModel("label");if(c.option=Ct(c.option,d),!!c.get("enabled")){if(u.setAttribute("role","img"),c.get("description")){u.setAttribute("aria-label",c.get("description"));return}var f=r.getSeriesCount(),h=c.get(["data","maxCount"])||10,m=c.get(["series","maxCount"])||10,p=Math.min(f,m),g;if(!(f<1)){var v=o();if(v){var x=c.get(["general","withTitle"]);g=s(x,{title:v})}else g=c.get(["general","withoutTitle"]);var y=[],w=f>1?c.get(["series","multiple","prefix"]):c.get(["series","single","prefix"]);g+=s(w,{seriesCount:f}),r.eachSeries(function(O,U){if(U<p){var L=void 0,W=O.get("name"),B=W?"withName":"withoutName";L=f>1?c.get(["series","multiple",B]):c.get(["series","single",B]),L=s(L,{seriesId:O.seriesIndex,seriesName:O.get("name"),seriesType:l(O.subType)});var z=O.getData();if(z.count()>h){var E=c.get(["data","partialData"]);L+=s(E,{displayCnt:h})}else L+=c.get(["data","allData"]);for(var k=c.get(["data","separator","middle"]),S=c.get(["data","separator","end"]),C=c.get(["data","excludeDimensionId"]),F=[],A=0;A<z.count();A++)if(A<h){var N=z.getName(A),H=C?Cr(z.getValues(A),function(Y,Z){return Vt(C,Z)===-1}):z.getValues(A),R=c.get(["data",N?"withName":"withoutName"]);F.push(s(R,{name:N,value:H.join(k)}))}L+=F.join(k)+S,y.push(L)}});var _=c.getModel(["series","multiple","separator"]),D=_.get("middle"),P=_.get("end");g+=y.join(D)+P,u.setAttribute("aria-label",g)}}}}function s(u,d){if(!ct(u))return u;var c=u;return oe(d,function(f,h){c=c.replace(new RegExp("\\{\\s*"+h+"\\s*\\}","g"),f)}),c}function o(){var u=r.get("title");return u&&u.length&&(u=u[0]),u&&u.text}function l(u){var d=r.getLocaleModel().get(["series","typeNames"]);return d[u]||d.chart}}function M5e(r){if(!(!r||!r.aria)){var t=r.aria;t.show!=null&&(t.enabled=t.show),t.label=t.label||{},oe(["description","general","series","data"],function(e){t[e]!=null&&(t.label[e]=t[e])})}}function w5e(r){r.registerPreprocessor(M5e),r.registerVisual(r.PRIORITY.VISUAL.ARIA,y5e)}var gU={value:"eq","<":"lt","<=":"lte",">":"gt",">=":"gte","=":"eq","!=":"ne","<>":"ne"},S5e=(function(){function r(t){var e=this._condVal=ct(t)?new RegExp(t):cL(t)?t:null;if(e==null){var n="";Ir(n)}}return r.prototype.evaluate=function(t){var e=typeof t;return ct(e)?this._condVal.test(t):xr(e)?this._condVal.test(t+""):!1},r})(),_5e=(function(){function r(){}return r.prototype.evaluate=function(){return this.value},r})(),T5e=(function(){function r(){}return r.prototype.evaluate=function(){for(var t=this.children,e=0;e<t.length;e++)if(!t[e].evaluate())return!1;return!0},r})(),C5e=(function(){function r(){}return r.prototype.evaluate=function(){for(var t=this.children,e=0;e<t.length;e++)if(t[e].evaluate())return!0;return!1},r})(),A5e=(function(){function r(){}return r.prototype.evaluate=function(){return!this.child.evaluate()},r})(),k5e=(function(){function r(){}return r.prototype.evaluate=function(){for(var t=!!this.valueParser,e=this.getValue,n=e(this.valueGetterParam),i=t?this.valueParser(n):null,a=0;a<this.subCondList.length;a++)if(!this.subCondList[a].evaluate(t?i:n))return!1;return!0},r})();function _T(r,t){if(r===!0||r===!1){var e=new _5e;return e.value=r,e}var n="";return Hj(r)||Ir(n),r.and?vU("and",r,t):r.or?vU("or",r,t):r.not?D5e(r,t):F5e(r,t)}function vU(r,t,e){var n=t[r],i="";Ge(n)||Ir(i),n.length||Ir(i);var a=r==="and"?new T5e:new C5e;return a.children=Ze(n,function(s){return _T(s,e)}),a.children.length||Ir(i),a}function D5e(r,t){var e=r.not,n="";Hj(e)||Ir(n);var i=new A5e;return i.child=_T(e,t),i.child||Ir(n),i}function F5e(r,t){for(var e="",n=t.prepareGetValue(r),i=[],a=ir(r),s=r.parser,o=s?bN(s):null,l=0;l<a.length;l++){var u=a[l];if(!(u==="parser"||t.valueGetterAttrMap.get(u))){var d=vt(gU,u)?gU[u]:u,c=r[u],f=o?o(c):c,h=tfe(d,f)||d==="reg"&&new S5e(f);h||Ir(e),i.push(h)}}i.length||Ir(e);var m=new k5e;return m.valueGetterParam=n,m.valueParser=o,m.getValue=t.getValue,m.subCondList=i,m}function Hj(r){return At(r)&&!Ci(r)}var E5e=(function(){function r(t,e){this._cond=_T(t,e)}return r.prototype.evaluate=function(){return this._cond.evaluate()},r})();function z5e(r,t){return new E5e(r,t)}var P5e={type:"echarts:filter",transform:function(r){for(var t=r.upstream,e,n=z5e(r.config,{valueGetterAttrMap:wt({dimension:!0}),prepareGetValue:function(o){var l="",u=o.dimension;vt(o,"dimension")||Ir(l);var d=t.getDimensionInfo(u);return d||Ir(l),{dimIdx:d.index}},getValue:function(o){return t.retrieveValueFromItem(e,o.dimIdx)}}),i=[],a=0,s=t.count();a<s;a++)e=t.getRawDataItem(a),n.evaluate()&&i.push(e);return{data:i}}},O5e={type:"echarts:sort",transform:function(r){var t=r.upstream,e=r.config,n="",i=qr(e);i.length||Ir(n);var a=[];oe(i,function(d){var c=d.dimension,f=d.order,h=d.parser,m=d.incomparable;if(c==null&&Ir(n),f!=="asc"&&f!=="desc"&&Ir(n),m&&m!=="min"&&m!=="max"){var p="";Ir(p)}if(f!=="asc"&&f!=="desc"){var g="";Ir(g)}var v=t.getDimensionInfo(c);v||Ir(n);var x=h?bN(h):null;h&&!x&&Ir(n),a.push({dimIdx:v.index,parser:x,comparator:new MN(f,m)})});var s=t.sourceFormat;s!==qi&&s!==Ps&&Ir(n);for(var o=[],l=0,u=t.count();l<u;l++)o.push(t.getRawDataItem(l));return o.sort(function(d,c){for(var f=0;f<a.length;f++){var h=a[f],m=t.retrieveValueFromItem(d,h.dimIdx),p=t.retrieveValueFromItem(c,h.dimIdx);h.parser&&(m=h.parser(m),p=h.parser(p));var g=h.comparator.evaluate(m,p);if(g!==0)return g}return 0}),{data:o}}};function U5e(r){r.registerTransform(P5e),r.registerTransform(O5e)}var I5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type="dataset",e}return t.prototype.init=function(e,n,i){r.prototype.init.call(this,e,n,i),this._sourceManager=new TN(this),yF(this)},t.prototype.mergeOption=function(e,n){r.prototype.mergeOption.call(this,e,n),yF(this)},t.prototype.optionUpdated=function(){this._sourceManager.dirty()},t.prototype.getSourceManager=function(){return this._sourceManager},t.type="dataset",t.defaultOption={seriesLayoutBy:Ro},t})(tr),R5e=(function(r){ke(t,r);function t(){var e=r!==null&&r.apply(this,arguments)||this;return e.type="dataset",e}return t.type="dataset",t})(ln);function L5e(r){r.registerComponentModel(I5e),r.registerComponentView(R5e)}var wo=Ho.CMD;function A0(r,t){return Math.abs(r-t)<1e-5}function l8(r){var t=r.data,e=r.len(),n=[],i,a=0,s=0,o=0,l=0;function u(z,E){i&&i.length>2&&n.push(i),i=[z,E]}function d(z,E,k,S){A0(z,k)&&A0(E,S)||i.push(z,E,k,S,k,S)}function c(z,E,k,S,C,F){var A=Math.abs(E-z),N=Math.tan(A/4)*4/3,H=E<z?-1:1,R=Math.cos(z),Y=Math.sin(z),Z=Math.cos(E),ee=Math.sin(E),V=R*C+k,re=Y*F+S,j=Z*C+k,X=ee*F+S,Q=C*N*H,ae=F*N*H;i.push(V-Q*Y,re+ae*R,j+Q*ee,X-ae*Z,j,X)}for(var f,h,m,p,g=0;g<e;){var v=t[g++],x=g===1;switch(x&&(a=t[g],s=t[g+1],o=a,l=s,(v===wo.L||v===wo.C||v===wo.Q)&&(i=[o,l])),v){case wo.M:a=o=t[g++],s=l=t[g++],u(o,l);break;case wo.L:f=t[g++],h=t[g++],d(a,s,f,h),a=f,s=h;break;case wo.C:i.push(t[g++],t[g++],t[g++],t[g++],a=t[g++],s=t[g++]);break;case wo.Q:f=t[g++],h=t[g++],m=t[g++],p=t[g++],i.push(a+2/3*(f-a),s+2/3*(h-s),m+2/3*(f-m),p+2/3*(h-p),m,p),a=m,s=p;break;case wo.A:var y=t[g++],w=t[g++],_=t[g++],D=t[g++],P=t[g++],O=t[g++]+P;g+=1;var U=!t[g++];f=Math.cos(P)*_+y,h=Math.sin(P)*D+w,x?(o=f,l=h,u(o,l)):d(a,s,f,h),a=Math.cos(O)*_+y,s=Math.sin(O)*D+w;for(var L=(U?-1:1)*Math.PI/2,W=P;U?W>O:W<O;W+=L){var B=U?Math.max(W+L,O):Math.min(W+L,O);c(W,B,y,w,_,D)}break;case wo.R:o=a=t[g++],l=s=t[g++],f=o+t[g++],h=l+t[g++],u(f,l),d(f,l,f,h),d(f,h,o,h),d(o,h,o,l),d(o,l,f,l);break;case wo.Z:i&&d(a,s,o,l),a=o,s=l;break}}return i&&i.length>2&&n.push(i),n}function u8(r,t,e,n,i,a,s,o,l,u){if(A0(r,e)&&A0(t,n)&&A0(i,s)&&A0(a,o)){l.push(s,o);return}var d=2/u,c=d*d,f=s-r,h=o-t,m=Math.sqrt(f*f+h*h);f/=m,h/=m;var p=e-r,g=n-t,v=i-s,x=a-o,y=p*p+g*g,w=v*v+x*x;if(y<c&&w<c){l.push(s,o);return}var _=f*p+h*g,D=-f*v-h*x,P=y-_*_,O=w-D*D;if(P<c&&_>=0&&O<c&&D>=0){l.push(s,o);return}var U=[],L=[];ed(r,e,i,s,.5,U),ed(t,n,a,o,.5,L),u8(U[0],L[0],U[1],L[1],U[2],L[2],U[3],L[3],l,u),u8(U[4],L[4],U[5],L[5],U[6],L[6],U[7],L[7],l,u)}function B5e(r,t){var e=l8(r),n=[];t=t||1;for(var i=0;i<e.length;i++){var a=e[i],s=[],o=a[0],l=a[1];s.push(o,l);for(var u=2;u<a.length;){var d=a[u++],c=a[u++],f=a[u++],h=a[u++],m=a[u++],p=a[u++];u8(o,l,d,c,f,h,m,p,s,t),o=m,l=p}n.push(s)}return n}function Wj(r,t,e){var n=r[t],i=r[1-t],a=Math.abs(n/i),s=Math.ceil(Math.sqrt(a*e)),o=Math.floor(e/s);o===0&&(o=1,s=e);for(var l=[],u=0;u<s;u++)l.push(o);var d=s*o,c=e-d;if(c>0)for(var u=0;u<c;u++)l[u%s]+=1;return l}function xU(r,t,e){for(var n=r.r0,i=r.r,a=r.startAngle,s=r.endAngle,o=Math.abs(s-a),l=o*i,u=i-n,d=l>Math.abs(u),c=Wj([l,u],d?0:1,t),f=(d?o:u)/c.length,h=0;h<c.length;h++)for(var m=(d?u:o)/c[h],p=0;p<c[h];p++){var g={};d?(g.startAngle=a+f*h,g.endAngle=a+f*(h+1),g.r0=n+m*p,g.r=n+m*(p+1)):(g.startAngle=a+m*p,g.endAngle=a+m*(p+1),g.r0=n+f*h,g.r=n+f*(h+1)),g.clockwise=r.clockwise,g.cx=r.cx,g.cy=r.cy,e.push(g)}}function N5e(r,t,e){for(var n=r.width,i=r.height,a=n>i,s=Wj([n,i],a?0:1,t),o=a?"width":"height",l=a?"height":"width",u=a?"x":"y",d=a?"y":"x",c=r[o]/s.length,f=0;f<s.length;f++)for(var h=r[l]/s[f],m=0;m<s[f];m++){var p={};p[u]=f*c,p[d]=m*h,p[o]=c,p[l]=h,p.x+=r.x,p.y+=r.y,e.push(p)}}function bU(r,t,e,n){return r*n-e*t}function H5e(r,t,e,n,i,a,s,o){var l=e-r,u=n-t,d=s-i,c=o-a,f=bU(d,c,l,u);if(Math.abs(f)<1e-6)return null;var h=r-i,m=t-a,p=bU(h,m,d,c)/f;return p<0||p>1?null:new Xt(p*l+r,p*u+t)}function W5e(r,t,e){var n=new Xt;Xt.sub(n,e,t),n.normalize();var i=new Xt;Xt.sub(i,r,t);var a=i.dot(n);return a}function m0(r,t){var e=r[r.length-1];e&&e[0]===t[0]&&e[1]===t[1]||r.push(t)}function X5e(r,t,e){for(var n=r.length,i=[],a=0;a<n;a++){var s=r[a],o=r[(a+1)%n],l=H5e(s[0],s[1],o[0],o[1],t.x,t.y,e.x,e.y);l&&i.push({projPt:W5e(l,t,e),pt:l,idx:a})}if(i.length<2)return[{points:r},{points:r}];i.sort(function(g,v){return g.projPt-v.projPt});var u=i[0],d=i[i.length-1];if(d.idx<u.idx){var c=u;u=d,d=c}for(var f=[u.pt.x,u.pt.y],h=[d.pt.x,d.pt.y],m=[f],p=[h],a=u.idx+1;a<=d.idx;a++)m0(m,r[a].slice());m0(m,h),m0(m,f);for(var a=d.idx+1;a<=u.idx+n;a++)m0(p,r[a%n].slice());return m0(p,f),m0(p,h),[{points:m},{points:p}]}function yU(r){var t=r.points,e=[],n=[];Ob(t,e,n);var i=new jt(e[0],e[1],n[0]-e[0],n[1]-e[1]),a=i.width,s=i.height,o=i.x,l=i.y,u=new Xt,d=new Xt;return a>s?(u.x=d.x=o+a/2,u.y=l,d.y=l+s):(u.y=d.y=l+s/2,u.x=o,d.x=o+a),X5e(t,u,d)}function ib(r,t,e,n){if(e===1)n.push(t);else{var i=Math.floor(e/2),a=r(t);ib(r,a[0],i,n),ib(r,a[1],e-i,n)}return n}function j5e(r,t){for(var e=[],n=0;n<t;n++)e.push(ES(r));return e}function V5e(r,t){t.setStyle(r.style),t.z=r.z,t.z2=r.z2,t.zlevel=r.zlevel}function G5e(r){for(var t=[],e=0;e<r.length;)t.push([r[e++],r[e++]]);return t}function Z5e(r,t){var e=[],n=r.shape,i;switch(r.type){case"rect":N5e(n,t,e),i=cr;break;case"sector":xU(n,t,e),i=Yi;break;case"circle":xU({r0:0,r:n.r,startAngle:0,endAngle:Math.PI*2,cx:n.cx,cy:n.cy},t,e),i=Yi;break;default:var a=r.getComputedTransform(),s=a?Math.sqrt(Math.max(a[0]*a[0]+a[1]*a[1],a[2]*a[2]+a[3]*a[3])):1,o=Ze(B5e(r.getUpdatedPathProxy(),s),function(v){return G5e(v)}),l=o.length;if(l===0)ib(yU,{points:o[0]},t,e);else if(l===t)for(var u=0;u<l;u++)e.push({points:o[u]});else{var d=0,c=Ze(o,function(v){var x=[],y=[];Ob(v,x,y);var w=(y[1]-x[1])*(y[0]-x[0]);return d+=w,{poly:v,area:w}});c.sort(function(v,x){return x.area-v.area});for(var f=t,u=0;u<l;u++){var h=c[u];if(f<=0)break;var m=u===l-1?f:Math.ceil(h.area/d*t);m<0||(ib(yU,{points:h.poly},m,e),f-=m)}}i=$i;break}if(!i)return j5e(r,t);for(var p=[],u=0;u<e.length;u++){var g=new i;g.setShape(e[u]),V5e(r,g),p.push(g)}return p}function Y5e(r,t){var e=r.length,n=t.length;if(e===n)return[r,t];for(var i=[],a=[],s=e<n?r:t,o=Math.min(e,n),l=Math.abs(n-e)/6,u=(o-2)/6,d=Math.ceil(l/u)+1,c=[s[0],s[1]],f=l,h=2;h<o;){var m=s[h-2],p=s[h-1],g=s[h++],v=s[h++],x=s[h++],y=s[h++],w=s[h++],_=s[h++];if(f<=0){c.push(g,v,x,y,w,_);continue}for(var D=Math.min(f,d-1)+1,P=1;P<=D;P++){var O=P/D;ed(m,g,x,w,O,i),ed(p,v,y,_,O,a),m=i[3],p=a[3],c.push(i[1],a[1],i[2],a[2],m,p),g=i[5],v=a[5],x=i[6],y=a[6]}f-=D-1}return s===r?[c,t]:[r,c]}function MU(r,t){for(var e=r.length,n=r[e-2],i=r[e-1],a=[],s=0;s<t.length;)a[s++]=n,a[s++]=i;return a}function $5e(r,t){for(var e,n,i,a=[],s=[],o=0;o<Math.max(r.length,t.length);o++){var l=r[o],u=t[o],d=void 0,c=void 0;l?u?(e=Y5e(l,u),d=e[0],c=e[1],n=d,i=c):(c=MU(i||l,l),d=l):(d=MU(n||u,u),c=u),a.push(d),s.push(c)}return[a,s]}function wU(r){for(var t=0,e=0,n=0,i=r.length,a=0,s=i-2;a<i;s=a,a+=2){var o=r[s],l=r[s+1],u=r[a],d=r[a+1],c=o*d-u*l;t+=c,e+=(o+u)*c,n+=(l+d)*c}return t===0?[r[0]||0,r[1]||0]:[e/t/3,n/t/3,t]}function q5e(r,t,e,n){for(var i=(r.length-2)/6,a=1/0,s=0,o=r.length,l=o-2,u=0;u<i;u++){for(var d=u*6,c=0,f=0;f<o;f+=2){var h=f===0?d:(d+f-2)%l+2,m=r[h]-e[0],p=r[h+1]-e[1],g=t[f]-n[0],v=t[f+1]-n[1],x=g-m,y=v-p;c+=x*x+y*y}c<a&&(a=c,s=u)}return s}function K5e(r){for(var t=[],e=r.length,n=0;n<e;n+=2)t[n]=r[e-n-2],t[n+1]=r[e-n-1];return t}function Q5e(r,t,e,n){for(var i=[],a,s=0;s<r.length;s++){var o=r[s],l=t[s],u=wU(o),d=wU(l);a==null&&(a=u[2]<0!=d[2]<0);var c=[],f=[],h=0,m=1/0,p=[],g=o.length;a&&(o=K5e(o));for(var v=q5e(o,l,u,d)*6,x=g-2,y=0;y<x;y+=2){var w=(v+y)%x+2;c[y+2]=o[w]-u[0],c[y+3]=o[w+1]-u[1]}c[0]=o[v]-u[0],c[1]=o[v+1]-u[1];for(var _=n/e,D=-n/2;D<=n/2;D+=_){for(var P=Math.sin(D),O=Math.cos(D),U=0,y=0;y<o.length;y+=2){var L=c[y],W=c[y+1],B=l[y]-d[0],z=l[y+1]-d[1],E=B*O-z*P,k=B*P+z*O;p[y]=E,p[y+1]=k;var S=E-L,C=k-W;U+=S*S+C*C}if(U<m){m=U,h=D;for(var F=0;F<p.length;F++)f[F]=p[F]}}i.push({from:c,to:f,fromCp:u,toCp:d,rotation:-h})}return i}function ab(r){return r.__isCombineMorphing}var Xj="__mOriginal_";function sb(r,t,e){var n=Xj+t,i=r[n]||r[t];r[n]||(r[n]=r[t]);var a=e.replace,s=e.after,o=e.before;r[t]=function(){var l=arguments,u;return o&&o.apply(this,l),a?u=a.apply(this,l):u=i.apply(this,l),s&&s.apply(this,l),u}}function Up(r,t){var e=Xj+t;r[e]&&(r[t]=r[e],r[e]=null)}function SU(r,t){for(var e=0;e<r.length;e++)for(var n=r[e],i=0;i<n.length;){var a=n[i],s=n[i+1];n[i++]=t[0]*a+t[2]*s+t[4],n[i++]=t[1]*a+t[3]*s+t[5]}}function jj(r,t){var e=r.getUpdatedPathProxy(),n=t.getUpdatedPathProxy(),i=$5e(l8(e),l8(n)),a=i[0],s=i[1],o=r.getComputedTransform(),l=t.getComputedTransform();function u(){this.transform=null}o&&SU(a,o),l&&SU(s,l),sb(t,"updateTransform",{replace:u}),t.transform=null;var d=Q5e(a,s,10,Math.PI),c=[];sb(t,"buildPath",{replace:function(f){for(var h=t.__morphT,m=1-h,p=[],g=0;g<d.length;g++){var v=d[g],x=v.from,y=v.to,w=v.rotation*h,_=v.fromCp,D=v.toCp,P=Math.sin(w),O=Math.cos(w);Mp(p,_,D,h);for(var U=0;U<x.length;U+=2){var L=x[U],W=x[U+1],B=y[U],z=y[U+1],E=L*m+B*h,k=W*m+z*h;c[U]=E*O-k*P+p[0],c[U+1]=E*P+k*O+p[1]}var S=c[0],C=c[1];f.moveTo(S,C);for(var U=2;U<x.length;){var B=c[U++],z=c[U++],F=c[U++],A=c[U++],N=c[U++],H=c[U++];S===B&&C===z&&F===N&&A===H?f.lineTo(N,H):f.bezierCurveTo(B,z,F,A,N,H),S=N,C=H}}}})}function TT(r,t,e){if(!r||!t)return t;var n=e.done,i=e.during;jj(r,t),t.__morphT=0;function a(){Up(t,"buildPath"),Up(t,"updateTransform"),t.__morphT=-1,t.createPathProxy(),t.dirtyShape()}return t.animateTo({__morphT:1},Ct({during:function(s){t.dirtyShape(),i&&i(s)},done:function(){a(),n&&n()}},e)),t}function J5e(r,t,e,n,i,a){var s=16;r=i===e?0:Math.round(32767*(r-e)/(i-e)),t=a===n?0:Math.round(32767*(t-n)/(a-n));for(var o=0,l,u=(1<<s)/2;u>0;u/=2){var d=0,c=0;(r&u)>0&&(d=1),(t&u)>0&&(c=1),o+=u*u*(3*d^c),c===0&&(d===1&&(r=u-1-r,t=u-1-t),l=r,r=t,t=l)}return o}function ob(r){var t=1/0,e=1/0,n=-1/0,i=-1/0,a=Ze(r,function(o){var l=o.getBoundingRect(),u=o.getComputedTransform(),d=l.x+l.width/2+(u?u[4]:0),c=l.y+l.height/2+(u?u[5]:0);return t=Math.min(d,t),e=Math.min(c,e),n=Math.max(d,n),i=Math.max(c,i),[d,c]}),s=Ze(a,function(o,l){return{cp:o,z:J5e(o[0],o[1],t,e,n,i),path:r[l]}});return s.sort(function(o,l){return o.z-l.z}).map(function(o){return o.path})}function Vj(r){return Z5e(r.path,r.count)}function d8(){return{fromIndividuals:[],toIndividuals:[],count:0}}function e6e(r,t,e){var n=[];function i(_){for(var D=0;D<_.length;D++){var P=_[D];ab(P)?i(P.childrenRef()):P instanceof nr&&n.push(P)}}i(r);var a=n.length;if(!a)return d8();var s=e.dividePath||Vj,o=s({path:t,count:a});if(o.length!==a)return console.error("Invalid morphing: unmatched splitted path"),d8();n=ob(n),o=ob(o);for(var l=e.done,u=e.during,d=e.individualDelay,c=new Ml,f=0;f<a;f++){var h=n[f],m=o[f];m.parent=t,m.copyTransform(c),d||jj(h,m)}t.__isCombineMorphing=!0,t.childrenRef=function(){return o};function p(_){for(var D=0;D<o.length;D++)o[D].addSelfToZr(_)}sb(t,"addSelfToZr",{after:function(_){p(_)}}),sb(t,"removeSelfFromZr",{after:function(_){for(var D=0;D<o.length;D++)o[D].removeSelfFromZr(_)}});function g(){t.__isCombineMorphing=!1,t.__morphT=-1,t.childrenRef=null,Up(t,"addSelfToZr"),Up(t,"removeSelfFromZr")}var v=o.length;if(d)for(var x=v,y=function(){x--,x===0&&(g(),l&&l())},f=0;f<v;f++){var w=d?Ct({delay:(e.delay||0)+d(f,v,n[f],o[f]),done:y},e):e;TT(n[f],o[f],w)}else t.__morphT=0,t.animateTo({__morphT:1},Ct({during:function(_){for(var D=0;D<v;D++){var P=o[D];P.__morphT=t.__morphT,P.dirtyShape()}u&&u(_)},done:function(){g();for(var _=0;_<r.length;_++)Up(r[_],"updateTransform");l&&l()}},e));return t.__zr&&p(t.__zr),{fromIndividuals:n,toIndividuals:o,count:v}}function t6e(r,t,e){var n=t.length,i=[],a=e.dividePath||Vj;function s(h){for(var m=0;m<h.length;m++){var p=h[m];ab(p)?s(p.childrenRef()):p instanceof nr&&i.push(p)}}if(ab(r)){s(r.childrenRef());var o=i.length;if(o<n)for(var l=0,u=o;u<n;u++)i.push(ES(i[l++%o]));i.length=n}else{i=a({path:r,count:n});for(var d=r.getComputedTransform(),u=0;u<i.length;u++)i[u].setLocalTransform(d);if(i.length!==n)return console.error("Invalid morphing: unmatched splitted path"),d8()}i=ob(i),t=ob(t);for(var c=e.individualDelay,u=0;u<n;u++){var f=c?Ct({delay:(e.delay||0)+c(u,n,i[u],t[u])},e):e;TT(i[u],t[u],f)}return{fromIndividuals:i,toIndividuals:t,count:t.length}}function _U(r){return Ge(r[0])}function TU(r,t){for(var e=[],n=r.length,i=0;i<n;i++)e.push({one:r[i],many:[]});for(var i=0;i<t.length;i++){var a=t[i].length,s=void 0;for(s=0;s<a;s++)e[s%n].many.push(t[i][s])}for(var o=0,i=n-1;i>=0;i--)if(!e[i].many.length){var l=e[o].many;if(l.length<=1)if(o)o=0;else return e;var a=l.length,u=Math.ceil(a/2);e[i].many=l.slice(u,a),e[o].many=l.slice(0,u),o++}return e}var r6e={clone:function(r){for(var t=[],e=1-Math.pow(1-r.path.style.opacity,1/r.count),n=0;n<r.count;n++){var i=ES(r.path);i.setStyle("opacity",e),t.push(i)}return t},split:null};function a5(r,t,e,n,i,a){if(!r.length||!t.length)return;var s=fh("update",n,i);if(!(s&&s.duration>0))return;var o=n.getModel("universalTransition").get("delay"),l=Object.assign({setToFinal:!0},s),u,d;_U(r)&&(u=r,d=t),_U(t)&&(u=t,d=r);function c(v,x,y,w,_){var D=v.many,P=v.one;if(D.length===1&&!_){var O=x?D[0]:P,U=x?P:D[0];if(ab(O))c({many:[O],one:U},!0,y,w,!0);else{var L=o?Ct({delay:o(y,w)},l):l;TT(O,U,L),a(O,U,O,U,L)}}else for(var W=Ct({dividePath:r6e[e],individualDelay:o&&function(C,F,A,N){return o(C+y,w)}},l),B=x?e6e(D,P,W):t6e(P,D,W),z=B.fromIndividuals,E=B.toIndividuals,k=z.length,S=0;S<k;S++){var L=o?Ct({delay:o(S,k)},l):l;a(z[S],E[S],x?D[S]:v.one,x?v.one:D[S],L)}}for(var f=u?u===r:r.length>t.length,h=u?TU(d,u):TU(f?t:r,[f?r:t]),m=0,p=0;p<h.length;p++)m+=h[p].many.length;for(var g=0,p=0;p<h.length;p++)c(h[p],f,g,m),g+=h[p].many.length}function uc(r){if(!r)return[];if(Ge(r)){for(var t=[],e=0;e<r.length;e++)t.push(uc(r[e]));return t}var n=[];return r.traverse(function(i){i instanceof nr&&!i.disableMorphing&&!i.invisible&&!i.ignore&&n.push(i)}),n}var Gj=1e4,n6e=0,CU=1,AU=2,i6e=mr();function a6e(r,t){for(var e=r.dimensions,n=0;n<e.length;n++){var i=r.getDimensionInfo(e[n]);if(i&&i.otherDims[t]===0)return e[n]}}function s6e(r,t,e){var n=r.getDimensionInfo(e),i=n&&n.ordinalMeta;if(n){var a=r.get(n.name,t);return i&&i.categories[a]||a+""}}function kU(r,t,e,n){var i=n?"itemChildGroupId":"itemGroupId",a=a6e(r,i);if(a){var s=s6e(r,t,a);return s}var o=r.getRawDataItem(t),l=n?"childGroupId":"groupId";if(o&&o[l])return o[l]+"";if(!n)return e||r.getId(t)}function DU(r){var t=[];return oe(r,function(e){var n=e.data,i=e.dataGroupId;if(!(n.count()>Gj))for(var a=n.getIndices(),s=0;s<a.length;s++)t.push({data:n,groupId:kU(n,s,i,!1),childGroupId:kU(n,s,i,!0),divide:e.divide,dataIndex:s})}),t}function s5(r,t,e){r.traverse(function(n){n instanceof nr&&hn(n,{style:{opacity:0}},t,{dataIndex:e,isFrom:!0})})}function o5(r){if(r.parent){var t=r.getComputedTransform();r.setLocalTransform(t),r.parent.remove(r)}}function p0(r){r.stopAnimation(),r.isGroup&&r.traverse(function(t){t.stopAnimation()})}function o6e(r,t,e){var n=fh("update",e,t);n&&r.traverse(function(i){if(i instanceof ks){var a=Bde(i);a&&i.animateFrom({style:a},n)}})}function l6e(r,t){var e=r.length;if(e!==t.length)return!1;for(var n=0;n<e;n++){var i=r[n],a=t[n];if(i.data.getId(i.dataIndex)!==a.data.getId(a.dataIndex))return!1}return!0}function Zj(r,t,e){var n=DU(r),i=DU(t);function a(y,w,_,D,P){(_||y)&&w.animateFrom({style:_&&_!==y?We(We({},_.style),y.style):y.style},P)}var s=!1,o=n6e,l=wt(),u=wt();n.forEach(function(y){y.groupId&&l.set(y.groupId,!0),y.childGroupId&&u.set(y.childGroupId,!0)});for(var d=0;d<i.length;d++){var c=i[d].groupId;if(u.get(c)){o=CU;break}var f=i[d].childGroupId;if(f&&l.get(f)){o=AU;break}}function h(y,w){return function(_){var D=_.data,P=_.dataIndex;return w?D.getId(P):y?o===CU?_.childGroupId:_.groupId:o===AU?_.childGroupId:_.groupId}}var m=l6e(n,i),p={};if(!m)for(var d=0;d<i.length;d++){var g=i[d],v=g.data.getItemGraphicEl(g.dataIndex);v&&(p[v.id]=!0)}function x(y,w){var _=n[w],D=i[y],P=D.data.hostModel,O=_.data.getItemGraphicEl(_.dataIndex),U=D.data.getItemGraphicEl(D.dataIndex);if(O===U){U&&o6e(U,D.dataIndex,P);return}O&&p[O.id]||U&&(p0(U),O?(p0(O),o5(O),s=!0,a5(uc(O),uc(U),D.divide,P,y,a)):s5(U,P,y))}new El(n,i,h(!0,m),h(!1,m),null,"multiple").update(x).updateManyToOne(function(y,w){var _=i[y],D=_.data,P=D.hostModel,O=D.getItemGraphicEl(_.dataIndex),U=Cr(Ze(w,function(L){return n[L].data.getItemGraphicEl(n[L].dataIndex)}),function(L){return L&&L!==O&&!p[L.id]});O&&(p0(O),U.length?(oe(U,function(L){p0(L),o5(L)}),s=!0,a5(uc(U),uc(O),_.divide,P,y,a)):s5(O,P,_.dataIndex))}).updateOneToMany(function(y,w){var _=n[w],D=_.data.getItemGraphicEl(_.dataIndex);if(!(D&&p[D.id])){var P=Cr(Ze(y,function(U){return i[U].data.getItemGraphicEl(i[U].dataIndex)}),function(U){return U&&U!==D}),O=i[y[0]].data.hostModel;P.length&&(oe(P,function(U){return p0(U)}),D?(p0(D),o5(D),s=!0,a5(uc(D),uc(P),_.divide,O,y[0],a)):oe(P,function(U){return s5(U,O,y[0])}))}}).updateManyToMany(function(y,w){new El(w,y,function(_){return n[_].data.getId(n[_].dataIndex)},function(_){return i[_].data.getId(i[_].dataIndex)}).update(function(_,D){x(y[_],w[D])}).execute()}).execute(),s&&oe(t,function(y){var w=y.data,_=w.hostModel,D=_&&e.getViewOfSeriesModel(_),P=fh("update",_,0);D&&_.isAnimationEnabled()&&P&&P.duration>0&&D.group.traverse(function(O){O instanceof nr&&!O.animators.length&&O.animateFrom({style:{opacity:0}},P)})})}function FU(r){var t=r.getModel("universalTransition").get("seriesKey");return t||r.id}function EU(r){return Ge(r)?r.sort().join(","):r}function ku(r){if(r.hostModel)return r.hostModel.getModel("universalTransition").get("divideShape")}function u6e(r,t){var e=wt(),n=wt(),i=wt();return oe(r.oldSeries,function(a,s){var o=r.oldDataGroupIds[s],l=r.oldData[s],u=FU(a),d=EU(u);n.set(d,{dataGroupId:o,data:l}),Ge(u)&&oe(u,function(c){i.set(c,{key:d,dataGroupId:o,data:l})})}),oe(t.updatedSeries,function(a){if(a.isUniversalTransitionEnabled()&&a.isAnimationEnabled()){var s=a.get("dataGroupId"),o=a.getData(),l=FU(a),u=EU(l),d=n.get(u);if(d)e.set(u,{oldSeries:[{dataGroupId:d.dataGroupId,divide:ku(d.data),data:d.data}],newSeries:[{dataGroupId:s,divide:ku(o),data:o}]});else if(Ge(l)){var c=[];oe(l,function(m){var p=n.get(m);p.data&&c.push({dataGroupId:p.dataGroupId,divide:ku(p.data),data:p.data})}),c.length&&e.set(u,{oldSeries:c,newSeries:[{dataGroupId:s,data:o,divide:ku(o)}]})}else{var f=i.get(l);if(f){var h=e.get(f.key);h||(h={oldSeries:[{dataGroupId:f.dataGroupId,data:f.data,divide:ku(f.data)}],newSeries:[]},e.set(f.key,h)),h.newSeries.push({dataGroupId:s,data:o,divide:ku(o)})}}}}),e}function zU(r,t){for(var e=0;e<r.length;e++){var n=t.seriesIndex!=null&&t.seriesIndex===r[e].seriesIndex||t.seriesId!=null&&t.seriesId===r[e].id;if(n)return e}}function d6e(r,t,e,n){var i=[],a=[];oe(qr(r.from),function(s){var o=zU(t.oldSeries,s);o>=0&&i.push({dataGroupId:t.oldDataGroupIds[o],data:t.oldData[o],divide:ku(t.oldData[o]),groupIdDim:s.dimension})}),oe(qr(r.to),function(s){var o=zU(e.updatedSeries,s);if(o>=0){var l=e.updatedSeries[o].getData();a.push({dataGroupId:t.oldDataGroupIds[o],data:l,divide:ku(l),groupIdDim:s.dimension})}}),i.length>0&&a.length>0&&Zj(i,a,n)}function c6e(r){r.registerUpdateLifecycle("series:beforeupdate",function(t,e,n){oe(qr(n.seriesTransition),function(i){oe(qr(i.to),function(a){for(var s=n.updatedSeries,o=0;o<s.length;o++)(a.seriesIndex!=null&&a.seriesIndex===s[o].seriesIndex||a.seriesId!=null&&a.seriesId===s[o].id)&&(s[o][N2]=!0)})})}),r.registerUpdateLifecycle("series:transition",function(t,e,n){var i=i6e(e);if(i.oldSeries&&n.updatedSeries&&n.optionChanged){var a=n.seriesTransition;if(a)oe(qr(a),function(h){d6e(h,i,n,e)});else{var s=u6e(i,n);oe(s.keys(),function(h){var m=s.get(h);Zj(m.oldSeries,m.newSeries,e)})}oe(n.updatedSeries,function(h){h[N2]&&(h[N2]=!1)})}for(var o=t.getSeries(),l=i.oldSeries=[],u=i.oldDataGroupIds=[],d=i.oldData=[],c=0;c<o.length;c++){var f=o[c].getData();f.count()<Gj&&(l.push(o[c]),u.push(o[c].get("dataGroupId")),d.push(f))}})}Qt([Mpe]);Qt([gpe]);Qt([Hpe,r1e,f1e,V1e,rge,Wge,gve,Jve,M2e,A2e,I2e,Fxe,tbe,fbe,kbe,zbe,Wbe,$be,sye,fye,wye,aMe]);Qt(_Me);Qt(qMe);Qt(VW);Qt(u4e);Qt(FX);Qt(h4e);Qt(w4e);Qt(uwe);Qt(kwe);Qt(ig);Qt(Vwe);Qt(Ywe);Qt(i3e);Qt(c3e);Qt(v3e);Qt(S3e);Qt(P3e);Qt(K3e);Qt(Pj);Qt(Oj);Qt(v5e);Qt(Bj);Qt(Nj);Qt(w5e);Qt(U5e);Qt(L5e);Qt(c6e);Qt(Ime);const f6e=Object.freeze(Object.defineProperty({__proto__:null,Axis:Os,ChartView:Vr,ComponentModel:tr,ComponentView:ln,List:Vi,Model:Ar,PRIORITY:eH,SeriesModel:Kr,color:ile,connect:V0e,dataTool:Q0e,dependencies:A0e,disConnect:G0e,disconnect:lH,dispose:Z0e,env:rr,extendChartView:Sme,extendComponentModel:yme,extendComponentView:Mme,extendSeriesModel:wme,format:ume,getCoordinateSystemDimensions:$0e,getInstanceByDom:l_,getInstanceById:Y0e,getMap:K0e,graphic:lme,helper:eme,init:j0e,innerDrawElementOnCanvas:i_,matrix:Ioe,number:sme,parseGeoJSON:M6,parseGeoJson:M6,registerAction:so,registerCoordinateSystem:cH,registerLayout:fH,registerLoading:h_,registerLocale:NS,registerMap:hH,registerPostInit:uH,registerPostUpdate:dH,registerPreprocessor:d_,registerProcessor:c_,registerTheme:u_,registerTransform:mH,registerUpdateLifecycle:Kb,registerVisual:fd,setCanvasCreator:q0e,setPlatformAPI:sL,throttle:$b,time:ome,use:Qt,util:dme,vector:woe,version:C0e,zrUtil:poe,zrender:Ble},Symbol.toStringTag,{value:"Module"})),h6e=`<!DOCTYPE html>\r
+<html lang="zh-CN">\r
+<head>\r
+<meta charset="UTF-8" />\r
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />\r
+<title>测量数据相关性判断器</title>\r
+\r
+<style>\r
+* { box-sizing: border-box; }\r
+:root {\r
+  /* AOI LAB 设计令牌 */\r
+  --navy: #072F50;\r
+  --ink: #08304F;\r
+  --cream: #FFF9E8;\r
+  --paper: #FFFAEA;\r
+  --cyan: #24D4D3;\r
+  --cyan-soft: #9CE7DF;\r
+  --orange: #FF9D2E;\r
+  --grid: rgba(112,190,220,0.14);\r
+  --mono: "Geist Mono","PingFang SC","Microsoft YaHei",Consolas,Menlo,monospace;\r
+  --sans: "Geist","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;\r
+  /* 兼容旧内联样式变量 */\r
+  --primary: #24D4D3;\r
+  --success: #0d9894;\r
+  --danger: #c0392b;\r
+  --text: #08304F;\r
+  --sub: #557a8a;\r
+  --border: #08304F;\r
+  --card: #FFFAEA;\r
+}\r
+html { scroll-behavior: smooth; }\r
+body {\r
+  margin: 0;\r
+  background-color: var(--navy);\r
+  background-image:\r
+    linear-gradient(var(--grid) 1px, transparent 1px),\r
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);\r
+  background-size: 28px 28px;\r
+  color: var(--cream);\r
+  font-family: var(--sans);\r
+  font-size: 14px;\r
+  line-height: 1.55;\r
+}\r
+\r
+/* ─── 顶部 AOI LAB 标识条（嵌入工作台时由宿主隐藏） ─── */\r
+.lab-topbar {\r
+  position: sticky; top: 0; z-index: 50;\r
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;\r
+  padding: 14px 28px;\r
+  background: var(--navy);\r
+  border-bottom: 2px solid #ffffff22;\r
+}\r
+.lab-brand { display: flex; align-items: center; gap: 12px; color: var(--cream); }\r
+.lab-brand-mark {\r
+  display: grid; width: 40px; height: 40px; place-items: center;\r
+  border: 2px solid var(--cream); color: var(--cyan);\r
+  font: 900 1rem/1 var(--mono); letter-spacing: .02em; transform: rotate(-2deg);\r
+}\r
+.lab-brand-name { font: 900 1.15rem/1 var(--mono); letter-spacing: .04em; }\r
+.lab-breadcrumb { display: flex; align-items: center; gap: 8px; font: 700 .8rem/1 var(--mono); color: #fff9e8b0; }\r
+.lab-breadcrumb .sep { color: var(--cyan); }\r
+.lab-breadcrumb [aria-current] { color: var(--cream); }\r
+\r
+/* ─── 工具页面纸张 ─── */\r
+.container {\r
+  max-width: 1320px; margin: 28px auto 56px;\r
+  background: var(--paper); color: var(--ink);\r
+  border: 3px solid var(--ink);\r
+  box-shadow: 9px 9px 0 rgba(1,20,34,.55);\r
+  counter-reset: cardno;\r
+}\r
+/* ─── 卡片（分节面板，自动编号 01/02/03） ─── */\r
+.card {\r
+  position: relative; background: #fffdf5; color: var(--ink);\r
+  border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--cyan);\r
+  padding: 22px 24px; margin-top: 22px;\r
+}\r
+.card > h2 {\r
+  display: flex; align-items: center; gap: 14px; margin: 0 0 18px;\r
+  padding-bottom: 12px; border-bottom: 2px solid #08304f2e;\r
+  font-size: 1.2rem; font-weight: 900; line-height: 1.2;\r
+}\r
+.card > h2::before {\r
+  flex: 0 0 auto; content: counter(cardno, decimal-leading-zero);\r
+  display: grid; place-items: center; width: 34px; height: 34px;\r
+  background: var(--cyan); color: var(--ink); border: 2px solid var(--ink);\r
+  box-shadow: 3px 3px 0 var(--ink); font: 900 .8rem/1 var(--mono);\r
+}\r
+.card > h2 .dot { display: none; }\r
+.card > h2 .badge {\r
+  margin-left: auto; font: 800 .72rem/1 var(--mono); letter-spacing: .02em;\r
+  color: var(--ink); background: var(--cyan-soft); border: 1px solid var(--ink);\r
+  padding: 6px 12px; white-space: nowrap;\r
+}\r
+\r
+/* ─── 结论条 ─── */\r
+.conclusion {\r
+  border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--cyan);\r
+  padding: 16px 20px; background: #fffdf5; margin-top: 22px;\r
+}\r
+/* 去掉了工具标题头后，结论条作为页面首个元素顶到纸张顶部 */\r
+.conclusion:first-child { margin-top: 0; }\r
+.conclusion .main { font: 800 1.05rem/1.3 var(--sans); margin-bottom: 6px; color: var(--ink); }\r
+.conclusion .detail { font-size: 13px; color: #4e6b7a; line-height: 1.6; }\r
+.conclusion.pass { border-left: 8px solid var(--cyan); }\r
+.conclusion.pass .main { color: #0d6b66; }\r
+.conclusion.warn { border-left: 8px solid var(--orange); }\r
+.conclusion.warn .main { color: #b5640a; }\r
+.conclusion.fail { border-left: 8px solid var(--danger); }\r
+.conclusion.fail .main { color: #a3331f; }\r
+\r
+/* ─── 表单元素 ─── */\r
+label { display: block; font-size: 12.5px; color: var(--ink); margin-bottom: 6px; font-weight: 800; }\r
+input[type=number], input[type=text] {\r
+  width: 100%; height: 46px; padding: 0 12px; outline: none;\r
+  font-family: var(--mono); font-size: 13px; color: var(--ink);\r
+  background: #fffdf5; border: 2px solid var(--ink); border-radius: 0;\r
+}\r
+select {\r
+  height: 46px; padding: 0 10px; border: 2px solid var(--ink); border-radius: 0;\r
+  background: #fffdf5; color: var(--ink); font-family: var(--sans); font-size: 13px; cursor: pointer;\r
+  width: 100%;\r
+}\r
+input:focus, select:focus {\r
+  border-color: var(--cyan); outline: 3px solid var(--orange); outline-offset: 2px;\r
+}\r
+\r
+button { font-family: var(--sans); }\r
+.btn-primary {\r
+  background: var(--orange); color: var(--ink); border: 2px solid var(--ink);\r
+  box-shadow: 3px 3px 0 var(--ink); padding: 11px 20px; font: 850 .9rem/1 var(--mono);\r
+  cursor: pointer; transition: transform 160ms, box-shadow 160ms, background 160ms;\r
+}\r
+.btn-primary:hover { background: #ffb255; transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--ink); }\r
+.btn-primary:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--ink); }\r
+.btn-primary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }\r
+.btn-ghost {\r
+  background: transparent; color: var(--ink); border: 2px solid var(--ink);\r
+  padding: 10px 16px; font: 700 .85rem/1 var(--sans); cursor: pointer; transition: background 160ms;\r
+}\r
+.btn-ghost:hover { background: #08304f0d; }\r
+.btn-ghost:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }\r
+.btn-ghost-sm { font-size: .78rem; padding: 6px 12px; }\r
+\r
+.param-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin-top: 18px; }\r
+.btn-row { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }\r
+.muted { color: var(--sub); }\r
+\r
+/* ─── 拖拽导入区 ─── */\r
+.drop-hint {\r
+  border: 2px dashed var(--ink); padding: 30px 16px; text-align: center;\r
+  color: var(--sub); font-size: 14px; font-weight: 700; cursor: pointer;\r
+  background: #fffdf5; margin-top: 4px;\r
+  transition: background 160ms, border-color 160ms, transform 160ms;\r
+}\r
+.drop-hint .drop-icon { display: block; font-size: 34px; margin-bottom: 10px; line-height: 1; }\r
+.drop-hint .drop-sub { display: block; font-size: 11.5px; font-weight: 500; color: var(--sub); margin-top: 4px; }\r
+.drop-hint.dragover { border-color: var(--cyan); background: #dff9f3; color: var(--ink); transform: scale(1.01); }\r
+.file-info { margin-top: 12px; font-size: 13px; line-height: 1.6; }\r
+.scope-note {\r
+  margin-top: 14px; font-size: 12.5px; color: #4e6b7a;\r
+  background: #08304f0a; border-left: 4px solid var(--cyan);\r
+  padding: 9px 13px; line-height: 1.6;\r
+}\r
+\r
+/* ─── 图表 ─── */\r
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }\r
+.chart-box { height: 380px; background: #fffdf5; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--cyan); }\r
+.chart-title { font: 800 .72rem/1 var(--mono); color: var(--ink); letter-spacing: .04em; text-align: center; padding: 8px 0 0; }\r
+\r
+/* ─── 表格 ─── */\r
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }\r
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #08304f1f; }\r
+th {\r
+  color: var(--ink); font-weight: 800; font-size: 11.5px; background: var(--cyan-soft);\r
+  border-bottom: 2px solid var(--ink); position: sticky; top: 0; z-index: 1; font-family: var(--mono);\r
+}\r
+td.mono { font-family: var(--mono); }\r
+\r
+/* ─── 状态标签（不只靠颜色，加描边） ─── */\r
+.tag { display: inline-block; padding: 2px 9px; border-radius: 0; border: 1px solid var(--ink); font: 800 .72rem/1 var(--mono); white-space: nowrap; }\r
+.tag.ok { background: var(--cyan-soft); color: var(--ink); }\r
+.tag.bad { background: #f6d9d2; color: #a3331f; }\r
+.tag.warn { background: #ffe1ad; color: #b5640a; }\r
+\r
+.err { color: #a3331f; font-size: 12.5px; margin-top: 12px; display: none; background: #f6d9d2; border: 2px solid var(--danger); border-left-width: 6px; padding: 8px 10px; }\r
+.err.show { display: block; }\r
+\r
+.footer { text-align: center; color: #557a8a; font: 700 .78rem/1.4 var(--mono); margin-top: 28px; padding-bottom: 8px; }\r
+\r
+/* ─── 乘坐块 ─── */\r
+.seat-block { margin-bottom: 18px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 4px 4px 0 var(--cyan); overflow: hidden; }\r
+.seat-title { background: var(--cyan-soft); padding: 12px 16px; font-weight: 800; font-size: 14px; color: var(--ink); border-bottom: 2px solid var(--ink); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }\r
+.seat-title .sub { font-weight: 700; font-size: 12px; color: #4e6b7a; }\r
+.seat-func { padding: 10px 16px; background: #fffdf5; border-bottom: 2px solid var(--ink); font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }\r
+.seat-block table { width: 100%; border-collapse: collapse; font-size: 12.5px; }\r
+.seat-block th { background: var(--cyan-soft); color: var(--ink); font-weight: 800; font-size: 11.5px; text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--ink); font-family: var(--mono); }\r
+.seat-block td { padding: 8px 12px; border-bottom: 1px solid #08304f1f; }\r
+.formula-chip { display: inline-block; background: var(--ink); color: var(--cream); font-family: var(--mono); font-size: 12px; padding: 3px 10px; border: 2px solid var(--ink); }\r
+\r
+/* ─── 补偿建议 ─── */\r
+.advice-head { font: 800 .75rem/1 var(--mono); color: var(--ink); letter-spacing: .04em; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }\r
+.advice-head .muted { font-family: var(--sans); font-weight: 500; font-size: 12px; letter-spacing: 0; }\r
+.advice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }\r
+.advice-card { border: 2px solid var(--ink); background: #fffdf5; box-shadow: 3px 3px 0 var(--cyan); padding: 12px 14px; }\r
+.advice-card.no { box-shadow: 3px 3px 0 var(--danger); }\r
+.advice-card.yes { box-shadow: 3px 3px 0 var(--cyan); }\r
+.advice-card .k { font: 800 .74rem/1 var(--mono); color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }\r
+.advice-val { font-family: var(--mono); font-size: 15px; font-weight: 800; color: var(--ink); background: var(--cyan-soft); border: 1px solid var(--ink); padding: 3px 10px; display: inline-block; margin-top: 8px; }\r
+.advice-note { font-size: 12px; color: #4e6b7a; line-height: 1.6; margin-top: 8px; }\r
+.advice-note b { color: var(--ink); }\r
+.advice-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }\r
+.advice-bn { margin-top: 10px; font-size: 12px; color: #4e6b7a; line-height: 1.7; border-left: 4px solid var(--orange); background: #08304f0a; padding: 8px 12px; }\r
+.advice-bn .pt { font-family: var(--mono); color: #a3331f; font-weight: 700; }\r
+@media (max-width: 980px) { .advice-grid { grid-template-columns: 1fr; } }\r
+\r
+/* ─── 补偿建议（按项目名，跨乘坐） ─── */\r
+.global-advice { border: 3px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 var(--cyan); padding: 14px 16px; margin-bottom: 18px; }\r
+.global-advice .advice-head { font-size: .82rem; }\r
+.advice-bwrap { margin-top: 10px; max-height: 280px; overflow-y: auto; border: 2px solid var(--ink); }\r
+.advice-b { width: 100%; border-collapse: collapse; font-size: 12.5px; }\r
+.advice-b th { position: sticky; top: 0; z-index: 1; background: var(--cyan-soft); color: var(--ink); font: 800 11.5px/1 var(--mono); text-align: left; padding: 7px 10px; border-bottom: 2px solid var(--ink); white-space: nowrap; }\r
+.advice-b td { padding: 5px 10px; border-bottom: 1px solid #08304f14; font-family: var(--mono); white-space: nowrap; }\r
+.advice-b td:first-child, .advice-b td.sn { font-family: var(--sans); }\r
+.advice-b tr:hover td { background: #f1f8f6; }\r
+details.advice-alt { margin-top: 12px; }\r
+details.advice-alt > summary { cursor: pointer; font: 800 .78rem/1 var(--mono); color: var(--ink); padding: 8px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }\r
+details.advice-alt > summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }\r
+\r
+/* ─── 产品块（每个产品展开逐点明细） ─── */\r
+.prod-block { border-top: 2px solid var(--ink); }\r
+.prod-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; cursor: pointer; user-select: none; font-weight: 700; font-size: 13px; background: #fffdf5; }\r
+.prod-head:hover { background: var(--cyan-soft); }\r
+.prod-head .arrow { display: inline-block; font-size: 10px; color: var(--ink); width: 12px; transition: transform .15s; }\r
+.prod-head.collapsed .arrow { transform: rotate(-90deg); }\r
+.prod-head .link { font-weight: 800; font-size: 12px; color: var(--ink); cursor: pointer; border-bottom: 2px solid var(--cyan); padding-bottom: 1px; }\r
+.prod-head .link:hover { color: #0d6b66; border-color: var(--orange); }\r
+.prod-points { padding: 4px 16px 12px; overflow-x: auto; }\r
+.prod-points table { width: 100%; border-collapse: collapse; font-size: 12px; }\r
+.prod-points th { background: #eef4f3; color: var(--ink); font-weight: 800; font-size: 11px; text-align: right; padding: 6px 10px; border-bottom: 2px solid var(--ink); white-space: nowrap; font-family: var(--mono); }\r
+.prod-points th:first-child, .prod-points td:first-child { text-align: center; }\r
+.prod-points td { padding: 5px 10px; border-bottom: 1px solid #08304f14; text-align: right; font-family: var(--mono); white-space: nowrap; }\r
+.prod-points tr:hover td { background: #f1f8f6; }\r
+.pt-ok { color: #0d6b66; font-weight: 700; }\r
+.pt-fail { color: #a3331f; font-weight: 700; }\r
+.pt-fail-cell { background: #f6d9d2 !important; color: #a3331f; font-weight: 700; }\r
+\r
+/* ─── 散点图弹窗 ─── */\r
+.modal-overlay { position: fixed; inset: 0; background: rgba(7,47,80,.88); z-index: 1000; display: none; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow-y: auto; }\r
+.modal-overlay.show { display: flex; }\r
+.modal-box { background: var(--paper); border: 3px solid var(--ink); box-shadow: 9px 9px 0 var(--cyan); width: min(96vw, 1100px); padding: 18px 22px 22px; }\r
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }\r
+.modal-head h3 { margin: 0; font-size: 16px; font-weight: 900; color: var(--ink); }\r
+.modal-close { border: none; background: var(--ink); color: var(--paper); width: 36px; height: 36px; font-size: 16px; cursor: pointer; line-height: 1; font-family: var(--mono); }\r
+.modal-close:hover { background: var(--orange); color: var(--ink); }\r
+\r
+/* ─── 响应式 ─── */\r
+@media (max-width: 980px) {\r
+  .charts { grid-template-columns: 1fr; }\r
+  .param-row { grid-template-columns: 1fr 1fr; }\r
+}\r
+@media (max-width: 680px) {\r
+  .lab-topbar { padding: 12px 16px; }\r
+  .param-row { grid-template-columns: 1fr; }\r
+  .container { margin: 16px 12px 40px; box-shadow: 6px 6px 0 rgba(1,20,34,.55); }\r
+  .card { padding: 18px 16px; }\r
+}\r
+@media (prefers-reduced-motion: reduce) {\r
+  html { scroll-behavior: auto; }\r
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }\r
+}\r
+</style>\r
+</head>\r
+<body>\r
+<div class="lab-topbar">\r
+  <a class="lab-brand" href="#top" aria-label="AOI LAB 首页">\r
+    <span class="lab-brand-mark" aria-hidden="true">AOI</span>\r
+    <span class="lab-brand-name">AOI LAB</span>\r
+  </a>\r
+  <nav class="lab-breadcrumb" aria-label="面包屑">\r
+    <span>工具箱</span><span class="sep">/</span><span aria-current="page">相关性判断</span>\r
+  </nav>\r
+</div>\r
+\r
+<div class="container" id="top">\r
+  <!-- 按乘坐的诊断汇总条 -->\r
+  <div class="conclusion" id="multiSummaryBar">\r
+    <div class="main" id="multiSummaryMain">导入 Excel 文件后点击 [开始分析]</div>\r
+    <div class="detail" id="multiSummaryDetail">Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列</div>\r
+  </div>\r
+\r
+  <!-- 按项目名的补偿结论条（组合维度判定） -->\r
+  <div class="conclusion" id="globalSummaryBar">\r
+    <div class="main" id="globalSummaryMain">补偿建议：等待分析</div>\r
+    <div class="detail" id="globalSummaryDetail">规则：y = ax + b，优先只改补偿值 b（分辨率 a 不动）；同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b。判定看（乘坐 × 项目名）组合里全部点位对齐的个数。</div>\r
+  </div>\r
+\r
+  <!-- Excel 导入 -->\r
+  <div class="card">\r
+    <h2><span class="dot"></span>Excel 文件导入 <span class="badge">每个 sheet 一个乘坐</span></h2>\r
+    <div class="drop-hint" id="excelDropHint">\r
+      <span class="drop-icon" aria-hidden="true">📁</span>\r
+      拖拽 .xlsx 文件到这里，或点击选择文件\r
+      <span class="drop-sub">每个 sheet = 一个乘坐 · sheet 内 1#~10# = 10 个产品</span>\r
+    </div>\r
+    <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none" />\r
+    <div id="excelFileInfo" class="file-info muted">未加载文件</div>\r
+\r
+    <div class="param-row">\r
+      <div>\r
+        <label for="multiTolerance">容差（gap 上限）</label>\r
+        <input type="number" id="multiTolerance" value="0.015" min="0" step="0.001" />\r
+      </div>\r
+      <div>\r
+        <label for="multiTransformType">变换类型</label>\r
+        <select id="multiTransformType">\r
+          <option value="linear">线性拟合 y = ax + b（推荐）</option>\r
+          <option value="offset">固定 a=1（仅补偿 y = x + b）</option>\r
+          <option value="none">不变换（只看原始 gap）</option>\r
+        </select>\r
+      </div>\r
+      <div>\r
+        <label for="multiATol">分辨率缩放容差 |a−1|</label>\r
+        <input type="number" id="multiATol" value="0.1" min="0" step="0.001" />\r
+      </div>\r
+      <div>\r
+        <label for="multiCompTol">补偿值上限</label>\r
+        <input type="number" id="multiCompTol" value="0.03" min="0" step="0.001" />\r
+      </div>\r
+    </div>\r
+    <div class="scope-note">每个乘坐共用一个变换函数（该乘坐 10 个产品同一套 y = ax + b）；a 表示分辨率缩放（最好趋近 1），b 表示补偿值（尽量 ≤0.03）</div>\r
+\r
+    <div class="err" id="multiErr"></div>\r
+    <div class="btn-row">\r
+      <button class="btn-primary" id="multiAnalyzeBtn">▶ 开始分析</button>\r
+      <button class="btn-ghost" id="multiClearBtn">清空</button>\r
+    </div>\r
+  </div>\r
+\r
+  <!-- 比对结果：每个乘坐一个表格 -->\r
+  <div class="card">\r
+    <h2><span class="dot"></span>比对结果 <span class="badge" id="multiSummaryBadge">—</span></h2>\r
+    <div class="btn-row" style="margin:0 0 10px">\r
+      <button class="btn-ghost" id="multiExportCsv">导出 CSV</button>\r
+      <button class="btn-ghost" id="multiCopyTable">复制汇总表</button>\r
+      <button class="btn-ghost btn-ghost-sm" id="multiExpandAll">展开全部点位</button>\r
+      <button class="btn-ghost btn-ghost-sm" id="multiCollapseAll">收起全部点位</button>\r
+    </div>\r
+    <div id="multiResultContainer"></div>\r
+  </div>\r
+\r
+  <!-- 散点图弹窗 -->\r
+  <div class="modal-overlay" id="multiDetailCard">\r
+    <div class="modal-box">\r
+      <div class="modal-head">\r
+        <h3>散点图 · <span id="multiDetailName">—</span></h3>\r
+        <button class="modal-close" id="multiModalClose" type="button">✕</button>\r
+      </div>\r
+      <div class="charts">\r
+        <div>\r
+          <div class="chart-title">原始：测量值(CCD) → 标准值(QV)</div>\r
+          <div class="chart-box" id="multiChartRaw" style="height:340px"></div>\r
+        </div>\r
+        <div>\r
+          <div class="chart-title">变换后：校准值 → 标准值(QV)</div>\r
+          <div class="chart-box" id="multiChartFit" style="height:340px"></div>\r
+        </div>\r
+      </div>\r
+    </div>\r
+  </div>\r
+\r
+  <div class="footer">相关性判断 · 偏移校准 + 内点分析 · 数据不上传</div>\r
+</div>\r
+\r
+<script>\r
+'use strict';\r
+const $ = id => document.getElementById(id);\r
+\r
+/* ==================== 算法 ==================== */\r
+\r
+function fitLinear(xs, ys) {\r
+  const n = xs.length;\r
+  if (n < 2) throw new Error('至少需要 2 个数据点');\r
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;\r
+  for (let i = 0; i < n; i++) { sx += xs[i]; sy += ys[i]; sxy += xs[i]*ys[i]; sxx += xs[i]*xs[i]; }\r
+  const mx = sx/n, my = sy/n;\r
+  const denom = sxx - n*mx*mx;\r
+  const a = Math.abs(denom) < 1e-15 ? 0 : (sxy - n*mx*my)/denom;\r
+  const b = my - a*mx;\r
+  let st = 0, sr = 0;\r
+  for (let i = 0; i < n; i++) { const yh = a*xs[i]+b; sr += (ys[i]-yh)**2; st += (ys[i]-my)**2; }\r
+  const r2 = st < 1e-15 ? 1 : 1 - sr/st;\r
+  return { a, b, r2 };\r
+}\r
+\r
+function theilSen(xs, ys) {\r
+  const n = xs.length;\r
+  const slopes = [];\r
+  for (let i = 0; i < n; i++)\r
+    for (let j = i+1; j < n; j++) {\r
+      const dx = xs[j]-xs[i];\r
+      if (Math.abs(dx) < 1e-15) continue;\r
+      slopes.push((ys[j]-ys[i])/dx);\r
+    }\r
+  let a = 0;\r
+  if (slopes.length > 0) {\r
+    slopes.sort((p,q) => p-q);\r
+    a = slopes[Math.floor(slopes.length/2)];\r
+  }\r
+  const ints = xs.map((x,i) => ys[i]-a*x).sort((p,q)=>p-q);\r
+  const b = ints[Math.floor(ints.length/2)];\r
+  return { a, b };\r
+}\r
+\r
+function fmt(x) {\r
+  if (!isFinite(x)) return '0';\r
+  if (Math.abs(x) < 1e-10) return '0';\r
+  return Number(x.toPrecision(8)).toString();\r
+}\r
+\r
+// 格式化变换函数 y = a·x + b（正确处理负号、a=1 简化）\r
+function fmtFunc(a, b) {\r
+  const aPart = Math.abs(a - 1) < 1e-12 ? 'x' : \`\${Number(a.toFixed(4))}·x\`;\r
+  if (Math.abs(b) < 1e-12) return \`y = \${aPart}\`;\r
+  const bSign = b < 0 ? ' − ' : ' + ';\r
+  return \`y = \${aPart}\${bSign}\${Number(Math.abs(b).toFixed(4))}\`;\r
+}\r
+\r
+/* ==================== 图表 ==================== */\r
+\r
+function renderAlignmentChart(el, xs, ys, tol) {\r
+  const lo = Math.min(...xs, ...ys), hi = Math.max(...xs, ...ys);\r
+  const pad = (hi - lo) * 0.08 || 1;\r
+  const L = lo - pad, H = hi + pad;\r
+  const pass = [], fail = [];\r
+  for (let i = 0; i < xs.length; i++) {\r
+    if (Math.abs(xs[i]-ys[i]) <= tol) pass.push([xs[i], ys[i]]);\r
+    else fail.push([xs[i], ys[i]]);\r
+  }\r
+  const option = {\r
+    grid: { top: 30, left: 55, right: 20, bottom: 45 },\r
+    tooltip: { trigger: 'item', formatter: p => \`X=\${p.data[0]}<br/>Y=\${p.data[1]}\` },\r
+    xAxis: { type: 'value', name: 'X', min: L, max: H, scale: true },\r
+    yAxis: { type: 'value', name: 'Y', min: L, max: H, scale: true },\r
+    series: [\r
+      { name: '≤ 容差', type: 'scatter', data: pass, symbolSize: 8, itemStyle: { color: '#24D4D3', opacity: 0.85 } },\r
+      { name: '> 容差', type: 'scatter', data: fail, symbolSize: 10, itemStyle: { color: '#c0392b', borderColor: '#7a1f12', borderWidth: 1 } },\r
+      { name: 'y=x', type: 'line', data: [[L,L],[H,H]], showSymbol: false, lineStyle: { color: '#557a8a', width: 1, type: 'dashed' } }\r
+    ],\r
+    legend: { top: 0 }\r
+  };\r
+  el.setOption(option, true);\r
+}\r
+\r
+/* ==================== 多产品批量比对 ==================== */\r
+\r
+let multiSeats = null;      // 解析后的乘坐 [{name, products:[{name,meas,qv}]}]\r
+let multiResult = null;     // analyzeSeats 结果\r
+let multiChartRaw = null, multiChartFit = null;\r
+let multiSelectedIdx = -1;\r
+\r
+// 解析 Excel workbook → 乘坐列表\r
+// 真实结构：每个 sheet 一个乘坐；sheet 内 10 个产品（1#~10#）横向 3 个并排、纵向多块。\r
+// 每个产品块有表头行 "offest QV CCD CCD+ GAP"，只需 QV 列（标准值）和 CCD 列（测量值）。\r
+function parseWorkbook(wb) {\r
+  const seats = [];\r
+  wb.SheetNames.forEach(sheetName => {\r
+    const ws = wb.Sheets[sheetName];\r
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });\r
+    const products = [];\r
+    // 遍历所有单元格，找产品标签 "N#"（如 1#、2#…10#）\r
+    for (let r = 0; r < rows.length; r++) {\r
+      const row = rows[r] || [];\r
+      for (let c = 0; c < row.length; c++) {\r
+        const cell = row[c];\r
+        if (cell != null && /^\\d+#$/.test(String(cell).trim())) {\r
+          const name = String(cell).trim();\r
+          let qvCol = -1, ccdCol = -1, headerRow = -1;\r
+\r
+          // 模式1：标签同一行右边找 QV/CCD（新表格：N# QV CCD GAP 横向并排）\r
+          for (let cc = c + 1; cc < Math.min(c + 5, row.length); cc++) {\r
+            const s = String(row[cc] ?? '').trim();\r
+            if (s === 'QV' && qvCol < 0) qvCol = cc;\r
+            if (s === 'CCD' && ccdCol < 0) ccdCol = cc;\r
+            if (qvCol >= 0 && ccdCol >= 0) break;\r
+          }\r
+          if (qvCol >= 0 && ccdCol >= 0) headerRow = r;\r
+\r
+          // 模式2：标签下方几行找 QV/CCD（旧表格：表头在标签下方，精确匹配排除 "CCD+"）\r
+          if (headerRow < 0) {\r
+            for (let h = r + 1; h < Math.min(r + 6, rows.length); h++) {\r
+              const hrow = rows[h] || [];\r
+              for (let cc = c; cc < Math.min(c + 8, hrow.length); cc++) {\r
+                const s = String(hrow[cc] ?? '').trim();\r
+                if (s === 'QV' && qvCol < 0) qvCol = cc;\r
+                if (s === 'CCD' && ccdCol < 0) ccdCol = cc;\r
+              }\r
+              if (qvCol >= 0 && ccdCol >= 0) { headerRow = h; break; }\r
+            }\r
+          }\r
+\r
+          if (headerRow < 0) continue;\r
+          // 数据从表头行 +1 开始，遇到空单元格即停止\r
+          const meas = [], qv = [];\r
+          for (let d = headerRow + 1; d < rows.length; d++) {\r
+            const drow = rows[d] || [];\r
+            const rawM = drow[ccdCol], rawQ = drow[qvCol];\r
+            if (rawM == null || rawQ == null || rawM === '' || rawQ === '') break;\r
+            const m = Number(rawM), q = Number(rawQ);\r
+            if (isFinite(m) && isFinite(q)) { meas.push(m); qv.push(q); }\r
+            else break;\r
+          }\r
+          if (meas.length >= 2) products.push({ name, meas, qv });\r
+        }\r
+      }\r
+    }\r
+    seats.push({ name: sheetName, products });\r
+  });\r
+  return seats;\r
+}\r
+\r
+function median(arr) { const a = [...arr].sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; }\r
+\r
+// 稳健线性拟合 y = ax + b：Theil-Sen 初值 → 内点 OLS 细化\r
+function robustFit(xs, ys, tol) {\r
+  const ts = theilSen(xs, ys);\r
+  const thresh = Math.max(tol * 2, 0.02);\r
+  const ix = [], iy = [];\r
+  for (let i = 0; i < xs.length; i++) {\r
+    if (Math.abs(ts.a * xs[i] + ts.b - ys[i]) <= thresh) { ix.push(xs[i]); iy.push(ys[i]); }\r
+  }\r
+  if (ix.length >= 3) {\r
+    const o = fitLinear(ix, iy);\r
+    return { a: o.a, b: o.b };\r
+  }\r
+  return { a: ts.a, b: ts.b };\r
+}\r
+\r
+\r
+// 分析：每个乘坐一个统一变换函数（该乘坐 10 个产品共用一个 y=ax+b）\r
+// 物理含义：a = 分辨率缩放系数（最好趋近 1，但不强制）；b = 补偿值（尽量小）。\r
+// transformType: 'linear' 线性拟合 y=ax+b | 'offset' 固定 a=1 | 'none' 不变换\r
+function analyzeBySeat(seats, tol, transformType, compTol, aTol) {\r
+  seats.forEach(seat => {\r
+    // 达标门槛按本乘坐自己的产品数算（≥半数），不沿用其它乘坐的产品数\r
+    seat.nProds = seat.products.length;\r
+    seat.threshold = Math.ceil(seat.nProds * 0.5);\r
+\r
+    // 该乘坐唯一的变换函数\r
+    const allXs = [], allYs = [];\r
+    seat.products.forEach(p => { allXs.push(...p.meas); allYs.push(...p.qv); });\r
+    let a = 1, b = 0;\r
+    if (transformType === 'linear') {\r
+      const fit = robustFit(allXs, allYs, tol);\r
+      a = fit.a; b = fit.b;\r
+    } else if (transformType === 'offset') {\r
+      const allD = [];\r
+      seat.products.forEach(p => p.meas.forEach((m, i) => allD.push(p.qv[i] - m)));\r
+      b = median(allD);\r
+    }\r
+    seat.a = a; seat.b = b;\r
+    seat.aOk = Math.abs(a - 1) <= aTol;   // 分辨率缩放是否趋近 1\r
+    seat.compOk = Math.abs(b) <= compTol; // 补偿值是否在 ±compTol 内\r
+\r
+    // 用这个唯一函数评估每个产品\r
+    seat.products.forEach(p => {\r
+      const rawErrs = p.meas.map((m, i) => m - p.qv[i]);\r
+      p.rawFail = rawErrs.filter(e => Math.abs(e) > tol).length;\r
+      p.rawPass = p.rawFail === 0;\r
+      if (transformType === 'none') {\r
+        p.fitFail = p.rawFail; p.fitPass = p.rawPass;\r
+      } else {\r
+        const fitErrs = p.meas.map((m, i) => a * m + b - p.qv[i]);\r
+        p.fitFail = fitErrs.filter(e => Math.abs(e) > tol).length;\r
+        p.fitPass = p.fitFail === 0;\r
+      }\r
+    });\r
+\r
+    seat.rawOkCount = seat.products.filter(p => p.rawPass).length;\r
+    seat.fitOkCount = seat.products.filter(p => p.fitPass).length;\r
+\r
+    // 只有原始未达门槛的乘坐才需要变换（也因此才显示函数、显示变换后列）\r
+    seat.needTransform = transformType !== 'none' && seat.rawOkCount < seat.threshold;\r
+\r
+  });\r
+\r
+  // 展示用：各乘坐产品数一致时给确切门槛，不一致时只说"≥半数"\r
+  const thresholds = seats.map(s => s.threshold);\r
+  const uniformThreshold = thresholds.length && thresholds.every(t => t === thresholds[0]) ? thresholds[0] : null;\r
+\r
+  // 跨乘坐补偿方案：a 全局一个 + b 按项目名（同名跨乘坐一致），P2 单补作退路\r
+  const global = buildGlobalPlans(seats, tol);\r
+  return { seats, tol, transformType, compTol, aTol, uniformThreshold, global };\r
+}\r
+\r
+/* ==================== 跨乘坐补偿（最终口径） ====================\r
+   现场规则（用户 2026-09-07 明确）：\r
+   1) 分辨率缩放 a 一个测量程序只能有一个，不能按乘坐分别标定\r
+   2) 补偿值按「项目名」给：同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b；不同项目名各用各的\r
+   3) 调试顺序：优先只改补偿值 b（分辨率 a 不动）；只改 b 补不过来时才允许动 a（缩放）；\r
+      最后才退到「每个 乘坐×项目名 单独补」\r
+   4) 判定口径：(乘坐 × 项目名) 组合里，≥半数全部点位对齐才算达标\r
+   ============================================================= */\r
+\r
+// 给定分组（每组内部共用一个 b），求全局最优 a（aFixed 传数字则固定不动）：\r
+// 最小化「各组残差半带宽」的最大值。固定 a 时组内最优 b = 残差带中点。\r
+function fitGlobalA(groups, aFixed) {\r
+  const half = (pts, a) => {\r
+    let lo = Infinity, hi = -Infinity;\r
+    for (let i = 0; i < pts.length; i++) {\r
+      const r = pts[i][1] - a * pts[i][0];\r
+      if (r < lo) lo = r;\r
+      if (r > hi) hi = r;\r
+    }\r
+    return { mid: (lo + hi) / 2, half: (hi - lo) / 2 };\r
+  };\r
+  const obj = a => {\r
+    let w = 0;\r
+    for (let i = 0; i < groups.length; i++) {\r
+      const h = half(groups[i].pts, a).half;\r
+      if (h > w) w = h;\r
+    }\r
+    return w;\r
+  };\r
+  let a;\r
+  if (typeof aFixed === 'number') {\r
+    a = aFixed;\r
+  } else {\r
+    let bestA = 1, bestV = Infinity;\r
+    for (let x = 0.2; x <= 2.0001; x += 0.005) { const v = obj(x); if (v < bestV) { bestV = v; bestA = x; } }\r
+    let lo = bestA - 0.01, hi = bestA + 0.01;\r
+    for (let it = 0; it < 60; it++) {\r
+      const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3;\r
+      if (obj(m1) < obj(m2)) hi = m2; else lo = m1;\r
+    }\r
+    a = (lo + hi) / 2;\r
+  }\r
+  const bs = groups.map(g => {\r
+    const h = half(g.pts, a);\r
+    return { key: g.key, name: g.name, seat: g.seat, b: h.mid, half: h.half, n: g.pts.length };\r
+  });\r
+  return { a, bs, maxGap: obj(a) };\r
+}\r
+\r
+// 三级方案（按现场调试顺序，从"尽量不动 a"到"不得不动 a"）：\r
+//   plan1 只改补偿值：a 保持 1（不动分辨率），b 按项目名跨乘坐一致 —— 最省事，优先\r
+//   plan2 补偿 + 缩放：a 全局可调一个 + b 按项目名 —— 只改 b 补不过来时才需要\r
+//   plan3 单补：a 全局可调一个 + b 按 乘坐×项目名 分别给 —— 最后退路，填的数最多\r
+function buildGlobalPlans(seats, tol) {\r
+  const prodMap = new Map();\r
+  const combos = [];\r
+  seats.forEach(seat => {\r
+    seat.products.forEach(p => {\r
+      const pts = p.meas.map((m, i) => [m, p.qv[i]]);\r
+      combos.push({ key: seat.name + '||' + p.name, seat: seat.name, name: p.name, pts });\r
+      if (!prodMap.has(p.name)) prodMap.set(p.name, { key: p.name, name: p.name, seat: '', pts: [] });\r
+      prodMap.get(p.name).pts.push(...pts);\r
+    });\r
+  });\r
+  if (!combos.length) return null;\r
+\r
+  const groups = Array.from(prodMap.values());\r
+  const plan1raw = fitGlobalA(groups, 1.0);   // 不动分辨率\r
+  const plan2raw = fitGlobalA(groups);        // 全局调 a\r
+  const plan3raw = fitGlobalA(combos);        // 全局调 a + 单补\r
+\r
+  const aligned = (a, bOf) => combos.filter(c => {\r
+    const b = bOf(c);\r
+    return c.pts.every(pt => Math.abs(a * pt[0] + b - pt[1]) <= tol);\r
+  }).length;\r
+  const passRaw = combos.filter(c => c.pts.every(pt => Math.abs(pt[0] - pt[1]) <= tol)).length;\r
+\r
+  const bByProd = m => new Map(m.bs.map(x => [x.name, x.b]));\r
+  const bByCombo = m => new Map(m.bs.map(x => [x.key, x.b]));\r
+\r
+  const mk = (raw, bMap, useName) => ({ a: raw.a, bs: raw.bs, maxGap: raw.maxGap,\r
+    ok: raw.maxGap <= tol, pass: aligned(raw.a, c => (useName ? bMap.get(c.name) : bMap.get(c.key))) });\r
+\r
+  const plan1 = mk(plan1raw, bByProd(plan1raw), true);\r
+  const plan2 = mk(plan2raw, bByProd(plan2raw), true);\r
+  const plan3 = mk(plan3raw, bByCombo(plan3raw), false);\r
+\r
+  // 按现场原则推荐：只改 b 可行就先推 plan1，否则才允许动 a 的 plan2，最后 plan3\r
+  const recommend = plan1.ok ? 'plan1' : (plan2.ok ? 'plan2' : (plan3.ok ? 'plan3' : null));\r
+\r
+  return {\r
+    total: combos.length, threshold: Math.ceil(combos.length / 2), passRaw,\r
+    plan1, plan2, plan3, recommend\r
+  };\r
+}\r
+\r
+// 渲染补偿建议：现场原则「ax+b 里优先改 b，不要动 a」→ plan1 只补 b；plan2 补 b+调 a；plan3 单补+调 a\r
+function renderGlobalAdvice(g, result) {\r
+  const { tol } = result;\r
+  const num = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(4);\r
+  const times = v => (tol > 0 ? (v / tol).toFixed(1) : '—');\r
+\r
+  const META = {\r
+    plan1: {\r
+      t: '方案 1 · 只改补偿值 b',\r
+      d: '分辨率 a 不动（a = 1），只给补偿值；同一项目名（1#、端子TP）在所有乘坐上加同一个 b。现场优先试这个。',\r
+      aTxt: '',\r
+    },\r
+    plan2: {\r
+      t: '方案 2 · 补偿 b + 调分辨率 a',\r
+      d: '同一项目名跨乘坐加同一个 b；a 整套程序调成一个数。只改 b 补不过来时才需要动 a。',\r
+      aTxt: '',\r
+    },\r
+    plan3: {\r
+      t: '方案 3 · 单补 + 调分辨率 a',\r
+      d: '每个 乘坐×项目名 各给一个 b（现场填的数最多）；a 整套程序一个。最后的退路。',\r
+      aTxt: '',\r
+    },\r
+  };\r
+  const ORDER = ['plan1', 'plan2', 'plan3'];\r
+\r
+  const bTable = (lv, withSeat) => {\r
+    let s = \`<div class="advice-bwrap"><table class="advice-b"><thead><tr>\`\r
+      + (withSeat ? \`<th>乘坐</th>\` : '') + \`<th>项目名</th><th>补偿值 b</th><th>补偿后最大 gap</th><th>状态</th>\`\r
+      + \`</tr></thead><tbody>\`;\r
+    lv.bs.forEach(x => {\r
+      const ok = x.half <= tol;\r
+      s += \`<tr>\` + (withSeat ? \`<td class="sn">\${x.seat}</td>\` : '')\r
+        + \`<td>\${x.name}</td><td>\${num(x.b)}</td><td>\${x.half.toFixed(4)}</td>\`\r
+        + \`<td class="\${ok ? 'pt-ok' : 'pt-fail'}">\${ok ? '✓' : '✗'}</td></tr>\`;\r
+    });\r
+    return s + \`</tbody></table></div>\`;\r
+  };\r
+\r
+  const card = (key, withSeat, opts) => {\r
+    const lv = g[key], meta = META[key];\r
+    const isRec = g.recommend === key;\r
+    const tag = lv.ok ? \`<span class="tag ok">可行</span>\` : \`<span class="tag bad">无解</span>\`;\r
+    const rec = isRec ? \`<span class="tag ok">推荐</span>\` : '';\r
+    let s = \`<div class="advice-card \${lv.ok ? 'yes' : 'no'}">\`;\r
+    s += \`<div class="k">\${meta.t}\${tag}\${rec}</div>\`;\r
+    s += \`<div class="advice-note" style="margin-top:6px">\${meta.d}</div>\`;\r
+    if (opts.showA !== false) {\r
+      s += \`<div style="margin-top:8px"><span class="advice-val">a = \${lv.a.toFixed(4)}</span>\`\r
+        + \`<span class="muted" style="font-size:12px;margin-left:8px">\${lv.a === 1 ? '分辨率不动' : '分辨率要按这个数改'}</span></div>\`;\r
+    }\r
+    s += \`<div class="advice-note">\${lv.ok\r
+      ? \`最大 gap <b>\${lv.maxGap.toFixed(4)}</b> ≤ 容差 \${fmt(tol)}，对齐组合 <b>\${lv.pass}/\${g.total}</b>（门槛 \${g.threshold}）\`\r
+      : \`即使取最优值，最大 gap 仍有 <b>\${lv.maxGap.toFixed(4)}</b>，是容差 \${fmt(tol)} 的 <b>\${times(lv.maxGap)}</b> 倍\`}</div>\`;\r
+    s += bTable(lv, withSeat);\r
+    if (lv.ok) {\r
+      const all = lv.bs.map(x => (withSeat ? \`\${x.seat}\\t\` : '') + \`\${x.name}\\t\${x.b.toFixed(6)}\`).join('\\n');\r
+      s += \`<div class="advice-actions">\`;\r
+      if (opts.copyA) {\r
+        s += \`<button type="button" class="btn-ghost advice-copy" data-copy="\${encodeURIComponent(lv.a.toFixed(6))}">复制 a</button>\`;\r
+      }\r
+      s += \`<button type="button" class="btn-ghost advice-copy" data-copy="\${encodeURIComponent(all)}">复制全部补偿值（\${withSeat ? '乘坐、项目名、b' : '项目名、b'}）</button>\`\r
+        + \`</div>\`;\r
+    }\r
+    return s + \`</div>\`;\r
+  };\r
+\r
+  const summaryTag = key => {\r
+    const lv = g[key];\r
+    return (lv.ok ? '<span class="tag ok">可行</span>' : '<span class="tag bad">无解</span>')\r
+      + (g.recommend === key ? '<span class="tag ok">推荐</span>' : '');\r
+  };\r
+\r
+  let html = \`<div class="global-advice">\`;\r
+  html += \`<div class="advice-head">补偿建议 · 先改 b，不行再动 a\`\r
+    + \`<span class="muted">y = ax + b：现场优先只改补偿值 b（不动分辨率）；只改 b 补不过来，才去动 a（分辨率缩放）</span></div>\`;\r
+  html += \`<div class="advice-note">原始未补偿：<b>\${g.passRaw}/\${g.total}</b> 个（乘坐×项目名）组合全部点位对齐 · 达标门槛 <b>≥\${g.threshold}</b>\`\r
+    + \`　同一项目名在所有乘坐上加同一个 b。</div>\`;\r
+\r
+  // 方案 1 永远展开（最省事、优先）\r
+  html += \`<div class="advice-grid">\`;\r
+  html += card('plan1', false, { copyA: false });\r
+  html += \`</div>\`;\r
+\r
+  html += \`<details class="advice-alt" \${(g.recommend === 'plan2' || (g.recommend === 'plan3' && !g.plan1.ok)) ? 'open' : ''}>\`\r
+    + \`<summary>\${META.plan2.t}\${summaryTag('plan2')}</summary>\`;\r
+  html += card('plan2', false, { copyA: true });\r
+  html += \`</details>\`;\r
+\r
+  html += \`<details class="advice-alt" \${(g.recommend === 'plan3' || !g.recommend) ? 'open' : ''}>\`\r
+    + \`<summary>\${META.plan3.t}\${summaryTag('plan3')}</summary>\`;\r
+  html += card('plan3', true, { copyA: true });\r
+  html += \`</details>\`;\r
+\r
+  if (!g.recommend) {\r
+    html += \`<div class="advice-bn">三个方案都对不上：即使每个乘坐、每个项目名单独给补偿值并允许调分辨率，最大 gap 仍有 \`\r
+      + \`<b>\${g.plan3.maxGap.toFixed(4)}</b>（容差 \${fmt(tol)} 的 \${times(g.plan3.maxGap)} 倍）。\`\r
+      + \`这不是补偿能解决的，要排查测量系统本身：分辨率标定、镜头畸变、光源、装夹重复性。</div>\`;\r
+  }\r
+  html += \`</div>\`;\r
+  return html;\r
+}\r
+\r
+// 汇总统计条\r
+function renderMultiSummaryBar(result) {\r
+  const { seats, tol, transformType, uniformThreshold } = result;\r
+  const bar = $('multiSummaryBar');\r
+  const verdict = s => s.rawOkCount >= s.threshold ? 'pass' : (s.fitOkCount >= s.threshold ? 'warn' : 'fail');\r
+  const pass = seats.filter(s => verdict(s) === 'pass').length;\r
+  const warn = seats.filter(s => verdict(s) === 'warn').length;\r
+  const fail = seats.filter(s => verdict(s) === 'fail').length;\r
+\r
+  const goal = uniformThreshold != null ? \`≥\${uniformThreshold} 个产品\` : '≥半数产品';\r
+  let main, detail;\r
+  if (transformType === 'none') {\r
+    main = \`\${pass}/\${seats.length} 个乘坐原始达标（每乘坐 \${goal} gap ≤ \${tol}）\`;\r
+    detail = seats.map(s => \`\${s.name}：\${s.rawOkCount}/\${s.nProds} 个产品达标\`).join('，');\r
+  } else {\r
+    main = \`\${pass + warn}/\${seats.length} 个乘坐达标（\${pass} 无需变换，\${warn} 需变换，\${fail} 不达标）\`;\r
+    detail = \`按乘坐单独拟合仅供诊断。现场补偿以「补偿建议」为准：同一项目名跨乘坐加同一个 b，a 只填一个。\`;\r
+  }\r
+  const cls = fail > 0 ? (pass + warn > 0 ? 'warn' : 'fail') : (warn > 0 ? 'warn' : 'pass');\r
+  bar.className = 'conclusion ' + cls;\r
+  $('multiSummaryMain').textContent = main;\r
+  $('multiSummaryDetail').textContent = detail;\r
+  $('multiSummaryBadge').textContent = \`\${pass + warn} 达标 / \${seats.length} 乘坐\`;\r
+\r
+  // 补偿口径（组合维度）：(乘坐 × 项目名) 组合里全部点位对齐的个数\r
+  const g = result.global;\r
+  if (g) {\r
+    const NAME = { plan1: '只改补偿值 b', plan2: '补偿 b + 调 a', plan3: '单补 + 调 a' };\r
+    const bestKey = g.recommend || 'plan3';\r
+    const best = g[bestKey];\r
+    const okAll = best.pass >= g.threshold && best.ok;\r
+    const bar2 = $('globalSummaryBar');\r
+    if (bar2) {\r
+      bar2.className = 'conclusion ' + (okAll ? 'pass' : 'fail');\r
+      $('globalSummaryMain').textContent = okAll\r
+        ? \`补偿后：\${best.pass}/\${g.total} 个（乘坐×项目名）组合全部点位对齐（门槛 ≥\${g.threshold}）\`\r
+        : \`补偿后最多只能对齐 \${Math.max(g.plan1.pass, g.plan2.pass, g.plan3.pass)}/\${g.total} 个组合，未过门槛（≥\${g.threshold}）\`;\r
+      $('globalSummaryDetail').textContent = g.recommend\r
+        ? \`推荐方案 \${g.recommend === 'plan1' ? '1（只改 b）' : g.recommend === 'plan2' ? '2（b + 调 a）' : '3（单补）'}\`\r
+        + \`：a=\${best.a.toFixed(4)}，最大 gap \${best.maxGap.toFixed(4)}\`\r
+        : \`三个方案都对不上（单补 + 调 a 也需 \${g.plan3.maxGap.toFixed(4)} > \${fmt(result.tol)}），需排查测量系统本身\`;\r
+    }\r
+  }\r
+}\r
+\r
+// 渲染：每个乘坐一个表格，逐点展开每个产品的明细\r
+function renderMultiSummary(result) {\r
+  const container = $('multiResultContainer');\r
+  container.innerHTML = '';\r
+  const { seats, transformType, tol, global } = result;\r
+\r
+  // 补偿建议放在最上面：这才是现场能照着填的方案\r
+  if (global) container.insertAdjacentHTML('beforeend', renderGlobalAdvice(global, result));\r
+\r
+  seats.forEach((seat, si) => {\r
+    const block = document.createElement('div');\r
+    block.className = 'seat-block';\r
+\r
+    // 是否需要变换：本乘坐原始已达自身门槛就无需变换（不显示变换函数）\r
+    const needTransform = seat.needTransform;\r
+    const nProds = seat.nProds;\r
+    const threshold = seat.threshold;\r
+\r
+    // 乘坐标题\r
+    let html = \`<div class="seat-title">▎乘坐：\${seat.name}<span class="sub">\${nProds} 个产品</span></div>\`;\r
+\r
+    // 结论条：无需变换就不给函数；需变换才给函数\r
+    const aTag = seat.aOk\r
+      ? \`<span class="tag ok">缩放 a=\${Number(seat.a.toFixed(4))}（|a−1|=\${Number(Math.abs(seat.a - 1).toFixed(4))} ≤ \${fmt(result.aTol)} ✓）</span>\`\r
+      : \`<span class="tag bad">缩放 a=\${Number(seat.a.toFixed(4))}（|a−1|=\${Number(Math.abs(seat.a - 1).toFixed(4))} > \${fmt(result.aTol)} ✗）</span>\`;\r
+    const compTag = seat.compOk\r
+      ? \`<span class="tag ok">补偿 |b|=\${Number(Math.abs(seat.b).toFixed(4))} ≤ \${fmt(result.compTol)} ✓</span>\`\r
+      : \`<span class="tag bad">补偿 |b|=\${Number(Math.abs(seat.b).toFixed(4))} > \${fmt(result.compTol)} ✗</span>\`;\r
+\r
+    if (needTransform) {\r
+      const verdict = seat.fitOkCount >= threshold\r
+        ? \`<span class="tag warn">⚠️ 变换后 \${seat.fitOkCount}/\${nProds} 达标（≥\${threshold}）</span>\`\r
+        : \`<span class="tag bad">❌ 变换后仅 \${seat.fitOkCount}/\${nProds} 达标（&lt;\${threshold}）</span>\`;\r
+      html += \`<div class="seat-func">按乘坐拟合（仅供诊断）：<span class="formula-chip">\${fmtFunc(seat.a, seat.b)}</span>\${verdict}\${aTag}\${compTag}</div>\`;\r
+    } else if (transformType === 'none') {\r
+      const verdict = seat.rawOkCount >= threshold\r
+        ? \`<span class="tag ok">✅ 原始 \${seat.rawOkCount}/\${nProds} 达标</span>\`\r
+        : \`<span class="tag bad">❌ 原始仅 \${seat.rawOkCount}/\${nProds} 达标（&lt;\${threshold}）</span>\`;\r
+      html += \`<div class="seat-func">\${verdict}<span class="muted" style="font-size:12px">（未启用变换）</span></div>\`;\r
+    } else {\r
+      html += \`<div class="seat-func"><span class="tag ok">✅ 原始 \${seat.rawOkCount}/\${nProds} 达标，无需变换</span>\${aTag}\${compTag}</div>\`;\r
+    }\r
+\r
+    // 每乘坐的建议卡不再渲染：它给的是"每乘坐一个 b"，违反现场"同一产品跨乘坐一致"的约束，\r
+    // 会误导现场照着填。补偿值以页面顶部的「补偿建议」为准。\r
+\r
+    // 每个产品展开成逐点明细\r
+    seat.products.forEach((p, pi) => {\r
+      const rawGaps = p.meas.map((m, i) => m - p.qv[i]);\r
+      const rawMax = Math.max(...rawGaps.map(Math.abs));\r
+\r
+      // 产品状态\r
+      let statusText, statusCls;\r
+      if (p.rawPass) { statusText = '✅ 原始达标'; statusCls = 'ok'; }\r
+      else if (needTransform && p.fitPass) { statusText = '⚠️ 变换后达标'; statusCls = 'warn'; }\r
+      else { statusText = '❌ 不达标'; statusCls = 'bad'; }\r
+\r
+      const rawTag = p.rawPass\r
+        ? \`<span class="tag ok">原始 0 点超差</span>\`\r
+        : \`<span class="tag bad">原始 \${p.rawFail} 点超差</span> <span class="muted">(最大 \${rawMax.toFixed(4)})</span>\`;\r
+\r
+      let fitTag = '';\r
+      if (needTransform) {\r
+        const fitMax = Math.max(...p.meas.map((m, i) => Math.abs(seat.a * m + seat.b - p.qv[i])));\r
+        fitTag = p.fitPass\r
+          ? \`<span class="tag ok">变换后 0 点超差</span>\`\r
+          : \`<span class="tag bad">变换后 \${p.fitFail} 点超差</span> <span class="muted">(最大 \${fitMax.toFixed(4)})</span>\`;\r
+      }\r
+\r
+      html += \`<div class="prod-block">\`;\r
+      html += \`<div class="prod-head" data-si="\${si}" data-pi="\${pi}">\`;\r
+      html += \`<span class="arrow">▼</span><span>产品 \${p.name}</span>\${rawTag}\${fitTag}\`;\r
+      html += \`<span class="tag \${statusCls}">\${statusText}</span>\`;\r
+      html += \`<span class="link" data-chart="1" data-si="\${si}" data-pi="\${pi}">📊 查看散点图</span>\`;\r
+      html += \`</div>\`;\r
+\r
+      // 逐点明细表\r
+      html += \`<div class="prod-points"><table><thead><tr>\`;\r
+      html += \`<th>点#</th><th>标准值 QV</th><th>测量值 CCD</th><th>原始 gap</th><th>原始是否达标</th>\`;\r
+      if (needTransform) html += \`<th>变换后值</th><th>变换后 gap</th><th>变换后是否达标</th>\`;\r
+      html += \`</tr></thead><tbody>\`;\r
+\r
+      for (let i = 0; i < p.meas.length; i++) {\r
+        const rawGap = p.meas[i] - p.qv[i];\r
+        const rawOk = Math.abs(rawGap) <= tol;\r
+        let row = \`<tr>\`;\r
+        row += \`<td>\${i + 1}</td>\`;\r
+        row += \`<td>\${fmt(p.qv[i])}</td>\`;\r
+        row += \`<td>\${fmt(p.meas[i])}</td>\`;\r
+        row += \`<td class="\${rawOk ? 'pt-ok' : 'pt-fail-cell'}">\${rawGap >= 0 ? '+' : ''}\${fmt(rawGap)}</td>\`;\r
+        row += \`<td>\${rawOk ? '<span class="pt-ok">✓</span>' : '<span class="pt-fail">✗</span>'}</td>\`;\r
+        if (needTransform) {\r
+          const yh = seat.a * p.meas[i] + seat.b;\r
+          const fitGap = yh - p.qv[i];\r
+          const fitOk = Math.abs(fitGap) <= tol;\r
+          row += \`<td>\${fmt(yh)}</td>\`;\r
+          row += \`<td class="\${fitOk ? 'pt-ok' : 'pt-fail-cell'}">\${fitGap >= 0 ? '+' : ''}\${fmt(fitGap)}</td>\`;\r
+          row += \`<td>\${fitOk ? '<span class="pt-ok">✓</span>' : '<span class="pt-fail">✗</span>'}</td>\`;\r
+        }\r
+        row += \`</tr>\`;\r
+        html += row;\r
+      }\r
+      html += \`</tbody></table></div></div>\`;\r
+    });\r
+\r
+    block.innerHTML = html;\r
+    container.appendChild(block);\r
+\r
+    // 折叠/展开产品块\r
+    block.querySelectorAll('.prod-head').forEach(head => {\r
+      head.addEventListener('click', (e) => {\r
+        if (e.target.closest('.link')) return; // 点"查看散点图"不折叠\r
+        head.classList.toggle('collapsed');\r
+        const points = head.nextElementSibling;\r
+        if (points) points.style.display = head.classList.contains('collapsed') ? 'none' : '';\r
+      });\r
+    });\r
+\r
+    // 查看散点图\r
+    block.querySelectorAll('.link[data-chart]').forEach(link => {\r
+      link.addEventListener('click', (e) => {\r
+        e.stopPropagation();\r
+        showMultiDetail(Number(link.dataset.si), Number(link.dataset.pi));\r
+      });\r
+    });\r
+\r
+    // 复制补偿建议值（纯数字或"产品\\tb"表格文本，可直接粘贴）\r
+    block.querySelectorAll('.advice-copy').forEach(btn => {\r
+      btn.addEventListener('click', (e) => {\r
+        e.stopPropagation();\r
+        copyText(decodeURIComponent(btn.dataset.copy)).then(() => flashBtn(btn, '已复制 ✓'));\r
+      });\r
+    });\r
+  });\r
+\r
+  // 补偿建议卡里的复制按钮（它不在乘坐块内，单独绑）\r
+  container.querySelectorAll('.global-advice .advice-copy').forEach(btn => {\r
+    btn.addEventListener('click', (e) => {\r
+      e.stopPropagation();\r
+      copyText(decodeURIComponent(btn.dataset.copy)).then(() => flashBtn(btn, '已复制 ✓'));\r
+    });\r
+  });\r
+}\r
+\r
+// 详情：查看某产品在某乘坐的散点图 + 逐点明细\r
+function showMultiDetail(si, pi) {\r
+  const result = multiResult;\r
+  if (!result) return;\r
+  const seat = result.seats[si];\r
+  const p = seat && seat.products[pi];\r
+  if (!seat || !p) return;\r
+  multiSelectedIdx = pi;\r
+\r
+  const needTransform = !!seat.needTransform;\r
+  $('multiDetailName').textContent = \`\${seat.name} · \${p.name}\${needTransform ? \`（函数 \${fmtFunc(seat.a, seat.b)}）\` : '（无需变换）'}\`;\r
+  $('multiDetailCard').classList.add('show');\r
+\r
+  const tol = result.tol;\r
+  if (typeof echarts !== 'undefined') {\r
+    try {\r
+      if (!multiChartRaw) multiChartRaw = echarts.init($('multiChartRaw'));\r
+      if (!multiChartFit) multiChartFit = echarts.init($('multiChartFit'));\r
+      renderAlignmentChart(multiChartRaw, p.meas, p.qv, tol);\r
+      renderAlignmentChart(multiChartFit, p.meas.map(x => seat.a * x + seat.b), p.qv, tol);\r
+      // 弹窗刚显示，布局完成后强制 resize，确保图表正确渲染\r
+      setTimeout(() => { multiChartRaw && multiChartRaw.resize(); multiChartFit && multiChartFit.resize(); }, 60);\r
+    } catch (e) {\r
+      console.warn('散点图渲染失败:', e);\r
+    }\r
+  } else {\r
+    ['multiChartRaw', 'multiChartFit'].forEach(id => {\r
+      const el = $(id);\r
+      if (el) el.innerHTML = '<div style="padding:60px;text-align:center;color:#557a8a;font-size:13px">图表库未加载，不影响逐点数据查看</div>';\r
+    });\r
+  }\r
+}\r
+\r
+// 关闭散点图弹窗\r
+function closeMultiDetail() {\r
+  const card = $('multiDetailCard');\r
+  if (card) card.classList.remove('show');\r
+}\r
+$('multiModalClose').addEventListener('click', closeMultiDetail);\r
+$('multiDetailCard').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeMultiDetail(); });\r
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMultiDetail(); });\r
+\r
+function multiShowError(msg) { const el = $('multiErr'); el.textContent = '⚠ ' + msg; el.classList.add('show'); }\r
+function multiClearError() { $('multiErr').classList.remove('show'); }\r
+\r
+// 展开/收起全部点位\r
+function setAllPoints(collapsed) {\r
+  document.querySelectorAll('#multiResultContainer .prod-head').forEach(head => {\r
+    if (collapsed) head.classList.add('collapsed');\r
+    else head.classList.remove('collapsed');\r
+    const points = head.nextElementSibling;\r
+    if (points) points.style.display = collapsed ? 'none' : '';\r
+  });\r
+}\r
+$('multiExpandAll').addEventListener('click', () => setAllPoints(false));\r
+$('multiCollapseAll').addEventListener('click', () => setAllPoints(true));\r
+\r
+// 开始分析\r
+$('multiAnalyzeBtn').addEventListener('click', () => {\r
+  multiClearError();\r
+  try {\r
+    const tol = Number($('multiTolerance').value);\r
+    const transformType = $('multiTransformType').value;\r
+    const compTol = Number($('multiCompTol').value);\r
+    const aTol = Number($('multiATol').value);\r
+    if (!isFinite(tol) || tol < 0) throw new Error('容差需为非负数字');\r
+    if (!isFinite(compTol) || compTol < 0) throw new Error('补偿值上限需为非负数字');\r
+    if (!isFinite(aTol) || aTol < 0) throw new Error('分辨率缩放容差需为非负数字');\r
+    if (!multiSeats) throw new Error('请先导入 Excel 文件');\r
+    multiResult = analyzeBySeat(multiSeats, tol, transformType, compTol, aTol);\r
+    renderMultiSummaryBar(multiResult);\r
+    renderMultiSummary(multiResult);\r
+    closeMultiDetail();\r
+    multiSelectedIdx = -1;\r
+  } catch (e) { multiShowError(e.message); }\r
+});\r
+\r
+// Excel 文件导入\r
+function loadExcelFile(file) {\r
+  if (!file) return;\r
+  if (typeof XLSX === 'undefined') { alert('Excel 解析库加载失败，请检查网络后刷新重试'); return; }\r
+  const reader = new FileReader();\r
+  reader.onload = () => {\r
+    try {\r
+      const data = new Uint8Array(reader.result);\r
+      const wb = XLSX.read(data, { type: 'array' });\r
+      const seats = parseWorkbook(wb);\r
+      const totalProds = seats.reduce((s, x) => s + x.products.length, 0);\r
+      if (totalProds === 0) throw new Error('未在 Excel 中找到 CCD/QV 列');\r
+      multiSeats = seats;\r
+      const seatInfo = seats.map(s => \`\${s.name}(\${s.products.length}产品)\`).join('、');\r
+      $('excelFileInfo').textContent = \`已加载 \${file.name}：\${seats.length} 个乘坐 → \${seatInfo}\`;\r
+      $('excelFileInfo').style.color = 'var(--success)';\r
+    } catch (e) {\r
+      multiShowError(e.message);\r
+    }\r
+  };\r
+  reader.readAsArrayBuffer(file);\r
+}\r
+\r
+const excelDrop = $('excelDropHint');\r
+excelDrop.addEventListener('click', () => $('excelFileInput').click());\r
+excelDrop.addEventListener('dragover', (e) => { e.preventDefault(); excelDrop.classList.add('dragover'); });\r
+excelDrop.addEventListener('dragleave', () => excelDrop.classList.remove('dragover'));\r
+excelDrop.addEventListener('drop', (e) => {\r
+  e.preventDefault(); excelDrop.classList.remove('dragover');\r
+  loadExcelFile(e.dataTransfer.files[0]);\r
+});\r
+$('excelFileInput').addEventListener('change', (e) => { loadExcelFile(e.target.files[0]); e.target.value = ''; });\r
+\r
+// 清空\r
+$('multiClearBtn').addEventListener('click', () => {\r
+  $('multiResultContainer').innerHTML = '';\r
+  $('multiSummaryBadge').textContent = '—';\r
+  closeMultiDetail();\r
+  $('excelFileInfo').textContent = '未加载文件';\r
+  $('excelFileInfo').style.color = '';\r
+  const bar = $('multiSummaryBar');\r
+  bar.className = 'conclusion';\r
+  $('multiSummaryMain').textContent = '导入 Excel 文件后点击 [开始分析]';\r
+  $('multiSummaryDetail').textContent = 'Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列';\r
+  const gbar = $('globalSummaryBar');\r
+  gbar.className = 'conclusion';\r
+  $('globalSummaryMain').textContent = '补偿建议：等待分析';\r
+  $('globalSummaryDetail').textContent = '规则：y = ax + b，优先只改补偿值 b（分辨率 a 不动）；同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b。判定看（乘坐 × 项目名）组合里全部点位对齐的个数。';\r
+  multiClearError();\r
+  multiSeats = null; multiResult = null; multiSelectedIdx = -1;\r
+});\r
+\r
+// 导出 CSV（含每个产品的每个检测点明细）\r
+$('multiExportCsv').addEventListener('click', () => {\r
+  if (!multiResult) { alert('请先完成分析'); return; }\r
+  const { seats, tol, compTol, aTol } = multiResult;\r
+  const lines = ['乘坐,产品,变换函数,分辨率缩放a,缩放是否达标,补偿b,补偿是否达标,原始结果,变换后结果'];\r
+  seats.forEach(seat => {\r
+    const needTransform = seat.needTransform;\r
+    const func = needTransform ? fmtFunc(seat.a, seat.b) : '无需变换';\r
+    const aOk = seat.aOk ? '达标' : '超限';\r
+    const compOk = seat.compOk ? '达标' : '超限';\r
+    lines.push(\`\${seat.name},全部,\${func},\${fmt(seat.a)},\${aOk},\${fmt(seat.b)},\${compOk},\${seat.rawOkCount}/\${seat.nProds} 产品达标,\${seat.fitOkCount}/\${seat.nProds} 产品达标\`);\r
+    seat.products.forEach(p => {\r
+      const rawTxt = p.rawPass ? '✓全部达标' : \`✗\${p.rawFail}点超差\`;\r
+      const fitTxt = needTransform ? (p.fitPass ? '✓全部达标' : \`✗\${p.fitFail}点超差\`) : '—';\r
+      lines.push(\`\${seat.name},\${p.name},\${func},\${fmt(seat.a)},\${aOk},\${fmt(seat.b)},\${compOk},\${rawTxt},\${fitTxt}\`);\r
+    });\r
+  });\r
+\r
+  // 补偿建议（现场照填用）：三个方案摘要 + 推荐方案的值表\r
+  const g = multiResult.global;\r
+  if (g) {\r
+    const PNAME = { plan1: '只改补偿值 b', plan2: '补偿 b + 调分辨率 a', plan3: '单补 + 调分辨率 a' };\r
+    lines.push('');\r
+    lines.push('【补偿建议】y = ax + b：优先只改 b（不动分辨率）；同一项目名在所有乘坐上加同一个 b');\r
+    lines.push(\`判定口径,\${g.total} 个(乘坐×项目名)组合,达标门槛 ≥\${g.threshold},原始对齐 \${g.passRaw}/\${g.total}\`);\r
+    ['plan1', 'plan2', 'plan3'].forEach(k => {\r
+      const lv = g[k];\r
+      lines.push(\`方案\${k === 'plan1' ? '1' : k === 'plan2' ? '2' : '3'} \${PNAME[k]},\${lv.ok ? '可行' : '无解'},a=\${fmt(lv.a)},最大gap=\${lv.maxGap.toFixed(4)},对齐 \${lv.pass}/\${g.total}\`);\r
+    });\r
+    const rec = g.recommend;\r
+    if (rec) {\r
+      const lv = g[rec];\r
+      const n = rec === 'plan1' ? '1' : rec === 'plan2' ? '2' : '3';\r
+      lines.push('');\r
+      lines.push(\`【推荐方案 \${n} · \${PNAME[rec]} 的值】\`);\r
+      lines.push(\`a,\${fmt(lv.a)}\`);\r
+      lines.push(rec === 'plan3' ? \`乘坐,项目名,补偿值 b\` : \`项目名,补偿值 b\`);\r
+      lv.bs.forEach(x => lines.push(rec === 'plan3' ? \`\${x.seat},\${x.name},\${fmt(x.b)}\` : \`\${x.name},\${fmt(x.b)}\`));\r
+    }\r
+  }\r
+\r
+  lines.push('');\r
+  lines.push('逐点明细');\r
+  lines.push(\`gap容差,\${tol}\`);\r
+  lines.push(\`分辨率缩放容差|a-1|,\${aTol}\`);\r
+  lines.push(\`补偿值上限,\${compTol}\`);\r
+  seats.forEach(seat => {\r
+    const needTransform = seat.needTransform;\r
+    // 每个乘坐单独一行表头：各乘坐是否启用变换可能不同，共用表头会导致列数错位\r
+    lines.push('');\r
+    lines.push(\`乘坐,\${seat.name},（\${needTransform ? '含变换后列' : '未启用变换'}）\`);\r
+    lines.push(pointDetailHeader(needTransform));\r
+    seat.products.forEach(p => {\r
+      p.meas.forEach((m, i) => {\r
+        const rawGap = m - p.qv[i];\r
+        const rawOk = Math.abs(rawGap) <= tol;\r
+        let row = \`\${seat.name},\${p.name},\${i + 1},\${p.qv[i]},\${m},\${rawGap},\${rawOk ? '达标' : '超差'}\`;\r
+        if (needTransform) {\r
+          const yh = seat.a * m + seat.b;\r
+          const fitGap = yh - p.qv[i];\r
+          const fitOk = Math.abs(fitGap) <= tol;\r
+          row += \`,\${yh},\${fitGap},\${fitOk ? '达标' : '超差'}\`;\r
+        }\r
+        lines.push(row);\r
+      });\r
+    });\r
+  });\r
+  const csv = lines.join('\\n');\r
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });\r
+  const url = URL.createObjectURL(blob);\r
+  const aEl = document.createElement('a');\r
+  aEl.href = url;\r
+  aEl.download = \`乘坐比对_\${new Date().toISOString().slice(0, 10)}.csv\`;\r
+  aEl.click();\r
+  URL.revokeObjectURL(url);\r
+});\r
+\r
+// 逐点明细表头：按该乘坐是否启用变换决定列数（各乘坐独立，避免列错位）\r
+function pointDetailHeader(needTransform) {\r
+  return needTransform\r
+    ? '乘坐,产品,点#,标准值QV,测量值CCD,原始gap,原始是否达标,变换后值,变换后gap,变换后是否达标'\r
+    : '乘坐,产品,点#,标准值QV,测量值CCD,原始gap,原始是否达标';\r
+}\r
+\r
+// 复制汇总表（每个乘坐一个函数）\r
+$('multiCopyTable').addEventListener('click', () => {\r
+  if (!multiResult) { alert('请先完成分析'); return; }\r
+  const { seats, compTol, aTol } = multiResult;\r
+  const lines = [];\r
+  seats.forEach(seat => {\r
+    const needTransform = seat.needTransform;\r
+    const threshold = seat.threshold;\r
+    const func = needTransform ? fmtFunc(seat.a, seat.b) : '无需变换';\r
+    const aInfo = \`缩放 a=\${fmt(seat.a)}（|a−1|=\${fmt(Math.abs(seat.a - 1))} \${seat.aOk ? '≤' : '>'}\${fmt(aTol)} \${seat.aOk ? '✓' : '✗'}）\`;\r
+    const compInfo = \`补偿 b=\${seat.b >= 0 ? '+' : ''}\${fmt(seat.b)}（\${seat.compOk ? '≤' : '>'}\${fmt(compTol)} \${seat.compOk ? '✓' : '✗'}）\`;\r
+    lines.push(\`\${seat.name}\\t\${needTransform ? '统一函数：' + func : '无需变换'}\\t\${aInfo}，\${compInfo}\\t原始 \${seat.rawOkCount}/\${seat.nProds} 达标 → 变换后 \${seat.fitOkCount}/\${seat.nProds}（目标≥\${threshold}）\`);\r
+    lines.push('产品\\t原始 gap\\t变换后 gap\\t结果');\r
+    seat.products.forEach(p => {\r
+      const res = p.rawPass ? '原始达标' : (needTransform && p.fitPass ? '变换后达标' : '不达标');\r
+      lines.push(\`\${p.name}\\t\${p.rawPass ? '✓全部' : '✗' + p.rawFail + '点'}\\t\${needTransform ? (p.fitPass ? '✓全部' : '✗' + p.fitFail + '点') : '—'}\\t\${res}\`);\r
+    });\r
+    lines.push('');\r
+  });\r
+  copyText(lines.join('\\n')).then(() => flashBtn($('multiCopyTable'), '已复制 ✓'));\r
+});\r
+\r
+function copyText(text) {\r
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);\r
+  const ta = document.createElement('textarea');\r
+  ta.value = text; document.body.appendChild(ta); ta.select();\r
+  try { document.execCommand('copy'); } catch(e) {}\r
+  document.body.removeChild(ta);\r
+  return Promise.resolve();\r
+}\r
+\r
+function flashBtn(btn, txt) {\r
+  const o = btn.textContent;\r
+  btn.textContent = txt;\r
+  setTimeout(() => btn.textContent = o, 1500);\r
+}\r
+<\/script>\r
+</body>\r
+</html>\r
 `,m6e=`
 :host { display:block; width:100%; min-width:0; color:var(--ink); }
 .correlation-embed { min-width:0; color:var(--ink); font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; }
