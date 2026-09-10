@@ -198,6 +198,35 @@ td.mono { font-family: var(--mono); }
 .seat-block td { padding: 8px 12px; border-bottom: 1px solid #08304f1f; }
 .formula-chip { display: inline-block; background: var(--ink); color: var(--cream); font-family: var(--mono); font-size: 12px; padding: 3px 10px; border: 2px solid var(--ink); }
 
+/* ─── 补偿建议 ─── */
+.advice-head { font: 800 .75rem/1 var(--mono); color: var(--ink); letter-spacing: .04em; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.advice-head .muted { font-family: var(--sans); font-weight: 500; font-size: 12px; letter-spacing: 0; }
+.advice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.advice-card { border: 2px solid var(--ink); background: #fffdf5; box-shadow: 3px 3px 0 var(--cyan); padding: 12px 14px; }
+.advice-card.no { box-shadow: 3px 3px 0 var(--danger); }
+.advice-card.yes { box-shadow: 3px 3px 0 var(--cyan); }
+.advice-card .k { font: 800 .74rem/1 var(--mono); color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.advice-val { font-family: var(--mono); font-size: 15px; font-weight: 800; color: var(--ink); background: var(--cyan-soft); border: 1px solid var(--ink); padding: 3px 10px; display: inline-block; margin-top: 8px; }
+.advice-note { font-size: 12px; color: #4e6b7a; line-height: 1.6; margin-top: 8px; }
+.advice-note b { color: var(--ink); }
+.advice-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.advice-bn { margin-top: 10px; font-size: 12px; color: #4e6b7a; line-height: 1.7; border-left: 4px solid var(--orange); background: #08304f0a; padding: 8px 12px; }
+.advice-bn .pt { font-family: var(--mono); color: #a3331f; font-weight: 700; }
+@media (max-width: 980px) { .advice-grid { grid-template-columns: 1fr; } }
+
+/* ─── 补偿建议（按项目名，跨乘坐） ─── */
+.global-advice { border: 3px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 var(--cyan); padding: 14px 16px; margin-bottom: 18px; }
+.global-advice .advice-head { font-size: .82rem; }
+.advice-bwrap { margin-top: 10px; max-height: 280px; overflow-y: auto; border: 2px solid var(--ink); }
+.advice-b { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.advice-b th { position: sticky; top: 0; z-index: 1; background: var(--cyan-soft); color: var(--ink); font: 800 11.5px/1 var(--mono); text-align: left; padding: 7px 10px; border-bottom: 2px solid var(--ink); white-space: nowrap; }
+.advice-b td { padding: 5px 10px; border-bottom: 1px solid #08304f14; font-family: var(--mono); white-space: nowrap; }
+.advice-b td:first-child, .advice-b td.sn { font-family: var(--sans); }
+.advice-b tr:hover td { background: #f1f8f6; }
+details.advice-alt { margin-top: 12px; }
+details.advice-alt > summary { cursor: pointer; font: 800 .78rem/1 var(--mono); color: var(--ink); padding: 8px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+details.advice-alt > summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+
 /* ─── 产品块（每个产品展开逐点明细） ─── */
 .prod-block { border-top: 2px solid var(--ink); }
 .prod-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; cursor: pointer; user-select: none; font-weight: 700; font-size: 13px; background: #fffdf5; }
@@ -254,10 +283,16 @@ td.mono { font-family: var(--mono); }
 </div>
 
 <div class="container" id="top">
-  <!-- 汇总统计条 -->
+  <!-- 按乘坐的诊断汇总条 -->
   <div class="conclusion" id="multiSummaryBar">
     <div class="main" id="multiSummaryMain">导入 Excel 文件后点击 [开始分析]</div>
     <div class="detail" id="multiSummaryDetail">Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列</div>
+  </div>
+
+  <!-- 按项目名的补偿结论条（组合维度判定） -->
+  <div class="conclusion" id="globalSummaryBar">
+    <div class="main" id="globalSummaryMain">补偿建议：等待分析</div>
+    <div class="detail" id="globalSummaryDetail">规则：y = ax + b，优先只改补偿值 b（分辨率 a 不动）；同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b。判定看（乘坐 × 项目名）组合里全部点位对齐的个数。</div>
   </div>
 
   <!-- Excel 导入 -->
@@ -501,18 +536,21 @@ function robustFit(xs, ys, tol) {
   return { a: ts.a, b: ts.b };
 }
 
+
 // 分析：每个乘坐一个统一变换函数（该乘坐 10 个产品共用一个 y=ax+b）
 // 物理含义：a = 分辨率缩放系数（最好趋近 1，但不强制）；b = 补偿值（尽量小）。
 // transformType: 'linear' 线性拟合 y=ax+b | 'offset' 固定 a=1 | 'none' 不变换
 function analyzeBySeat(seats, tol, transformType, compTol, aTol) {
   seats.forEach(seat => {
-    const nProds = seat.products.length;
+    // 达标门槛按本乘坐自己的产品数算（≥半数），不沿用其它乘坐的产品数
+    seat.nProds = seat.products.length;
+    seat.threshold = Math.ceil(seat.nProds * 0.5);
 
     // 该乘坐唯一的变换函数
+    const allXs = [], allYs = [];
+    seat.products.forEach(p => { allXs.push(...p.meas); allYs.push(...p.qv); });
     let a = 1, b = 0;
     if (transformType === 'linear') {
-      const allXs = [], allYs = [];
-      seat.products.forEach(p => { allXs.push(...p.meas); allYs.push(...p.qv); });
       const fit = robustFit(allXs, allYs, tol);
       a = fit.a; b = fit.b;
     } else if (transformType === 'offset') {
@@ -540,48 +578,281 @@ function analyzeBySeat(seats, tol, transformType, compTol, aTol) {
 
     seat.rawOkCount = seat.products.filter(p => p.rawPass).length;
     seat.fitOkCount = seat.products.filter(p => p.fitPass).length;
+
+    // 只有原始未达门槛的乘坐才需要变换（也因此才显示函数、显示变换后列）
+    seat.needTransform = transformType !== 'none' && seat.rawOkCount < seat.threshold;
+
   });
 
-  const nProds = seats.length ? seats[0].products.length : 10;
-  return { seats, tol, transformType, compTol, aTol, threshold: Math.ceil(nProds * 0.5), nProds };
+  // 展示用：各乘坐产品数一致时给确切门槛，不一致时只说"≥半数"
+  const thresholds = seats.map(s => s.threshold);
+  const uniformThreshold = thresholds.length && thresholds.every(t => t === thresholds[0]) ? thresholds[0] : null;
+
+  // 跨乘坐补偿方案：a 全局一个 + b 按项目名（同名跨乘坐一致），P2 单补作退路
+  const global = buildGlobalPlans(seats, tol);
+  return { seats, tol, transformType, compTol, aTol, uniformThreshold, global };
+}
+
+/* ==================== 跨乘坐补偿（最终口径） ====================
+   现场规则（用户 2026-09-07 明确）：
+   1) 分辨率缩放 a 一个测量程序只能有一个，不能按乘坐分别标定
+   2) 补偿值按「项目名」给：同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b；不同项目名各用各的
+   3) 调试顺序：优先只改补偿值 b（分辨率 a 不动）；只改 b 补不过来时才允许动 a（缩放）；
+      最后才退到「每个 乘坐×项目名 单独补」
+   4) 判定口径：(乘坐 × 项目名) 组合里，≥半数全部点位对齐才算达标
+   ============================================================= */
+
+// 给定分组（每组内部共用一个 b），求全局最优 a（aFixed 传数字则固定不动）：
+// 最小化「各组残差半带宽」的最大值。固定 a 时组内最优 b = 残差带中点。
+function fitGlobalA(groups, aFixed) {
+  const half = (pts, a) => {
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const r = pts[i][1] - a * pts[i][0];
+      if (r < lo) lo = r;
+      if (r > hi) hi = r;
+    }
+    return { mid: (lo + hi) / 2, half: (hi - lo) / 2 };
+  };
+  const obj = a => {
+    let w = 0;
+    for (let i = 0; i < groups.length; i++) {
+      const h = half(groups[i].pts, a).half;
+      if (h > w) w = h;
+    }
+    return w;
+  };
+  let a;
+  if (typeof aFixed === 'number') {
+    a = aFixed;
+  } else {
+    let bestA = 1, bestV = Infinity;
+    for (let x = 0.2; x <= 2.0001; x += 0.005) { const v = obj(x); if (v < bestV) { bestV = v; bestA = x; } }
+    let lo = bestA - 0.01, hi = bestA + 0.01;
+    for (let it = 0; it < 60; it++) {
+      const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3;
+      if (obj(m1) < obj(m2)) hi = m2; else lo = m1;
+    }
+    a = (lo + hi) / 2;
+  }
+  const bs = groups.map(g => {
+    const h = half(g.pts, a);
+    return { key: g.key, name: g.name, seat: g.seat, b: h.mid, half: h.half, n: g.pts.length };
+  });
+  return { a, bs, maxGap: obj(a) };
+}
+
+// 三级方案（按现场调试顺序，从"尽量不动 a"到"不得不动 a"）：
+//   plan1 只改补偿值：a 保持 1（不动分辨率），b 按项目名跨乘坐一致 —— 最省事，优先
+//   plan2 补偿 + 缩放：a 全局可调一个 + b 按项目名 —— 只改 b 补不过来时才需要
+//   plan3 单补：a 全局可调一个 + b 按 乘坐×项目名 分别给 —— 最后退路，填的数最多
+function buildGlobalPlans(seats, tol) {
+  const prodMap = new Map();
+  const combos = [];
+  seats.forEach(seat => {
+    seat.products.forEach(p => {
+      const pts = p.meas.map((m, i) => [m, p.qv[i]]);
+      combos.push({ key: seat.name + '||' + p.name, seat: seat.name, name: p.name, pts });
+      if (!prodMap.has(p.name)) prodMap.set(p.name, { key: p.name, name: p.name, seat: '', pts: [] });
+      prodMap.get(p.name).pts.push(...pts);
+    });
+  });
+  if (!combos.length) return null;
+
+  const groups = Array.from(prodMap.values());
+  const plan1raw = fitGlobalA(groups, 1.0);   // 不动分辨率
+  const plan2raw = fitGlobalA(groups);        // 全局调 a
+  const plan3raw = fitGlobalA(combos);        // 全局调 a + 单补
+
+  const aligned = (a, bOf) => combos.filter(c => {
+    const b = bOf(c);
+    return c.pts.every(pt => Math.abs(a * pt[0] + b - pt[1]) <= tol);
+  }).length;
+  const passRaw = combos.filter(c => c.pts.every(pt => Math.abs(pt[0] - pt[1]) <= tol)).length;
+
+  const bByProd = m => new Map(m.bs.map(x => [x.name, x.b]));
+  const bByCombo = m => new Map(m.bs.map(x => [x.key, x.b]));
+
+  const mk = (raw, bMap, useName) => ({ a: raw.a, bs: raw.bs, maxGap: raw.maxGap,
+    ok: raw.maxGap <= tol, pass: aligned(raw.a, c => (useName ? bMap.get(c.name) : bMap.get(c.key))) });
+
+  const plan1 = mk(plan1raw, bByProd(plan1raw), true);
+  const plan2 = mk(plan2raw, bByProd(plan2raw), true);
+  const plan3 = mk(plan3raw, bByCombo(plan3raw), false);
+
+  // 按现场原则推荐：只改 b 可行就先推 plan1，否则才允许动 a 的 plan2，最后 plan3
+  const recommend = plan1.ok ? 'plan1' : (plan2.ok ? 'plan2' : (plan3.ok ? 'plan3' : null));
+
+  return {
+    total: combos.length, threshold: Math.ceil(combos.length / 2), passRaw,
+    plan1, plan2, plan3, recommend
+  };
+}
+
+// 渲染补偿建议：现场原则「ax+b 里优先改 b，不要动 a」→ plan1 只补 b；plan2 补 b+调 a；plan3 单补+调 a
+function renderGlobalAdvice(g, result) {
+  const { tol } = result;
+  const num = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(4);
+  const times = v => (tol > 0 ? (v / tol).toFixed(1) : '—');
+
+  const META = {
+    plan1: {
+      t: '方案 1 · 只改补偿值 b',
+      d: '分辨率 a 不动（a = 1），只给补偿值；同一项目名（1#、端子TP）在所有乘坐上加同一个 b。现场优先试这个。',
+      aTxt: '',
+    },
+    plan2: {
+      t: '方案 2 · 补偿 b + 调分辨率 a',
+      d: '同一项目名跨乘坐加同一个 b；a 整套程序调成一个数。只改 b 补不过来时才需要动 a。',
+      aTxt: '',
+    },
+    plan3: {
+      t: '方案 3 · 单补 + 调分辨率 a',
+      d: '每个 乘坐×项目名 各给一个 b（现场填的数最多）；a 整套程序一个。最后的退路。',
+      aTxt: '',
+    },
+  };
+  const ORDER = ['plan1', 'plan2', 'plan3'];
+
+  const bTable = (lv, withSeat) => {
+    let s = `<div class="advice-bwrap"><table class="advice-b"><thead><tr>`
+      + (withSeat ? `<th>乘坐</th>` : '') + `<th>项目名</th><th>补偿值 b</th><th>补偿后最大 gap</th><th>状态</th>`
+      + `</tr></thead><tbody>`;
+    lv.bs.forEach(x => {
+      const ok = x.half <= tol;
+      s += `<tr>` + (withSeat ? `<td class="sn">${x.seat}</td>` : '')
+        + `<td>${x.name}</td><td>${num(x.b)}</td><td>${x.half.toFixed(4)}</td>`
+        + `<td class="${ok ? 'pt-ok' : 'pt-fail'}">${ok ? '✓' : '✗'}</td></tr>`;
+    });
+    return s + `</tbody></table></div>`;
+  };
+
+  const card = (key, withSeat, opts) => {
+    const lv = g[key], meta = META[key];
+    const isRec = g.recommend === key;
+    const tag = lv.ok ? `<span class="tag ok">可行</span>` : `<span class="tag bad">无解</span>`;
+    const rec = isRec ? `<span class="tag ok">推荐</span>` : '';
+    let s = `<div class="advice-card ${lv.ok ? 'yes' : 'no'}">`;
+    s += `<div class="k">${meta.t}${tag}${rec}</div>`;
+    s += `<div class="advice-note" style="margin-top:6px">${meta.d}</div>`;
+    if (opts.showA !== false) {
+      s += `<div style="margin-top:8px"><span class="advice-val">a = ${lv.a.toFixed(4)}</span>`
+        + `<span class="muted" style="font-size:12px;margin-left:8px">${lv.a === 1 ? '分辨率不动' : '分辨率要按这个数改'}</span></div>`;
+    }
+    s += `<div class="advice-note">${lv.ok
+      ? `最大 gap <b>${lv.maxGap.toFixed(4)}</b> ≤ 容差 ${fmt(tol)}，对齐组合 <b>${lv.pass}/${g.total}</b>（门槛 ${g.threshold}）`
+      : `即使取最优值，最大 gap 仍有 <b>${lv.maxGap.toFixed(4)}</b>，是容差 ${fmt(tol)} 的 <b>${times(lv.maxGap)}</b> 倍`}</div>`;
+    s += bTable(lv, withSeat);
+    if (lv.ok) {
+      const all = lv.bs.map(x => (withSeat ? `${x.seat}\t` : '') + `${x.name}\t${x.b.toFixed(6)}`).join('\n');
+      s += `<div class="advice-actions">`;
+      if (opts.copyA) {
+        s += `<button type="button" class="btn-ghost advice-copy" data-copy="${encodeURIComponent(lv.a.toFixed(6))}">复制 a</button>`;
+      }
+      s += `<button type="button" class="btn-ghost advice-copy" data-copy="${encodeURIComponent(all)}">复制全部补偿值（${withSeat ? '乘坐、项目名、b' : '项目名、b'}）</button>`
+        + `</div>`;
+    }
+    return s + `</div>`;
+  };
+
+  const summaryTag = key => {
+    const lv = g[key];
+    return (lv.ok ? '<span class="tag ok">可行</span>' : '<span class="tag bad">无解</span>')
+      + (g.recommend === key ? '<span class="tag ok">推荐</span>' : '');
+  };
+
+  let html = `<div class="global-advice">`;
+  html += `<div class="advice-head">补偿建议 · 先改 b，不行再动 a`
+    + `<span class="muted">y = ax + b：现场优先只改补偿值 b（不动分辨率）；只改 b 补不过来，才去动 a（分辨率缩放）</span></div>`;
+  html += `<div class="advice-note">原始未补偿：<b>${g.passRaw}/${g.total}</b> 个（乘坐×项目名）组合全部点位对齐 · 达标门槛 <b>≥${g.threshold}</b>`
+    + `　同一项目名在所有乘坐上加同一个 b。</div>`;
+
+  // 方案 1 永远展开（最省事、优先）
+  html += `<div class="advice-grid">`;
+  html += card('plan1', false, { copyA: false });
+  html += `</div>`;
+
+  html += `<details class="advice-alt" ${(g.recommend === 'plan2' || (g.recommend === 'plan3' && !g.plan1.ok)) ? 'open' : ''}>`
+    + `<summary>${META.plan2.t}${summaryTag('plan2')}</summary>`;
+  html += card('plan2', false, { copyA: true });
+  html += `</details>`;
+
+  html += `<details class="advice-alt" ${(g.recommend === 'plan3' || !g.recommend) ? 'open' : ''}>`
+    + `<summary>${META.plan3.t}${summaryTag('plan3')}</summary>`;
+  html += card('plan3', true, { copyA: true });
+  html += `</details>`;
+
+  if (!g.recommend) {
+    html += `<div class="advice-bn">三个方案都对不上：即使每个乘坐、每个项目名单独给补偿值并允许调分辨率，最大 gap 仍有 `
+      + `<b>${g.plan3.maxGap.toFixed(4)}</b>（容差 ${fmt(tol)} 的 ${times(g.plan3.maxGap)} 倍）。`
+      + `这不是补偿能解决的，要排查测量系统本身：分辨率标定、镜头畸变、光源、装夹重复性。</div>`;
+  }
+  html += `</div>`;
+  return html;
 }
 
 // 汇总统计条
 function renderMultiSummaryBar(result) {
-  const { seats, tol, transformType, threshold, nProds } = result;
+  const { seats, tol, transformType, uniformThreshold } = result;
   const bar = $('multiSummaryBar');
-  const verdict = s => s.rawOkCount >= threshold ? 'pass' : (s.fitOkCount >= threshold ? 'warn' : 'fail');
+  const verdict = s => s.rawOkCount >= s.threshold ? 'pass' : (s.fitOkCount >= s.threshold ? 'warn' : 'fail');
   const pass = seats.filter(s => verdict(s) === 'pass').length;
   const warn = seats.filter(s => verdict(s) === 'warn').length;
   const fail = seats.filter(s => verdict(s) === 'fail').length;
 
+  const goal = uniformThreshold != null ? `≥${uniformThreshold} 个产品` : '≥半数产品';
   let main, detail;
   if (transformType === 'none') {
-    main = `${pass}/${seats.length} 个乘坐原始达标（≥${threshold} 个产品 gap ≤ ${tol}）`;
-    detail = seats.map(s => `${s.name}：${s.rawOkCount}/${nProds} 个产品达标`).join('，');
+    main = `${pass}/${seats.length} 个乘坐原始达标（每乘坐 ${goal} gap ≤ ${tol}）`;
+    detail = seats.map(s => `${s.name}：${s.rawOkCount}/${s.nProds} 个产品达标`).join('，');
   } else {
     main = `${pass + warn}/${seats.length} 个乘坐达标（${pass} 无需变换，${warn} 需变换，${fail} 不达标）`;
-    detail = `每个乘坐 ${nProds} 个产品共用一个变换函数（见下方各乘坐表格）。目标：≥${threshold} 个产品完全达标。`;
+    detail = `按乘坐单独拟合仅供诊断。现场补偿以「补偿建议」为准：同一项目名跨乘坐加同一个 b，a 只填一个。`;
   }
   const cls = fail > 0 ? (pass + warn > 0 ? 'warn' : 'fail') : (warn > 0 ? 'warn' : 'pass');
   bar.className = 'conclusion ' + cls;
   $('multiSummaryMain').textContent = main;
   $('multiSummaryDetail').textContent = detail;
   $('multiSummaryBadge').textContent = `${pass + warn} 达标 / ${seats.length} 乘坐`;
+
+  // 补偿口径（组合维度）：(乘坐 × 项目名) 组合里全部点位对齐的个数
+  const g = result.global;
+  if (g) {
+    const NAME = { plan1: '只改补偿值 b', plan2: '补偿 b + 调 a', plan3: '单补 + 调 a' };
+    const bestKey = g.recommend || 'plan3';
+    const best = g[bestKey];
+    const okAll = best.pass >= g.threshold && best.ok;
+    const bar2 = $('globalSummaryBar');
+    if (bar2) {
+      bar2.className = 'conclusion ' + (okAll ? 'pass' : 'fail');
+      $('globalSummaryMain').textContent = okAll
+        ? `补偿后：${best.pass}/${g.total} 个（乘坐×项目名）组合全部点位对齐（门槛 ≥${g.threshold}）`
+        : `补偿后最多只能对齐 ${Math.max(g.plan1.pass, g.plan2.pass, g.plan3.pass)}/${g.total} 个组合，未过门槛（≥${g.threshold}）`;
+      $('globalSummaryDetail').textContent = g.recommend
+        ? `推荐方案 ${g.recommend === 'plan1' ? '1（只改 b）' : g.recommend === 'plan2' ? '2（b + 调 a）' : '3（单补）'}`
+        + `：a=${best.a.toFixed(4)}，最大 gap ${best.maxGap.toFixed(4)}`
+        : `三个方案都对不上（单补 + 调 a 也需 ${g.plan3.maxGap.toFixed(4)} > ${fmt(result.tol)}），需排查测量系统本身`;
+    }
+  }
 }
 
 // 渲染：每个乘坐一个表格，逐点展开每个产品的明细
 function renderMultiSummary(result) {
   const container = $('multiResultContainer');
   container.innerHTML = '';
-  const { seats, transformType, tol, threshold, nProds } = result;
+  const { seats, transformType, tol, global } = result;
+
+  // 补偿建议放在最上面：这才是现场能照着填的方案
+  if (global) container.insertAdjacentHTML('beforeend', renderGlobalAdvice(global, result));
 
   seats.forEach((seat, si) => {
     const block = document.createElement('div');
     block.className = 'seat-block';
 
-    // 是否需要变换：原始已达阈值就无需变换（不显示函数）
-    const needTransform = transformType !== 'none' && seat.rawOkCount < threshold;
+    // 是否需要变换：本乘坐原始已达自身门槛就无需变换（不显示变换函数）
+    const needTransform = seat.needTransform;
+    const nProds = seat.nProds;
+    const threshold = seat.threshold;
 
     // 乘坐标题
     let html = `<div class="seat-title">▎乘坐：${seat.name}<span class="sub">${nProds} 个产品</span></div>`;
@@ -598,7 +869,7 @@ function renderMultiSummary(result) {
       const verdict = seat.fitOkCount >= threshold
         ? `<span class="tag warn">⚠️ 变换后 ${seat.fitOkCount}/${nProds} 达标（≥${threshold}）</span>`
         : `<span class="tag bad">❌ 变换后仅 ${seat.fitOkCount}/${nProds} 达标（&lt;${threshold}）</span>`;
-      html += `<div class="seat-func">统一变换函数：<span class="formula-chip">${fmtFunc(seat.a, seat.b)}</span>${verdict}${aTag}${compTag}</div>`;
+      html += `<div class="seat-func">按乘坐拟合（仅供诊断）：<span class="formula-chip">${fmtFunc(seat.a, seat.b)}</span>${verdict}${aTag}${compTag}</div>`;
     } else if (transformType === 'none') {
       const verdict = seat.rawOkCount >= threshold
         ? `<span class="tag ok">✅ 原始 ${seat.rawOkCount}/${nProds} 达标</span>`
@@ -607,6 +878,9 @@ function renderMultiSummary(result) {
     } else {
       html += `<div class="seat-func"><span class="tag ok">✅ 原始 ${seat.rawOkCount}/${nProds} 达标，无需变换</span>${aTag}${compTag}</div>`;
     }
+
+    // 每乘坐的建议卡不再渲染：它给的是"每乘坐一个 b"，违反现场"同一产品跨乘坐一致"的约束，
+    // 会误导现场照着填。补偿值以页面顶部的「补偿建议」为准。
 
     // 每个产品展开成逐点明细
     seat.products.forEach((p, pi) => {
@@ -687,6 +961,22 @@ function renderMultiSummary(result) {
         showMultiDetail(Number(link.dataset.si), Number(link.dataset.pi));
       });
     });
+
+    // 复制补偿建议值（纯数字或"产品\tb"表格文本，可直接粘贴）
+    block.querySelectorAll('.advice-copy').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyText(decodeURIComponent(btn.dataset.copy)).then(() => flashBtn(btn, '已复制 ✓'));
+      });
+    });
+  });
+
+  // 补偿建议卡里的复制按钮（它不在乘坐块内，单独绑）
+  container.querySelectorAll('.global-advice .advice-copy').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyText(decodeURIComponent(btn.dataset.copy)).then(() => flashBtn(btn, '已复制 ✓'));
+    });
   });
 }
 
@@ -699,7 +989,7 @@ function showMultiDetail(si, pi) {
   if (!seat || !p) return;
   multiSelectedIdx = pi;
 
-  const needTransform = result.transformType !== 'none' && seat.rawOkCount < result.threshold;
+  const needTransform = !!seat.needTransform;
   $('multiDetailName').textContent = `${seat.name} · ${p.name}${needTransform ? `（函数 ${fmtFunc(seat.a, seat.b)}）` : '（无需变换）'}`;
   $('multiDetailCard').classList.add('show');
 
@@ -811,6 +1101,10 @@ $('multiClearBtn').addEventListener('click', () => {
   bar.className = 'conclusion';
   $('multiSummaryMain').textContent = '导入 Excel 文件后点击 [开始分析]';
   $('multiSummaryDetail').textContent = 'Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列';
+  const gbar = $('globalSummaryBar');
+  gbar.className = 'conclusion';
+  $('globalSummaryMain').textContent = '补偿建议：等待分析';
+  $('globalSummaryDetail').textContent = '规则：y = ax + b，优先只改补偿值 b（分辨率 a 不动）；同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b。判定看（乘坐 × 项目名）组合里全部点位对齐的个数。';
   multiClearError();
   multiSeats = null; multiResult = null; multiSelectedIdx = -1;
 });
@@ -818,28 +1112,55 @@ $('multiClearBtn').addEventListener('click', () => {
 // 导出 CSV（含每个产品的每个检测点明细）
 $('multiExportCsv').addEventListener('click', () => {
   if (!multiResult) { alert('请先完成分析'); return; }
-  const { seats, transformType, threshold, tol, compTol, aTol } = multiResult;
-  const lines = ['乘坐,产品,变换函数,分辨率缩放a,缩放是否达标,补偿b,补偿是否达标,原始达标,变换后达标'];
+  const { seats, tol, compTol, aTol } = multiResult;
+  const lines = ['乘坐,产品,变换函数,分辨率缩放a,缩放是否达标,补偿b,补偿是否达标,原始结果,变换后结果'];
   seats.forEach(seat => {
-    const needTransform = transformType !== 'none' && seat.rawOkCount < threshold;
+    const needTransform = seat.needTransform;
     const func = needTransform ? fmtFunc(seat.a, seat.b) : '无需变换';
     const aOk = seat.aOk ? '达标' : '超限';
     const compOk = seat.compOk ? '达标' : '超限';
-    lines.push(`${seat.name},全部,${func},${fmt(seat.a)},${aOk},${fmt(seat.b)},${compOk},${seat.rawOkCount}/${seat.products.length},${seat.fitOkCount}/${seat.products.length}`);
+    lines.push(`${seat.name},全部,${func},${fmt(seat.a)},${aOk},${fmt(seat.b)},${compOk},${seat.rawOkCount}/${seat.nProds} 产品达标,${seat.fitOkCount}/${seat.nProds} 产品达标`);
     seat.products.forEach(p => {
-      const res = p.rawPass ? '原始达标' : (needTransform && p.fitPass ? '变换后达标' : '不达标');
-      lines.push(`${seat.name},${p.name},${func},${fmt(seat.a)},${aOk},${fmt(seat.b)},${compOk},${p.rawFail}点超差,${p.fitFail}点超差`);
+      const rawTxt = p.rawPass ? '✓全部达标' : `✗${p.rawFail}点超差`;
+      const fitTxt = needTransform ? (p.fitPass ? '✓全部达标' : `✗${p.fitFail}点超差`) : '—';
+      lines.push(`${seat.name},${p.name},${func},${fmt(seat.a)},${aOk},${fmt(seat.b)},${compOk},${rawTxt},${fitTxt}`);
     });
   });
+
+  // 补偿建议（现场照填用）：三个方案摘要 + 推荐方案的值表
+  const g = multiResult.global;
+  if (g) {
+    const PNAME = { plan1: '只改补偿值 b', plan2: '补偿 b + 调分辨率 a', plan3: '单补 + 调分辨率 a' };
+    lines.push('');
+    lines.push('【补偿建议】y = ax + b：优先只改 b（不动分辨率）；同一项目名在所有乘坐上加同一个 b');
+    lines.push(`判定口径,${g.total} 个(乘坐×项目名)组合,达标门槛 ≥${g.threshold},原始对齐 ${g.passRaw}/${g.total}`);
+    ['plan1', 'plan2', 'plan3'].forEach(k => {
+      const lv = g[k];
+      lines.push(`方案${k === 'plan1' ? '1' : k === 'plan2' ? '2' : '3'} ${PNAME[k]},${lv.ok ? '可行' : '无解'},a=${fmt(lv.a)},最大gap=${lv.maxGap.toFixed(4)},对齐 ${lv.pass}/${g.total}`);
+    });
+    const rec = g.recommend;
+    if (rec) {
+      const lv = g[rec];
+      const n = rec === 'plan1' ? '1' : rec === 'plan2' ? '2' : '3';
+      lines.push('');
+      lines.push(`【推荐方案 ${n} · ${PNAME[rec]} 的值】`);
+      lines.push(`a,${fmt(lv.a)}`);
+      lines.push(rec === 'plan3' ? `乘坐,项目名,补偿值 b` : `项目名,补偿值 b`);
+      lv.bs.forEach(x => lines.push(rec === 'plan3' ? `${x.seat},${x.name},${fmt(x.b)}` : `${x.name},${fmt(x.b)}`));
+    }
+  }
+
   lines.push('');
   lines.push('逐点明细');
   lines.push(`gap容差,${tol}`);
   lines.push(`分辨率缩放容差|a-1|,${aTol}`);
   lines.push(`补偿值上限,${compTol}`);
-  const header = needTransformHeader(seats, transformType, threshold);
-  lines.push(header);
   seats.forEach(seat => {
-    const needTransform = transformType !== 'none' && seat.rawOkCount < threshold;
+    const needTransform = seat.needTransform;
+    // 每个乘坐单独一行表头：各乘坐是否启用变换可能不同，共用表头会导致列数错位
+    lines.push('');
+    lines.push(`乘坐,${seat.name},（${needTransform ? '含变换后列' : '未启用变换'}）`);
+    lines.push(pointDetailHeader(needTransform));
     seat.products.forEach(p => {
       p.meas.forEach((m, i) => {
         const rawGap = m - p.qv[i];
@@ -865,9 +1186,9 @@ $('multiExportCsv').addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-function needTransformHeader(seats, transformType, threshold) {
-  const anyTransform = seats.some(seat => transformType !== 'none' && seat.rawOkCount < threshold);
-  return anyTransform
+// 逐点明细表头：按该乘坐是否启用变换决定列数（各乘坐独立，避免列错位）
+function pointDetailHeader(needTransform) {
+  return needTransform
     ? '乘坐,产品,点#,标准值QV,测量值CCD,原始gap,原始是否达标,变换后值,变换后gap,变换后是否达标'
     : '乘坐,产品,点#,标准值QV,测量值CCD,原始gap,原始是否达标';
 }
@@ -875,14 +1196,15 @@ function needTransformHeader(seats, transformType, threshold) {
 // 复制汇总表（每个乘坐一个函数）
 $('multiCopyTable').addEventListener('click', () => {
   if (!multiResult) { alert('请先完成分析'); return; }
-  const { seats, transformType, threshold, compTol, aTol } = multiResult;
+  const { seats, compTol, aTol } = multiResult;
   const lines = [];
   seats.forEach(seat => {
-    const needTransform = transformType !== 'none' && seat.rawOkCount < threshold;
+    const needTransform = seat.needTransform;
+    const threshold = seat.threshold;
     const func = needTransform ? fmtFunc(seat.a, seat.b) : '无需变换';
     const aInfo = `缩放 a=${fmt(seat.a)}（|a−1|=${fmt(Math.abs(seat.a - 1))} ${seat.aOk ? '≤' : '>'}${fmt(aTol)} ${seat.aOk ? '✓' : '✗'}）`;
     const compInfo = `补偿 b=${seat.b >= 0 ? '+' : ''}${fmt(seat.b)}（${seat.compOk ? '≤' : '>'}${fmt(compTol)} ${seat.compOk ? '✓' : '✗'}）`;
-    lines.push(`${seat.name}\t${needTransform ? '统一函数：' + func : '无需变换'}\t${aInfo}，${compInfo}\t原始 ${seat.rawOkCount}/${seat.products.length} 达标 → 变换后 ${seat.fitOkCount}/${seat.products.length}（目标≥${threshold}）`);
+    lines.push(`${seat.name}\t${needTransform ? '统一函数：' + func : '无需变换'}\t${aInfo}，${compInfo}\t原始 ${seat.rawOkCount}/${seat.nProds} 达标 → 变换后 ${seat.fitOkCount}/${seat.nProds}（目标≥${threshold}）`);
     lines.push('产品\t原始 gap\t变换后 gap\t结果');
     seat.products.forEach(p => {
       const res = p.rawPass ? '原始达标' : (needTransform && p.fitPass ? '变换后达标' : '不达标');
