@@ -1247,13 +1247,14 @@ const CAUSES={
 };
 
 function median(a){const x=[...a].sort((p,q)=>p-q); if(!x.length)return 0; const m=Math.floor(x.length/2); return x.length%2?x[m]:(x[m-1]+x[m])/2;}
-function robustRun(item){
+function outlierStats(item){
   const v=(item.measurements||[]).map(Number).filter(Number.isFinite); if(v.length<4)return null;
   const med=median(v); const dev=v.map(x=>Math.abs(x-med)); const mad=median(dev) || (sampleStdev(v)/2) || 1e-12;
   let idx=0,max=-1; dev.forEach((d,i)=>{if(d>max){max=d;idx=i;}});
   const score=max/(mad+1e-12);
-  return score>=5?{index:idx,score,value:v[idx],median:med}:null;
+  return {index:idx,score,value:v[idx],median:med,mad};
 }
+function robustRun(item){ const s=outlierStats(item); return s && s.score>=5 ? {index:s.index,score:s.score,value:s.value,median:s.median} : null; }
 function sameContext(a,b){return a.angle===b.angle&&a.station===b.station&&a.category===b.category&&a.product===b.product;}
 function groupRunEvidence(target,all){
   const peers=all.filter(x=>sameContext(x,target));
@@ -1317,7 +1318,17 @@ function diagnoseItem(target, allItems, experience={}){
       '同上下文其他 Item 未形成足够的同步异常覆盖率'
     ],'measurement_tool', [['measurement_tool',100],['template_match',62],['image_processing',58],['mechanism_fixture',35]],experience);
   }
-  return result('unstable_unspecified','low',['测量波动偏高，但当前数据未形成足够明确的单点、同 Item、同图像组或跨图像组模式'],'measurement_tool', [['measurement_tool',60],['image_processing',58],['shared_positioning',52],['mechanism_fixture',45]],experience);
+  const stats=outlierStats(target);
+  if(stats && stats.score>=2.5){
+    return result('mild_outlier','medium',[
+      `Run ${stats.index+1} 略偏离其余测量（偏离指数 ${stats.score.toFixed(1)}，未达强离群标准 5）`,
+      '整体波动仍偏高，但无法确认是单点偶发还是系统性分散'
+    ],'measurement_tool', [['measurement_tool',100],['template_match',70],['image_processing',60],['mechanism_fixture',40]],experience);
+  }
+  return result('systematic_spread','low',[
+    '整体 σ 偏高，且没有单一离群 Run，波动呈系统性分散',
+    '建议从定位稳定性、图像处理一致性、机构重复定位三个方向排查'
+  ],'image_processing', [['image_processing',100],['shared_positioning',82],['mechanism_fixture',70],['measurement_tool',55]],experience);
 }
 
 Object.assign(AOI,{diagnoseItem});
@@ -1437,6 +1448,15 @@ const fmt=(v,d=2)=>Number.isFinite(Number(v))?Number(v).toFixed(d):'—';
 const statusLabel={accepted:'完全认可',conditional:'条件认可',rejected:'不认可',pending:'待确认'};
 const statusClass={accepted:'accepted',conditional:'conditional',rejected:'rejected',pending:'pending'};
 const causeOptions={measurement_tool:'抓点 / 测量工具异常',item_vision_scheme:'Item 视觉方案稳定性偏弱',shared_positioning:'同图像组共用定位 / 基准异常',mechanism_fixture:'机构重复定位 / 产品姿态异常',template_match:'模板匹配偶发偏移',baseline:'基准线 / 基准点不稳定',image_processing:'图像处理参数敏感'};
+const patternMeta={
+  global_run_sync:{label:'跨图像组同步漂移',explain:'同一 Run 在多个独立 Image Group 同步偏移，指向放料 / 机构层面的共性因素'},
+  image_group_sync:{label:'同图像组同步漂移',explain:'同一 Run 在同一 Image Group 内多个 Item 同步偏移，指向共用定位 / 基准'},
+  item_scheme_instability:{label:'跨产品复现',explain:'同一 Item 在多个产品中重复性都偏高，指向该 Item 共用的视觉测量方案'},
+  single_outlier:{label:'单点离群',explain:'某个 Run 明显偏离其余测量值，指向偶发的抓点 / 匹配异常'},
+  mild_outlier:{label:'疑似单点离群',explain:'某个 Run 略偏离，但未达到强离群标准，需结合趋势图与现场判断'},
+  systematic_spread:{label:'系统性分散',explain:'整体波动偏高且无单一离群点，指向定位 / 图像处理 / 机构稳定性'},
+  unstable_unspecified:{label:'暂未形成明确模式',explain:'数据不足以形成明确模式，建议结合趋势图与现场观察'}
+};
 
 const state={
   records:[],experience:[],recordCenterTab:'records',recordScope:'all',validationExpanded:false,before:null,after:null,beforeBuffer:null,afterBuffer:null,
@@ -1593,7 +1613,8 @@ function riskDistributionRow(label,count,total,kind=''){const width=total?Math.m
 
 function anomalyCards(items){
   if(!items.length)return `<div class="anomaly-list"><div class="anomaly-head">没有 ≥10% 的异常 Item</div></div>`;
-  return `<div class="anomaly-list"><div class="anomaly-head">重点异常项（按 6σ 降序）</div>${items.slice(0,3).map((x,i)=>`<div class="anomaly-item" data-select-key="${esc(buildItemKey(x))}"><div class="rank ${i===1?'secondary':i===2?'third':''}">${i+1}</div><div><div class="item-name">${esc(x.item)}</div><div class="item-sub">${esc([x.product,x.angle,x.station,x.category].filter(Boolean).join(' · '))}</div></div><div class="item-value">${fmt(x.metrics?.sixSigmaPercent)}%</div><div class="bar"><span style="width:${Math.min(100,(x.metrics?.sixSigmaPercent||0)*4)}%"></span></div></div>`).join('')}</div>`;
+  const badge=x=>`<span class="status-text ${statusClass[x.status]}" style="font-size:12px;margin-left:8px">${statusLabel[x.status]}</span>`;
+  return `<div class="anomaly-list"><div class="anomaly-head">重点异常 · 按严重度降序（前 ${Math.min(8,items.length)} / ${items.length}）</div>${items.slice(0,8).map((x,i)=>`<div class="anomaly-item" data-select-key="${esc(buildItemKey(x))}"><div class="rank ${i===1?'secondary':i===2?'third':''}">${i+1}</div><div><div class="item-name">${esc(x.item)}${badge(x)}</div><div class="item-sub">${esc([x.product,x.angle,x.station,x.category].filter(Boolean).join(' · '))}</div></div><div class="item-value">${fmt(x.metrics?.sixSigmaPercent)}%</div><div class="bar"><span style="width:${Math.min(100,(x.metrics?.sixSigmaPercent||0)*4)}%"></span></div></div>`).join('')}</div>`;
 }
 function renderOverview(){
   const el=$('#overviewContent');if(!state.before){el.innerHTML=emptyImport();bindDynamic();return;}
@@ -1616,7 +1637,7 @@ function renderOverview(){
   ${overviewValidationHtml()}
   <div class="overview-grid"><div>
     ${anomalyCards(sum.anomalies)}
-    <div class="hero-actions"><button class="btn primary" data-jump="locate">去定位异常 →</button><button class="linklike" data-jump="locate">查看完整异常列表 ›</button></div>
+    <div class="hero-actions"><button class="btn primary" id="btnDiagnoseWorst">诊断最严重项 →</button><button class="btn cyan" data-jump="locate">去定位异常 →</button><button class="linklike" data-jump="locate">查看完整异常列表 ›</button></div>
   </div><div class="card soft risk-box">
     <div class="risk-section"><div class="risk-section-title">风险分布</div>
       ${riskDistributionRow('&lt;10%',r.acceptedCount,r.total,'accepted')}
@@ -1669,7 +1690,7 @@ async function renderDiagnose(){
   const el=$('#diagnoseContent');const item=selectedItem();if(!item){el.innerHTML=emptyImport();bindDynamic();return;}const exp=await experienceCounts(currentAnalysisId()).catch(()=>({}));const d=diagnoseItem(item,state.before.items,exp);item._diagnostic=d;const m=item.metrics;
   const projectExperienceCount=Object.values(exp?.projectCounts||{}).reduce((a,b)=>a+Number(b||0),0);const globalExperienceCount=Object.values(exp?.globalCounts||{}).reduce((a,b)=>a+Number(b||0),0);
   const causeSelect=`<select id="actualCause">${Object.entries(causeOptions).map(([k,v])=>`<option value="${k}" ${k===d.causes[0]?.code?'selected':''}>${esc(v)}</option>`).join('')}</select>`;
-  el.innerHTML=`<div style="font-size:20px;font-weight:900;margin-bottom:14px">${esc(item.item)} · ${esc([item.product,item.angle,item.station,item.category,item.imageGroup].filter(Boolean).join(' · '))}</div><div class="metric-strip">${[['AVG',m?.avg],['MAX',m?.max],['MIN',m?.min],['GAP',m?.gap],['σ',m?.sigma],['6σ',m?.sixSigmaPercent]].map(([k,v],i)=>`<div class="metric ${i===5&&item.status==='rejected'?'bad':''}"><div class="m-k">${k}</div><div class="m-v">${v==null?'—':fmt(v,i===5?2:4)}${i===5&&v!=null?'%':''}</div></div>`).join('')}</div><div class="diag-layout"><div class="panel-box diag-chart-card"><div class="diag-chart-head"><h3>重复测量趋势（Run 1 ~ Run ${item.measurements.length}）</h3><span class="diag-chart-hint">鼠标悬停 / 键盘聚焦查看数据</span></div>${trendSvg(item)}${trendRunTable(item)}<div class="small-note" style="margin-top:10px">蓝线：实测值；Cyan：AVG；橙色虚线：AVG ± 3σ。原始 Run 数据不会被自动删除。</div></div><div class="panel-box diag-result-card"><div class="diag-title"><h3 style="margin:0">诊断结果（本地规则）</h3><div class="diag-badge">置信度：${d.confidence==='high'?'高':d.confidence==='medium'?'中':'低'}</div></div><div style="font-size:28px;font-weight:900;margin-bottom:10px">${esc(d.causes[0]?.label||'暂无法明确分类')}</div><div style="font-weight:900">判断依据</div><ul class="diagnosis-evidence">${d.evidence.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><div style="font-weight:900;margin-top:16px">疑似原因 TOP ${Math.min(3,d.causes.length)}</div><div>${d.causes.slice(0,3).map((c,i)=>`<span class="cause-chip">${i+1}. ${esc(c.label)}</span>`).join('')}</div><div style="font-weight:900;margin-top:16px">优先检查</div><ol class="check-list">${d.checks.slice(0,5).map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div></div><div class="panel-box experience-panel"><div class="experience-panel-head"><div><h3>现场确认 / 经验记录</h3><div class="small-note" style="margin-top:5px">确认系统判断或修正实际原因，保存后会写入本机工程经验数据，用于后续诊断候选原因排序。</div></div><div class="experience-meta">当前文件 ${projectExperienceCount} 条经验<br>本机累计 ${globalExperienceCount} 条经验</div></div><div class="experience-grid"><div class="field"><label>现场确认的实际原因</label>${causeSelect}</div><div class="field"><label>处理备注</label><textarea id="experienceNote" maxlength="500" placeholder="例如：PMAlign 正常，实际是基准线 ROI 抓到旁边结构…"></textarea></div><div class="experience-buttons"><button class="btn cyan" id="btnCorrect" type="button">✓ 判断正确</button><button class="btn primary" id="btnSaveExperience" type="button">保存经验</button></div></div><div class="small-note experience-footnote">“判断正确”会直接记录系统第一判断；“保存经验”会记录你选择的实际原因与备注。</div></div>`;bindDynamic();
+  el.innerHTML=`<div style="font-size:20px;font-weight:900;margin-bottom:14px">${esc(item.item)} · ${esc([item.product,item.angle,item.station,item.category,item.imageGroup].filter(Boolean).join(' · '))}</div><div class="metric-strip">${[['AVG',m?.avg],['MAX',m?.max],['MIN',m?.min],['GAP',m?.gap],['σ',m?.sigma],['6σ',m?.sixSigmaPercent]].map(([k,v],i)=>`<div class="metric ${i===5&&item.status==='rejected'?'bad':''}"><div class="m-k">${k}</div><div class="m-v">${v==null?'—':fmt(v,i===5?2:4)}${i===5&&v!=null?'%':''}</div></div>`).join('')}</div><div class="diag-layout"><div class="panel-box diag-chart-card"><div class="diag-chart-head"><h3>重复测量趋势（Run 1 ~ Run ${item.measurements.length}）</h3><span class="diag-chart-hint">鼠标悬停 / 键盘聚焦查看数据</span></div>${trendSvg(item)}${trendRunTable(item)}<div class="small-note" style="margin-top:10px">蓝线：实测值；Cyan：AVG；橙色虚线：AVG ± 3σ。原始 Run 数据不会被自动删除。</div></div><div class="panel-box diag-result-card"><div class="diag-title"><h3 style="margin:0">数据呈现的模式</h3><div class="diag-badge">证据强度：${d.confidence==='high'?'强':d.confidence==='medium'?'中':'弱'}</div></div><div style="font-size:26px;font-weight:900;margin-bottom:6px">${esc(patternMeta[d.symptom]?.label||'暂未形成明确模式')}</div><div class="small-note" style="margin-bottom:12px">${esc(patternMeta[d.symptom]?.explain||'')}</div><div style="font-weight:900">证据</div><ul class="diagnosis-evidence">${d.evidence.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><div style="font-weight:900;margin-top:16px">建议排查方向</div><div>${d.causes.slice(0,3).map((c,i)=>`<span class="cause-chip">${i+1}. ${esc(c.label)}</span>`).join('')}</div><div style="font-weight:900;margin-top:16px">优先检查</div><ol class="check-list">${d.checks.slice(0,5).map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div></div><div class="panel-box experience-panel"><div class="experience-panel-head"><div><h3>现场确认 / 经验记录</h3><div class="small-note" style="margin-top:5px">确认系统判断或修正实际原因，保存后会写入本机工程经验数据，用于后续诊断候选原因排序。</div></div><div class="experience-meta">当前文件 ${projectExperienceCount} 条经验<br>本机累计 ${globalExperienceCount} 条经验</div></div><div class="experience-grid"><div class="field"><label>现场确认的实际原因</label>${causeSelect}</div><div class="field"><label>处理备注</label><textarea id="experienceNote" maxlength="500" placeholder="例如：PMAlign 正常，实际是基准线 ROI 抓到旁边结构…"></textarea></div><div class="experience-buttons"><button class="btn cyan" id="btnCorrect" type="button">✓ 判断正确</button><button class="btn primary" id="btnSaveExperience" type="button">保存经验</button></div></div><div class="small-note experience-footnote">“判断正确”会直接记录系统第一判断；“保存经验”会记录你选择的实际原因与备注。</div></div>`;bindDynamic();
 }
 
 function compareHtml(cmp){
@@ -1784,6 +1805,7 @@ function bindDynamic(){
   $$('[data-filter]').forEach(s=>s.addEventListener('change',()=>{state.filters[s.dataset.filter]=s.value;renderLocate();}));
   $('#btnHeatMode')?.addEventListener('click',()=>{state.onlyAnomalyHeatmap=!state.onlyAnomalyHeatmap;renderLocate();});
   $('#btnDiagnoseSelected')?.addEventListener('click',()=>activate('diagnose'));
+  $('#btnDiagnoseWorst')?.addEventListener('click',()=>{const top=state.before?.summary?.anomalies?.[0];if(top){state.selectedKey=buildItemKey(top);}activate('diagnose');});
   $('#btnShowAllAbnormal')?.addEventListener('click',()=>{state.onlyAnomalyHeatmap=false;renderLocate();toast('已展开全部 Item；可结合状态筛选继续缩小范围');});
   $('#btnAfterFile')?.addEventListener('click',()=>$('#afterFileInput').click());
   const afterDrop=$('#afterDrop');if(afterDrop){afterDrop.addEventListener('dragover',e=>{e.preventDefault();afterDrop.classList.add('drag')});afterDrop.addEventListener('dragleave',()=>afterDrop.classList.remove('drag'));afterDrop.addEventListener('drop',e=>{e.preventDefault();afterDrop.classList.remove('drag');loadFile(e.dataTransfer.files[0],'after')});}
