@@ -47,6 +47,10 @@ export function FovWorkbench({
   const [marginMm, setMarginMm] = useState("8");
   const [allowRotate, setAllowRotate] = useState(false);
   const [includeReview, setIncludeReview] = useState(false);
+  // 公差筛选默认会把"没有解析度资料"的镜头一并排除（实测 63/426）。给用户一个显式开关，
+  // 而不是让它们静默消失。
+  const [includeUnknownRes, setIncludeUnknownRes] = useState(false);
+  const [computing, setComputing] = useState(false);
   const [toleranceEnabled, setToleranceEnabled] = useState(false);
   const [toleranceMm, setToleranceMm] = useState("");
   const [showIncompatible, setShowIncompatible] = useState(false);
@@ -97,7 +101,7 @@ export function FovWorkbench({
     }
   }, [selectedCamera, selectedLens]);
 
-  const runRecommendations = () => {
+  const runRecommendations = async () => {
     const widthMm = Number(targetWidth);
     const heightMm = Number(targetHeight);
     if (!(widthMm > 0 && heightMm > 0)) {
@@ -108,14 +112,23 @@ export function FovWorkbench({
     const tolerance = toleranceEnabled ? Number(toleranceMm) : null;
     const cameras = visibleCameras.filter((item) => !cameraBrand || item.brand === cameraBrand);
     const lenses = visibleLenses.filter((item) => !lensBrand || item.brand === lensBrand);
-    setRecommendations(
-      recommendCombinations(
-        cameras,
-        lenses,
-        { widthMm: widthMm + margin, heightMm: heightMm + margin },
-        { allowRotate, includeReview, limit: 100, toleranceMm: tolerance && tolerance > 0 ? tolerance : null },
-      ),
-    );
+    // 全品牌时是 1147×426 ≈ 48.8 万组合同的同步枚举（实测简化内层循环就要约 190 ms，
+    // 浏览器里加上 toFixed/排序约 0.3–1 s）。先渲染"计算中"，再让出主线程执行，
+    // 否则点击后会有一段完全无反馈的卡死。
+    setComputing(true);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    try {
+      setRecommendations(
+        recommendCombinations(
+          cameras,
+          lenses,
+          { widthMm: widthMm + margin, heightMm: heightMm + margin },
+          { allowRotate, includeReview, limit: 100, toleranceMm: tolerance && tolerance > 0 ? tolerance : null, includeUnknownResolution: includeUnknownRes },
+        ),
+      );
+    } finally {
+      setComputing(false);
+    }
   };
 
   const inspect = (item: Recommendation) => {
@@ -305,17 +318,23 @@ export function FovWorkbench({
                 按公差带筛选解析度（可选）
               </label>
               {toleranceEnabled && (
-                <label className="tolerance-field">
-                  <span>公差带 T（mm）</span>
-                  <input
-                    type="number"
-                    min="0.001"
-                    step="any"
-                    value={toleranceMm}
-                    onChange={(event) => setToleranceMm(event.target.value)}
-                    placeholder="如 0.15"
-                  />
-                </label>
+                <>
+                  <label className="check-row">
+                    <input type="checkbox" checked={includeUnknownRes} onChange={(event) => setIncludeUnknownRes(event.target.checked)} />
+                    包含缺少解析度资料的组合
+                  </label>
+                  <label className="tolerance-field">
+                    <span>公差带 T（mm）</span>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      value={toleranceMm}
+                      onChange={(event) => setToleranceMm(event.target.value)}
+                      placeholder="如 0.15"
+                    />
+                  </label>
+                </>
               )}
               <button className="primary-button recommend-button" type="button" onClick={runRecommendations}>
                 查找完整覆盖组合
@@ -400,8 +419,18 @@ export function FovWorkbench({
                   <b>没有完整覆盖且兼容的组合</b>
                   <p>
                     FOV 不足 {recommendations.exclusions.insufficientFov}；接口/像圈限制 {recommendations.exclusions.mountOrCircle}；资料缺失 {recommendations.exclusions.missingData}。
+                    {toleranceEnabled && recommendations.exclusions.insufficientResolution > 0 && (
+                      <> 解析度不达标 {recommendations.exclusions.insufficientResolution}；</>
+                    )}
+                    {toleranceEnabled && recommendations.exclusions.resolutionUnknown > 0 && (
+                      <> 镜头缺解析度资料 {recommendations.exclusions.resolutionUnknown}；</>
+                    )}
                   </p>
-                  <p>可尝试勾选“包含兼容性待确认组合”，或调整目标尺寸。</p>
+                  <p>
+                    可尝试勾选“包含兼容性待确认组合”
+                    {toleranceEnabled && recommendations.exclusions.resolutionUnknown > 0 && "、“包含缺少解析度资料的组合”"}
+                    ，或调整目标尺寸。
+                  </p>
                 </div>
               )}
             </section>

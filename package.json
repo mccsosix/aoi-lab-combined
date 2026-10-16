@@ -9,8 +9,17 @@
     "build:offline": "vite build --config vite.offline.config.ts",
     "preview": "vite preview",
     "verify:repeatability": "node scripts/verify-repeatability-integration.mjs",
+    "verify:correlation": "node scripts/verify-correlation-parser.mjs",
+    "verify:correlation-e2e": "node scripts/verify-correlation-e2e.mjs",
+    "verify:fov": "node scripts/verify-fov-update.mjs",
     "verify:launcher": "node scripts/verify-launcher.mjs",
-    "verify:workspace": "node scripts/verify-workspace-navigation.mjs"
+    "verify:workspace": "node scripts/verify-workspace-navigation.mjs",
+    "verify:smoke": "node scripts/smoke-browser.mjs",
+    "verify:lighting-report": "node scripts/verify-lighting-report.mjs",
+    "verify:lighting-report-e2e": "node scripts/verify-lighting-report-e2e.mjs",
+    "lighting-report:build-template": "node scripts/lighting-report/build-template.mjs",
+    "lighting-report:samples": "node scripts/lighting-report/make-samples.mjs",
+    "verify": "npm run verify:repeatability && npm run verify:correlation && npm run verify:fov && npm run verify:launcher && npm run verify:workspace && npm run verify:lighting-report"
   },
   "dependencies": {
     "echarts": "^5.6.0",
@@ -18,7 +27,7 @@
     "jszip": "^3.10.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.4",

@@ -19,6 +19,14 @@ export interface RepeatabilityConfig {
   dataRows: number;
 }
 
+/**
+ * 让出主线程一帧。ExcelJS 的单元格写入是纯同步的，如果整个 for 循环
+ * 在第一个 `await`（writeBuffer）之前跑完，所有 onProgress 会被 React
+ * 批处理成一次渲染 —— 进度条 0 → 100 跳变，且生成期间界面完全锁死。
+ * 每个 Sheet 之间插入一次让出点，UI 才有机会重绘。
+ */
+const yieldToUI = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
 export async function generateRepeatability(
   c: RepeatabilityConfig,
   onProgress?: (cur: number, total: number, name: string) => void,
@@ -31,11 +39,16 @@ export async function generateRepeatability(
     for (let s = 1; s <= c.seatingCount; s++) {
       let name = `${angle}乘坐${s}`;
       if (name.length > 31) name = `${angle}坐${s}`;
+      // 先报进度再让出，让用户看到"正在生成 XX"，然后才执行本次的同步写入
+      if (onProgress) onProgress(idx, total, name);
+      await yieldToUI();
       createRepeatSheet(wb, name, c.productCount, c.projects, c.dataRows);
-      if (onProgress) onProgress(++idx, total, name);
+      idx++;
     }
   }
 
+  if (onProgress) onProgress(total, total, '写入文件');
+  await yieldToUI();
   return await wb.xlsx.writeBuffer();
 }
 

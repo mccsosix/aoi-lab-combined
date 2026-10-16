@@ -5,12 +5,13 @@ import Footer from './components/Footer';
 import ToolCard from './components/ToolCard';
 import ToolWorkbenchNav from './components/ToolWorkbenchNav';
 import { TOOL_HELP } from './components/help-content';
-import { LabMark, QueryIcon, GeneratorIcon, FovIcon, RepeatabilityIcon, CorrelationIcon } from './components/Icons';
+import { LabMark, QueryIcon, GeneratorIcon, FovIcon, RepeatabilityIcon, CorrelationIcon, ReportIcon } from './components/Icons';
 import CaseQueryTool from './components/case-query/CaseQueryTool';
 import SheetGeneratorTool from './components/sheet-generator/SheetGeneratorTool';
 import { FovWorkbench } from './fov/components/FovWorkbench';
 import RepeatabilityWorkbench from './repeatability/RepeatabilityWorkbench';
 import CorrelationWorkbench from './correlation/CorrelationWorkbench';
+import LightingReportWorkbench from './lighting-report/LightingReportWorkbench';
 
 type OpenToolId = Exclude<ToolId, null>;
 
@@ -39,6 +40,11 @@ const TOOL_META: Record<OpenToolId, { index: string; title: string; description:
     index: '05',
     title: '相关性判断',
     description: '导入对样表格，判断 CCD 能否对齐 QV，批量评估多产品多乘坐',
+  },
+  'lighting-report': {
+    index: '06',
+    title: '打光报告生成器',
+    description: '填表直接产出标准格式的打光评估报告，工站页自动算、可增删',
   },
 };
 
@@ -151,6 +157,15 @@ export default function App() {
                   isActive={false}
                   onOpen={() => handleOpen('correlation')}
                 />
+                <ToolCard
+                  index="06" id="lighting-report"
+                  title="打光报告生成器"
+                  description="填表直接产出标准格式报告，工站页自动算、可增删"
+                  tags={['Report', 'pptx', '自动填表']}
+                  icon={<ReportIcon />}
+                  isActive={false}
+                  onOpen={() => handleOpen('lighting-report')}
+                />
               </div>
             </section>
 
@@ -181,6 +196,7 @@ export default function App() {
               {activeTool === 'fov' && <FovWorkbench onBack={handleClose} showBackAction={false} />}
               {activeTool === 'repeatability' && <RepeatabilityWorkbench onBack={handleClose} />}
               {activeTool === 'correlation' && <CorrelationWorkbench onBack={handleClose} />}
+              {activeTool === 'lighting-report' && <LightingReportWorkbench onBack={handleClose} showBackAction={false} />}
             </div>
           </section>
         )}

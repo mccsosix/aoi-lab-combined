@@ -12,6 +12,9 @@ const CA: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle
 const COLS_PER_PROD = 6;
 const HEADER_HEX = 'FFD9D9D9';
 
+/** 让出主线程一帧，使进度回调能真正被渲染（与 repeatability.ts 同策略）。 */
+const yieldToUI = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
 export interface CorrelationConfig {
   productCount: number;
   seatingCount: number;
@@ -36,15 +39,22 @@ export async function generateCorrelation(
     for (let s = 1; s <= c.seatingCount; s++) {
       let name = `${angle}乘坐${s}`;
       if (name.length > 31) name = `${angle}坐${s}`;
+      // 同 repeatability：先报进度再让出主线程，否则进度条只会 0 → 100 跳变
+      if (onProgress) onProgress(idx, total, name);
+      await yieldToUI();
       createCorrSheet(wb, name, c, chartRefs);
-      if (onProgress) onProgress(++idx, total, name);
+      idx++;
     }
   }
 
+  if (onProgress) onProgress(total, total, '写入文件');
+  await yieldToUI();
   const buffer = await wb.xlsx.writeBuffer();
 
   // Inject charts if requested
   if (c.includeChart && chartRefs.length > 0) {
+    if (onProgress) onProgress(total, total, '注入图表');
+    await yieldToUI();
     try {
       return await injectCharts(buffer, chartRefs);
     } catch (_) {

@@ -12,6 +12,7 @@
  */
 
 import type { VppAnalysisResult, VppDetectionItem } from './vpp-types';
+import { escapeRegex } from './utils';
 
 // ─── Types ───
 interface SpecBlock { offset: number; name: string; upper: number; nominal: number; lower: number; }
@@ -315,10 +316,6 @@ function resolveAlias(expr: string, aliases: Map<string, string>, depth = 0): st
   return t;
 }
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 // ─── Phase C: Build items ───
 function buildItems(
   outputItemsByScript: Map<number, OutputItemDef[]>,
@@ -398,6 +395,16 @@ function buildItems(
 }
 
 // ─── Export ───
+/** 单个测量项目统一用「公差带宽度」作为 T（上游 6σ/T 口径）。 */
+function toleranceBand(item: VppDetectionItem): number | undefined {
+  if (typeof item.tolerance === 'number' && item.tolerance > 0) return item.tolerance;
+  if (typeof item.upper === 'number' && typeof item.lower === 'number') {
+    const band = item.upper - item.lower;
+    if (band > 0) return band;
+  }
+  return undefined;
+}
+
 export function mapToMeasurementProjects(
   items: VppDetectionItem[], defaultColors: string[],
 ): Array<{ name: string; pointCount: number; color: string; tolerance: number }> {
@@ -405,6 +412,9 @@ export function mapToMeasurementProjects(
     name: item.name,
     pointCount: item.points ?? 1,
     color: defaultColors[i % defaultColors.length],
-    tolerance: item.upperTolerance ?? item.lowerTolerance ?? item.tolerance ?? 0.1,
+    // 必须用公差带宽度。历史实现先取 upperTolerance —— 那是半个带（对称公差下
+    // upper-nominal = nominal-lower），一旦被填充就会把 6σ/T 抬高约一倍，
+    // 把合格品判成"不认可"。这里显式改用 toleranceBand。
+    tolerance: toleranceBand(item) ?? 0.1,
   }));
 }

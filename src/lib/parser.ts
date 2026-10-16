@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { DataRecord, ParsedData, CaseStatus, ItemStatus, CaseGroup } from '../types';
-import { toSimplified } from './utils';
+import { toSimplified, escapeRegex } from './utils';
 
 function parseSheet(ws: XLSX.WorkSheet): { headers: string[]; records: DataRecord[] } {
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
@@ -150,14 +150,29 @@ function extractPeople(records: DataRecord[]): string[] {
     .map(([name]) => name);
 }
 
-export function extractDate(text: string): Date | null {
+const HALF_YEAR_MS = 1000 * 60 * 60 * 24 * 183;
+
+/**
+ * 「预计交期」列只写了月/日，没有年份。历史实现把年份硬编码成 2026，
+ * 于是 2027-01-01 起所有交期都会被判成逾期（`date < today` 恒真）。
+ *
+ * 这里改为以"今天所在年"为准，并做一次跨年修正：如果按今年算出来的日期
+ * 比今天早了半年以上，说明它更可能属于下一年（例如 1 月看到的 12 月交期）。
+ */
+function inferYearForMonthDay(month: number, day: number, today: Date): number {
+  const year = today.getFullYear();
+  const candidate = new Date(year, month - 1, day);
+  return today.getTime() - candidate.getTime() > HALF_YEAR_MS ? year + 1 : year;
+}
+
+export function extractDate(text: string, today: Date = new Date()): Date | null {
   if (!text) return null;
   const mdChinese = text.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
   if (mdChinese) {
     const m = parseInt(mdChinese[1], 10);
     const d = parseInt(mdChinese[2], 10);
     if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return new Date(2026, m - 1, d);
+      return new Date(inferYearForMonthDay(m, d, today), m - 1, d);
     }
   }
   const mdSlash = text.match(/(\d{1,2})\/(\d{1,2})/);
@@ -165,7 +180,7 @@ export function extractDate(text: string): Date | null {
     const m = parseInt(mdSlash[1], 10);
     const d = parseInt(mdSlash[2], 10);
     if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return new Date(2026, m - 1, d);
+      return new Date(inferYearForMonthDay(m, d, today), m - 1, d);
     }
   }
   return null;
@@ -221,9 +236,12 @@ function worstStatus(statuses: CaseStatus[]): CaseStatus {
 
 function extractCaseName(reason: string, personName: string, allPeople: string[]): string {
   let name = reason;
-  name = name.replace(new RegExp(personName, 'g'), '');
+  // personName / allPeople 都来自 Excel 单元格。不转义时，含 `(` `[` `*` `\` 等
+  // 正则元字符的人名会让 new RegExp 抛 SyntaxError，冒泡到调用方的 useMemo
+  // 后直接白屏（React 渲染期没有错误边界）。历史数据恰好都是中文人名才没暴露。
+  name = name.replace(new RegExp(escapeRegex(personName), 'g'), '');
   for (const p of allPeople) {
-    if (p !== personName) name = name.replace(new RegExp(p, 'g'), '');
+    if (p !== personName) name = name.replace(new RegExp(escapeRegex(p), 'g'), '');
   }
   name = name
     .replace(/^[A-Za-z0-9]+[-]?/, '')

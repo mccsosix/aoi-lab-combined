@@ -1443,6 +1443,8 @@ const { readXlsxArrayBuffer, parseWorkbook, inferSheetMeta, analyzeParsedItems, 
 
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
+/** 被 AOI LAB 工作台以内嵌方式挂载时由宿主置位；独立 HTML 双击打开时为 false。 */
+const EMBEDDED=!!window.__AOI_EMBEDDED__;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(v,d=2)=>Number.isFinite(Number(v))?Number(v).toFixed(d):'—';
 const statusLabel={accepted:'完全认可',conditional:'条件认可',rejected:'不认可',pending:'待确认'};
@@ -1466,7 +1468,7 @@ const state={
 };
 
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.add('hidden'),3200);}
-function activate(name){$$('.tab').forEach(x=>x.classList.toggle('active',x.dataset.panel===name));$$('.panel').forEach(x=>x.classList.toggle('active',x.id==='panel-'+name));window.scrollTo({top:0,behavior:'smooth'});}
+function activate(name){$$('.tab').forEach(x=>x.classList.toggle('active',x.dataset.panel===name));$$('.panel').forEach(x=>x.classList.toggle('active',x.id==='panel-'+name));if(!EMBEDDED)window.scrollTo({top:0,behavior:'smooth'});}
 function unique(items,key){return [...new Set(items.map(x=>String(x[key]??'').trim()).filter(Boolean))];}
 function effectiveIssues(obj=state.before){if(!obj)return[];return obj.issues.filter(i=>!(i.sheet&&state.ignoredSheets.has(i.sheet)));}
 function fileStem(name){return String(name||'').trim().replace(/\.[^.]+$/,'').trim();}

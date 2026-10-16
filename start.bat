@@ -11,7 +11,7 @@ set "PORT_SCAN_MAX=5199"
 echo ============================================================
 echo    AOI LAB - Combined  Team Toolbox
 echo ============================================================
-echo    Integrated: 04 Repeatability / 05 Correlation (Coming Soon)
+echo    Integrated: 04 Repeatability / 05 Correlation
 echo    Launcher: v2026.08.14-r2
 echo.
 

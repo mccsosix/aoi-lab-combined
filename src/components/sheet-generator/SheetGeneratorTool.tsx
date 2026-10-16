@@ -15,6 +15,43 @@ type Mode = 'repeatability' | 'correlation';
 
 const DEFAULT_COLORS = ['#00B0F0', '#FFC000', '#92D050', '#FF6B6B', '#B4A7D6', '#FFD966', '#76D7C4', '#F1948A', '#85C1E9', '#F8C471'];
 
+/**
+ * 单次生成的硬上界。这些值是"防止把浏览器标签页写死"的护栏，
+ * 不是业务上限——需要更大规模时应改为分批生成或移入 Web Worker。
+ * 历史上 productCount / seatingCount 只有 min 没有 max，填 10000 产品
+ * 会让 ExcelJS 逐格写入十几万行，标签页直接假死直至 OOM。
+ */
+const MAX_PRODUCT_COUNT = 50;
+const MAX_SEATING_COUNT = 20;
+const MAX_TOTAL_ROWS = 50_000;
+/** 公差下限。公差为 0 会让 `=6*STDEV(...)/公差` 整列写出 #DIV/0!。 */
+const MIN_TOLERANCE = 0.0001;
+/** 相关性「测量数据行数」输入框的 max，与 JSX 里的 max={20} 保持一致。 */
+const MAX_CORR_DATA_ROWS = 20;
+
+/**
+ * VPP 导入会用"所有项目点数之和"回填相关性行数，但该输入框有 max 上界，
+ * 二者矛盾会导致受控值超出 max（输入框显示与校验不一致）。
+ * 这里统一收敛到 [1, MAX_CORR_DATA_ROWS]。
+ */
+function clampDataRows(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(MAX_CORR_DATA_ROWS, Math.max(1, Math.round(n)));
+}
+
+/**
+ * 估算生成工作量（近似"写入行数"），用于在动手之前拦住会导致标签页假死的参数组合。
+ * 注意：相关性表的产品是横向排布的，所以真实行数不含 productCount，
+ * 但单元格总量随产品数线性增长——这里按产品数计入工作量。
+ */
+function estimateWorkload(o: {
+  mode: Mode; sheetCount: number; productCount: number; dataRows: number; corrDataRows: number;
+}): number {
+  return o.mode === 'repeatability'
+    ? o.sheetCount * o.productCount * (7 + o.dataRows)
+    : o.sheetCount * o.productCount * (6 + o.corrDataRows + 1);
+}
+
 const templates = [
   { id: 'repeatability' as const, title: '重复性评估', note: '同一产品多次测量，验证数据稳定性' },
   { id: 'correlation' as const, title: '相关性评估', note: '对照两组测量数据，生成相关性表格' },
@@ -70,6 +107,14 @@ export default function SheetGeneratorTool({ onClose, showClose = true }: Props)
     if (mode === 'repeatability') return sheetCount * productCount * (7 + dataRows);
     return sheetCount * (6 + corrDataRows + 1);
   }, [angles, sheetCount, productCount, dataRows, mode, corrDataRows]);
+
+  const workload = useMemo(
+    () => estimateWorkload({ mode, sheetCount, productCount, dataRows, corrDataRows }),
+    [mode, sheetCount, productCount, dataRows, corrDataRows],
+  );
+  const exceedsLimit = angles.length > 0 && workload > MAX_TOTAL_ROWS;
+
+  const limitHint = `当前参数预计写入约 ${workload.toLocaleString()} 行，超过单次生成上限 ${MAX_TOTAL_ROWS.toLocaleString()} 行。请减少产品个数、乘坐次数或测量行数，或分批生成。`;
 
   const previewText = useMemo(() => {
     if (angles.length === 0) return '';
@@ -127,8 +172,14 @@ export default function SheetGeneratorTool({ onClose, showClose = true }: Props)
       })));
       // Auto-fill correlation data rows from total points
       const totalPoints = vppProjects.reduce((sum, p) => sum + (p.pointCount || 0), 0);
-      if (totalPoints > 0) setCorrDataRows(totalPoints);
-      setStatus({ msg: `已替换为 ${vppProjects.length} 个测量项目`, type: 'success' });
+      const clamped = clampDataRows(totalPoints);
+      if (clamped > 0) setCorrDataRows(clamped);
+      setStatus({
+        msg: clamped < totalPoints
+          ? `已替换为 ${vppProjects.length} 个测量项目（VPP 共 ${totalPoints} 点，已收敛为 ${clamped} 行以符合输入上限）`
+          : `已替换为 ${vppProjects.length} 个测量项目`,
+        type: 'success',
+      });
       return;
     }
 
@@ -145,7 +196,8 @@ export default function SheetGeneratorTool({ onClose, showClose = true }: Props)
       }))];
       // Auto-fill correlation data rows from total points
       const totalPoints = merged.reduce((sum, p) => sum + (p.pointCount || 0), 0);
-      if (totalPoints > 0) setCorrDataRows(totalPoints);
+      const clamped = clampDataRows(totalPoints);
+      if (clamped > 0) setCorrDataRows(clamped);
       return merged;
     });
     setStatus({ msg: `已追加 ${vppProjects.length} 个测量项目`, type: 'success' });
@@ -153,7 +205,24 @@ export default function SheetGeneratorTool({ onClose, showClose = true }: Props)
 
   const handleGenerate = useCallback(async () => {
     if (angles.length === 0) { setStatus({ msg: '请至少选择一个评估角度！', type: 'error' }); return; }
-    setGenerating(true); setProgress(0); setProgressText('正在生成...'); setStatus(null);
+
+    // ---- 生成前防御：拦住会写出 #DIV/0! 或让标签页假死的参数组合 ----
+    if (exceedsLimit) { setStatus({ msg: limitHint, type: 'error' }); return; }
+    if (mode === 'repeatability') {
+      const zeroTol = projects.find(p => !(Number(p.tolerance) > 0));
+      if (zeroTol) {
+        setStatus({
+          msg: `测量项目「${zeroTol.name}」的公差需大于 0，否则 6σ/T 公式会整列写出 #DIV/0!。`,
+          type: 'error',
+        });
+        return;
+      }
+    }
+
+    setGenerating(true); setProgress(0);
+    // 先渲染出 0% 与按钮的"生成中"态，再做同步的重活
+    setProgressText('正在生成...'); setStatus(null);
+    await new Promise<void>(r => setTimeout(r, 0));
     try {
       let buffer: ArrayBuffer;
       if (mode === 'repeatability') {
@@ -264,11 +333,23 @@ export default function SheetGeneratorTool({ onClose, showClose = true }: Props)
             <div className="base-fields">
               <label className="generator-field">
                 <span>产品个数</span>
-                <input type="number" min={1} value={productCount} onChange={e => setProductCount(Math.max(1, parseInt(e.target.value) || 1))} />
+                <input type="number" min={1} max={MAX_PRODUCT_COUNT}
+                  value={productCount}
+                  onChange={e => {
+                    const v = parseInt(e.target.value);
+                    setProductCount(isNaN(v) || v < 1 ? 1 : Math.min(MAX_PRODUCT_COUNT, v));
+                  }} />
+                <small>单次最多 {MAX_PRODUCT_COUNT} 个</small>
               </label>
               <label className="generator-field">
                 <span>乘坐次数</span>
-                <input type="number" min={1} value={seatingCount} onChange={e => setSeatingCount(Math.max(1, parseInt(e.target.value) || 1))} />
+                <input type="number" min={1} max={MAX_SEATING_COUNT}
+                  value={seatingCount}
+                  onChange={e => {
+                    const v = parseInt(e.target.value);
+                    setSeatingCount(isNaN(v) || v < 1 ? 1 : Math.min(MAX_SEATING_COUNT, v));
+                  }} />
+                <small>单次最多 {MAX_SEATING_COUNT} 次</small>
               </label>
               <fieldset className="angle-field">
                 <legend>评估角度</legend>
@@ -297,10 +378,10 @@ export default function SheetGeneratorTool({ onClose, showClose = true }: Props)
               ) : (
                 <label className="generator-field">
                   <span>测量数据行数</span>
-                  <input type="number" min={1} max={20} value={corrDataRows}
+                  <input type="number" min={1} max={MAX_CORR_DATA_ROWS} value={corrDataRows}
                     onChange={e => {
                       const v = parseInt(e.target.value);
-                      setCorrDataRows(isNaN(v) || v < 1 ? 1 : v);
+                      setCorrDataRows(isNaN(v) || v < 1 ? 1 : Math.min(MAX_CORR_DATA_ROWS, v));
                     }} />
                   <small>每个产品的测量点数</small>
                 </label>
@@ -403,7 +484,7 @@ export default function SheetGeneratorTool({ onClose, showClose = true }: Props)
               <b>.xlsx</b>
             </div>
           </label>
-          <button type="button" className="generate-button" onClick={handleGenerate} disabled={generating || angles.length === 0}>
+          <button type="button" className="generate-button" onClick={handleGenerate} disabled={generating || angles.length === 0 || exceedsLimit}>
             {generating ? '生成中...' : '生成并下载'} <span>→</span>
           </button>
 

@@ -36,4 +36,4 @@ export interface MeasurementProject {
   tolerance: number;
 }
 
-export type ToolId = 'case-query' | 'sheet-generator' | 'fov' | 'repeatability' | 'correlation' | null;
+export type ToolId = 'case-query' | 'sheet-generator' | 'fov' | 'repeatability' | 'correlation' | 'lighting-report' | null;

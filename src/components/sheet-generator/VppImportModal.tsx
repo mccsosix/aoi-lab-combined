@@ -300,7 +300,7 @@ export default function VppImportModal({ onImport, onClose, defaultColors, exist
                             </td>
                             <td>
                               <div className="vpp-cell-with-hint">
-                                <input className="panel-input panel-input-sm" type="number" min={0} step={0.01}
+                                <input className="panel-input panel-input-sm" type="number" min={0.0001} step={0.01}
                                   value={item.tolerance ?? ''}
                                   placeholder={item.toleranceConfidence.source}
                                   onChange={e => updateItem(item.id, 'tolerance', e.target.value)}

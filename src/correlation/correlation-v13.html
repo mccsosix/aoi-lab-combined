@@ -7,8 +7,8 @@
 
 <style>
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 :root {
-  /* AOI LAB 设计令牌 */
   --navy: #072F50;
   --ink: #08304F;
   --cream: #FFF9E8;
@@ -19,7 +19,6 @@
   --grid: rgba(112,190,220,0.14);
   --mono: "Geist Mono","PingFang SC","Microsoft YaHei",Consolas,Menlo,monospace;
   --sans: "Geist","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
-  /* 兼容旧内联样式变量 */
   --primary: #24D4D3;
   --success: #0d9894;
   --danger: #c0392b;
@@ -27,6 +26,9 @@
   --sub: #557a8a;
   --border: #08304F;
   --card: #FFFAEA;
+  --fail: #a3331f;
+  --warn: #b5640a;
+  --ok: #0d6b66;
 }
 html { scroll-behavior: smooth; }
 body {
@@ -69,11 +71,11 @@ body {
   box-shadow: 9px 9px 0 rgba(1,20,34,.55);
   counter-reset: cardno;
 }
-/* ─── 卡片（分节面板，自动编号 01/02/03） ─── */
 .card {
   position: relative; background: #fffdf5; color: var(--ink);
   border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--cyan);
   padding: 22px 24px; margin-top: 22px;
+  counter-increment: cardno;
 }
 .card > h2 {
   display: flex; align-items: center; gap: 14px; margin: 0 0 18px;
@@ -93,21 +95,35 @@ body {
   padding: 6px 12px; white-space: nowrap;
 }
 
-/* ─── 结论条 ─── */
-.conclusion {
-  border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--cyan);
-  padding: 16px 20px; background: #fffdf5; margin-top: 22px;
+/* ─── ① 结论条 ─── */
+.verdict {
+  border: 2px solid var(--ink); border-left-width: 10px; border-left-color: var(--cyan);
+  box-shadow: 5px 5px 0 var(--cyan); padding: 18px 22px; background: #fffdf5;
 }
-/* 去掉了工具标题头后，结论条作为页面首个元素顶到纸张顶部 */
-.conclusion:first-child { margin-top: 0; }
-.conclusion .main { font: 800 1.05rem/1.3 var(--sans); margin-bottom: 6px; color: var(--ink); }
-.conclusion .detail { font-size: 13px; color: #4e6b7a; line-height: 1.6; }
-.conclusion.pass { border-left: 8px solid var(--cyan); }
-.conclusion.pass .main { color: #0d6b66; }
-.conclusion.warn { border-left: 8px solid var(--orange); }
-.conclusion.warn .main { color: #b5640a; }
-.conclusion.fail { border-left: 8px solid var(--danger); }
-.conclusion.fail .main { color: #a3331f; }
+.verdict-main { font: 900 1.45rem/1.25 var(--sans); letter-spacing: .01em; color: var(--ink); }
+.verdict-sub { margin-top: 8px; font-size: 14px; color: #4e6b7a; }
+.verdict-sub b { color: var(--ink); }
+.verdict-actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+.verdict.pass { border-left-color: #0d9894; }
+.verdict.pass .verdict-main { color: var(--ok); }
+.verdict.warn { border-left-color: var(--orange); }
+.verdict.warn .verdict-main { color: var(--warn); }
+.verdict.fail { border-left-color: var(--danger); }
+.verdict.fail .verdict-main { color: var(--fail); }
+
+/* ─── ② 识别结果 ─── */
+.recognize { margin-top: 14px; border: 2px solid var(--ink); background: #fffdf5; padding: 14px 16px; }
+.rec-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-weight: 800; font-size: 14px; }
+.rec-head .file { font-weight: 700; font-size: 12.5px; color: var(--sub); }
+.rec-grid { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.rec-item { border: 1px solid #08304f33; background: #f7fbfa; padding: 8px 10px; }
+.rec-k { font: 800 .68rem/1 var(--mono); letter-spacing: .04em; color: var(--sub); }
+.rec-v { margin-top: 6px; font: 800 13px/1.35 var(--sans); color: var(--ink); }
+.rec-seat { margin-top: 10px; font-size: 12.5px; color: #4e6b7a; line-height: 1.9; }
+.rec-warn { margin-top: 10px; border-left: 4px solid var(--orange); background: #ff9d2e14; padding: 8px 12px; font-size: 12.5px; line-height: 1.7; color: #8a5a08; }
+.rec-ok { margin-top: 10px; border-left: 4px solid #0d9894; background: #24d4d30f; padding: 8px 12px; font-size: 12.5px; color: var(--ok); }
+/* 多乘坐同批样品 → 判定必须跨乘坐合并，这句话要在识别卡里说死 */
+.rec-merge { margin-top: 10px; border-left: 4px solid var(--ink); background: #08304f0a; padding: 8px 12px; font-size: 12.5px; line-height: 1.7; color: #2b4a5c; }
 
 /* ─── 表单元素 ─── */
 label { display: block; font-size: 12.5px; color: var(--ink); margin-bottom: 6px; font-weight: 800; }
@@ -121,9 +137,7 @@ select {
   background: #fffdf5; color: var(--ink); font-family: var(--sans); font-size: 13px; cursor: pointer;
   width: 100%;
 }
-input:focus, select:focus {
-  border-color: var(--cyan); outline: 3px solid var(--orange); outline-offset: 2px;
-}
+input:focus, select:focus { border-color: var(--cyan); outline: 3px solid var(--orange); outline-offset: 2px; }
 
 button { font-family: var(--sans); }
 .btn-primary {
@@ -141,8 +155,10 @@ button { font-family: var(--sans); }
 .btn-ghost:hover { background: #08304f0d; }
 .btn-ghost:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
 .btn-ghost-sm { font-size: .78rem; padding: 6px 12px; }
+button[disabled] { opacity: .45; cursor: not-allowed; }
 
-.param-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin-top: 18px; }
+.param-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+.param-row-1 { grid-template-columns: minmax(0, 220px); }
 .btn-row { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }
 .muted { color: var(--sub); }
 
@@ -156,94 +172,117 @@ button { font-family: var(--sans); }
 .drop-hint .drop-icon { display: block; font-size: 34px; margin-bottom: 10px; line-height: 1; }
 .drop-hint .drop-sub { display: block; font-size: 11.5px; font-weight: 500; color: var(--sub); margin-top: 4px; }
 .drop-hint.dragover { border-color: var(--cyan); background: #dff9f3; color: var(--ink); transform: scale(1.01); }
-.file-info { margin-top: 12px; font-size: 13px; line-height: 1.6; }
-.scope-note {
-  margin-top: 14px; font-size: 12.5px; color: #4e6b7a;
-  background: #08304f0a; border-left: 4px solid var(--cyan);
-  padding: 9px 13px; line-height: 1.6;
-}
 
-/* ─── 图表 ─── */
-.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.chart-box { height: 380px; background: #fffdf5; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--cyan); }
-.chart-title { font: 800 .72rem/1 var(--mono); color: var(--ink); letter-spacing: .04em; text-align: center; padding: 8px 0 0; }
-
-/* ─── 表格 ─── */
-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #08304f1f; }
-th {
-  color: var(--ink); font-weight: 800; font-size: 11.5px; background: var(--cyan-soft);
-  border-bottom: 2px solid var(--ink); position: sticky; top: 0; z-index: 1; font-family: var(--mono);
-}
-td.mono { font-family: var(--mono); }
-
-/* ─── 状态标签（不只靠颜色，加描边） ─── */
-.tag { display: inline-block; padding: 2px 9px; border-radius: 0; border: 1px solid var(--ink); font: 800 .72rem/1 var(--mono); white-space: nowrap; }
-.tag.ok { background: var(--cyan-soft); color: var(--ink); }
-.tag.bad { background: #f6d9d2; color: #a3331f; }
-.tag.warn { background: #ffe1ad; color: #b5640a; }
-
-.err { color: #a3331f; font-size: 12.5px; margin-top: 12px; display: none; background: #f6d9d2; border: 2px solid var(--danger); border-left-width: 6px; padding: 8px 10px; }
+.err { color: var(--fail); font-size: 12.5px; margin-top: 12px; display: none; background: #f6d9d2; border: 2px solid var(--danger); border-left-width: 6px; padding: 8px 10px; }
 .err.show { display: block; }
 
-.footer { text-align: center; color: #557a8a; font: 700 .78rem/1.4 var(--mono); margin-top: 28px; padding-bottom: 8px; }
+/* ─── 高级参数 / 口径说明 折叠 ─── */
+details.adv { margin-top: 16px; border-top: 2px solid #08304f1f; padding-top: 12px; }
+details.adv > summary { cursor: pointer; font: 800 .78rem/1 var(--mono); color: var(--ink); padding: 4px 0; }
+details.adv > summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.adv-body { padding-top: 12px; }
+details.spec-note { margin-top: 22px; border: 2px solid #08304f33; background: #fffdf5; padding: 12px 16px; }
+details.spec-note > summary { cursor: pointer; font: 800 .78rem/1 var(--mono); color: var(--ink); }
+details.spec-note > summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.spec-body { margin-top: 10px; font-size: 12.5px; line-height: 1.85; color: #4e6b7a; }
+.spec-body b { color: var(--ink); }
+.spec-body ul { margin: 8px 0 0; padding-left: 20px; }
 
-/* ─── 乘坐块 ─── */
-.seat-block { margin-bottom: 18px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 4px 4px 0 var(--cyan); overflow: hidden; }
-.seat-title { background: var(--cyan-soft); padding: 12px 16px; font-weight: 800; font-size: 14px; color: var(--ink); border-bottom: 2px solid var(--ink); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.seat-title .sub { font-weight: 700; font-size: 12px; color: #4e6b7a; }
-.seat-func { padding: 10px 16px; background: #fffdf5; border-bottom: 2px solid var(--ink); font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.seat-block table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.seat-block th { background: var(--cyan-soft); color: var(--ink); font-weight: 800; font-size: 11.5px; text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--ink); font-family: var(--mono); }
-.seat-block td { padding: 8px 12px; border-bottom: 1px solid #08304f1f; }
-.formula-chip { display: inline-block; background: var(--ink); color: var(--cream); font-family: var(--mono); font-size: 12px; padding: 3px 10px; border: 2px solid var(--ink); }
+/* ─── ③ 照这个填 ─── */
+.plan-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; font-weight: 800; }
+.plan-why { margin-top: 10px; border-left: 4px solid var(--cyan); background: #08304f0a; padding: 8px 12px; font-size: 12.5px; line-height: 1.7; color: #4e6b7a; }
+.plan-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 12.5px; }
+.plan-table th { background: var(--cyan-soft); color: var(--ink); font: 800 11.5px/1 var(--mono); text-align: left; padding: 9px 12px; border-bottom: 2px solid var(--ink); white-space: nowrap; }
+.plan-table td { padding: 8px 12px; border-bottom: 1px solid #08304f1f; }
+.plan-table td.num { font-family: var(--mono); white-space: nowrap; }
+.val-chip { display: inline-flex; align-items: center; gap: 8px; }
+.val-chip b { font-family: var(--mono); font-size: 13.5px; background: var(--cyan-soft); border: 1px solid var(--ink); padding: 2px 8px; }
+.copy-btn { border: 1px solid var(--ink); background: transparent; font: 800 .68rem/1 var(--mono); padding: 5px 8px; cursor: pointer; }
+.copy-btn:hover { background: var(--ink); color: var(--paper); }
+.alt-wrap { margin-top: 16px; border-top: 2px solid #08304f1f; padding-top: 12px; }
+.alt-wrap > summary { cursor: pointer; font: 800 .78rem/1 var(--mono); color: var(--ink); }
+.alt-wrap > summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.alt-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+.alt-table th { background: #eef4f3; font: 800 11px/1 var(--mono); text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--ink); white-space: nowrap; }
+.alt-table td { padding: 7px 10px; border-bottom: 1px solid #08304f14; white-space: nowrap; }
+.alt-table tr.pick td { background: #e6fbf8; font-weight: 700; }
 
-/* ─── 补偿建议 ─── */
-.advice-head { font: 800 .75rem/1 var(--mono); color: var(--ink); letter-spacing: .04em; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.advice-head .muted { font-family: var(--sans); font-weight: 500; font-size: 12px; letter-spacing: 0; }
-.advice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.advice-card { border: 2px solid var(--ink); background: #fffdf5; box-shadow: 3px 3px 0 var(--cyan); padding: 12px 14px; }
-.advice-card.no { box-shadow: 3px 3px 0 var(--danger); }
-.advice-card.yes { box-shadow: 3px 3px 0 var(--cyan); }
-.advice-card .k { font: 800 .74rem/1 var(--mono); color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.advice-val { font-family: var(--mono); font-size: 15px; font-weight: 800; color: var(--ink); background: var(--cyan-soft); border: 1px solid var(--ink); padding: 3px 10px; display: inline-block; margin-top: 8px; }
-.advice-note { font-size: 12px; color: #4e6b7a; line-height: 1.6; margin-top: 8px; }
-.advice-note b { color: var(--ink); }
-.advice-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
-.advice-bn { margin-top: 10px; font-size: 12px; color: #4e6b7a; line-height: 1.7; border-left: 4px solid var(--orange); background: #08304f0a; padding: 8px 12px; }
-.advice-bn .pt { font-family: var(--mono); color: #a3331f; font-weight: 700; }
-@media (max-width: 980px) { .advice-grid { grid-template-columns: 1fr; } }
+/* ─── ④ 哪些没对上 ─── */
+/* 宽屏：左边矩阵（"哪里没对上"）右边原因清单（"为什么"），把横向空间用满 */
+.fail-layout { display: grid; grid-template-columns: max-content minmax(260px, 1fr); gap: 24px; align-items: start; }
+.mtx-block { border: 2px solid var(--ink); background: #fffdf5; padding: 10px 12px; overflow-x: auto; }
+.mtx-title { font-size: 12.5px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.mtx-title .sub { font-weight: 700; font-size: 11.5px; color: var(--sub); }
+/* 矩阵 = 一行一个样品、列按乘坐分段：一行全 ✓ 才算这个样品对上 */
+.mtx-table { border-collapse: collapse; margin-top: 8px; }
+.mtx-table th { padding: 0; font-weight: 800; }
+.mtx-th-lab { width: 26px; }
+.mtx-th-seat {
+  font-family: var(--sans); font-size: 11.5px; color: var(--ink);
+  text-align: center; padding: 0 3px 2px; border-bottom: 2px solid var(--ink);
+}
+.mtx-th-pt { font-family: var(--mono); font-size: 10.5px; color: var(--sub); text-align: center; padding-bottom: 3px; }
+.mtx-th-v {
+  font-family: var(--sans); font-size: 11.5px; color: var(--ink); text-align: center;
+  padding: 0 0 2px 9px; border-bottom: 2px solid var(--ink);
+}
+.mtx-table td.mtx-lab { font: 700 11px/1 var(--mono); color: #4e6b7a; cursor: pointer; text-align: right; padding-right: 8px; }
+.mtx-table td.mtx-lab:hover { color: var(--ink); text-decoration: underline; }
+.mtx-cell { width: 18px; height: 18px; line-height: 16px; text-align: center; font-size: 11px; font-weight: 800; border: 1px solid #08304f55; }
+.mtx-ok { background: var(--cyan-soft); color: #0b5b57; }
+.mtx-no { background: #f6d9d2; color: var(--fail); }
+.mtx-na { background: #f0f0f0; color: #b3bfc6; }
+.mtx-table td.mtx-v { width: 22px; border-left: 2px solid var(--ink); }
+.mtx-note { margin-top: 8px; font-size: 11.5px; color: var(--sub); }
+.fail-list { min-width: 0; }
+.fail-item { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-left: 4px solid #08304f33; background: #08304f0a; padding: 8px 12px; margin-bottom: 8px; font-size: 12.5px; }
+.fail-item .who { font-weight: 800; flex: 0 0 auto; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+/* 样品名后面的"哪个乘坐拖后腿"小标 */
+.seatmk {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  padding: 1px 5px; border: 1px solid #08304f33;
+}
+.seatmk.ok { background: var(--cyan-soft); color: #0b5b57; }
+.seatmk.no { background: #f6d9d2; color: var(--fail); }
+.fail-item .why { color: #4e6b7a; }
+.fail-item .act { font-weight: 800; margin-left: auto; }
+.fail-item.cls-scatter { border-left-color: var(--danger); background: #f6d9d21f; }
+.fail-item.cls-scatter .act { color: var(--fail); }
+.fail-item.cls-lost { border-left-color: #8a5a08; background: #ffe1ad4d; }
+.fail-item.cls-lost .act { color: #8a5a08; }
+.fail-item.cls-range { border-left-color: var(--orange); background: #ff9d2e14; }
+.fail-item.cls-range .act { color: var(--warn); }
+.fail-item.cls-offset { border-left-color: var(--cyan); }
+.fail-item.cls-offset .act { color: var(--ok); }
+.fail-empty { border-left: 4px solid #0d9894; background: #24d4d30f; padding: 10px 14px; font-size: 12.5px; color: var(--ok); }
 
-/* ─── 补偿建议（按项目名，跨乘坐） ─── */
-.global-advice { border: 3px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 var(--cyan); padding: 14px 16px; margin-bottom: 18px; }
-.global-advice .advice-head { font-size: .82rem; }
-.advice-bwrap { margin-top: 10px; max-height: 280px; overflow-y: auto; border: 2px solid var(--ink); }
-.advice-b { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.advice-b th { position: sticky; top: 0; z-index: 1; background: var(--cyan-soft); color: var(--ink); font: 800 11.5px/1 var(--mono); text-align: left; padding: 7px 10px; border-bottom: 2px solid var(--ink); white-space: nowrap; }
-.advice-b td { padding: 5px 10px; border-bottom: 1px solid #08304f14; font-family: var(--mono); white-space: nowrap; }
-.advice-b td:first-child, .advice-b td.sn { font-family: var(--sans); }
-.advice-b tr:hover td { background: #f1f8f6; }
-details.advice-alt { margin-top: 12px; }
-details.advice-alt > summary { cursor: pointer; font: 800 .78rem/1 var(--mono); color: var(--ink); padding: 8px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-details.advice-alt > summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
-
-/* ─── 产品块（每个产品展开逐点明细） ─── */
-.prod-block { border-top: 2px solid var(--ink); }
+/* ─── ⑤ 明细 ─── */
+/* 一行一个样品（跨乘坐）；容器本身当外框，样品之间用分隔线 */
+#detailBody { border: 2px solid var(--ink); background: var(--paper); box-shadow: 4px 4px 0 var(--cyan); overflow: hidden; }
+#detailBody:empty { border: none; box-shadow: none; }
+.prod-block + .prod-block { border-top: 2px solid var(--ink); }
 .prod-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; cursor: pointer; user-select: none; font-weight: 700; font-size: 13px; background: #fffdf5; }
 .prod-head:hover { background: var(--cyan-soft); }
 .prod-head .arrow { display: inline-block; font-size: 10px; color: var(--ink); width: 12px; transition: transform .15s; }
 .prod-head.collapsed .arrow { transform: rotate(-90deg); }
 .prod-head .link { font-weight: 800; font-size: 12px; color: var(--ink); cursor: pointer; border-bottom: 2px solid var(--cyan); padding-bottom: 1px; }
-.prod-head .link:hover { color: #0d6b66; border-color: var(--orange); }
+.prod-head .link:hover { color: var(--ok); border-color: var(--orange); }
 .prod-points { padding: 4px 16px 12px; overflow-x: auto; }
 .prod-points table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .prod-points th { background: #eef4f3; color: var(--ink); font-weight: 800; font-size: 11px; text-align: right; padding: 6px 10px; border-bottom: 2px solid var(--ink); white-space: nowrap; font-family: var(--mono); }
 .prod-points th:first-child, .prod-points td:first-child { text-align: center; }
 .prod-points td { padding: 5px 10px; border-bottom: 1px solid #08304f14; text-align: right; font-family: var(--mono); white-space: nowrap; }
 .prod-points tr:hover td { background: #f1f8f6; }
-.pt-ok { color: #0d6b66; font-weight: 700; }
-.pt-fail { color: #a3331f; font-weight: 700; }
-.pt-fail-cell { background: #f6d9d2 !important; color: #a3331f; font-weight: 700; }
+.pt-ok { color: var(--ok); font-weight: 700; }
+.pt-warn { color: var(--warn); font-weight: 700; }
+.pt-fail { color: var(--fail); font-weight: 700; }
+.pt-fail-cell { background: #f6d9d2 !important; color: var(--fail); font-weight: 700; }
+
+/* ─── 状态标签（不只靠颜色，加描边与字形） ─── */
+.tag { display: inline-block; padding: 2px 9px; border: 1px solid var(--ink); font: 800 .72rem/1 var(--mono); white-space: nowrap; }
+.tag.ok { background: var(--cyan-soft); color: var(--ink); }
+.tag.bad { background: #f6d9d2; color: var(--fail); }
+.tag.warn { background: #ffe1ad; color: var(--warn); }
 
 /* ─── 散点图弹窗 ─── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(7,47,80,.88); z-index: 1000; display: none; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow-y: auto; }
@@ -253,17 +292,25 @@ details.advice-alt > summary:focus-visible { outline: 3px solid var(--orange); o
 .modal-head h3 { margin: 0; font-size: 16px; font-weight: 900; color: var(--ink); }
 .modal-close { border: none; background: var(--ink); color: var(--paper); width: 36px; height: 36px; font-size: 16px; cursor: pointer; line-height: 1; font-family: var(--mono); }
 .modal-close:hover { background: var(--orange); color: var(--ink); }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-box { height: 340px; background: #fffdf5; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--cyan); }
+.chart-title { font: 800 .72rem/1 var(--mono); color: var(--ink); letter-spacing: .04em; text-align: center; padding: 8px 0 0; }
+
+.footer { text-align: center; color: #557a8a; font: 700 .78rem/1.4 var(--mono); margin-top: 28px; padding-bottom: 8px; }
 
 /* ─── 响应式 ─── */
 @media (max-width: 980px) {
   .charts { grid-template-columns: 1fr; }
   .param-row { grid-template-columns: 1fr 1fr; }
+  .fail-layout { grid-template-columns: 1fr; }
 }
 @media (max-width: 680px) {
   .lab-topbar { padding: 12px 16px; }
-  .param-row { grid-template-columns: 1fr; }
+  .param-row, .param-row-1 { grid-template-columns: 1fr; }
   .container { margin: 16px 12px 40px; box-shadow: 6px 6px 0 rgba(1,20,34,.55); }
   .card { padding: 18px 16px; }
+  .verdict-main { font-size: 1.15rem; }
+  .verdict { padding: 14px 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -283,71 +330,105 @@ details.advice-alt > summary:focus-visible { outline: 3px solid var(--orange); o
 </div>
 
 <div class="container" id="top">
-  <!-- 按乘坐的诊断汇总条 -->
-  <div class="conclusion" id="multiSummaryBar">
-    <div class="main" id="multiSummaryMain">导入 Excel 文件后点击 [开始分析]</div>
-    <div class="detail" id="multiSummaryDetail">Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列</div>
+  <!-- ① 结论：整个页面的答案，不展开任何折叠就能看完 -->
+  <div class="verdict" id="conclusionBar" role="status" aria-live="polite">
+    <div class="verdict-main" id="conclusionMain">导入对样表，然后点「开始分析」</div>
+    <div class="verdict-sub" id="conclusionSub">每个 sheet 是一个乘坐；读 CCD（测量值）与 QV（标准值）两列。</div>
+    <div class="verdict-actions" id="conclusionActions"></div>
   </div>
 
-  <!-- 按项目名的补偿结论条（组合维度判定） -->
-  <div class="conclusion" id="globalSummaryBar">
-    <div class="main" id="globalSummaryMain">补偿建议：等待分析</div>
-    <div class="detail" id="globalSummaryDetail">规则：y = ax + b，优先只改补偿值 b（分辨率 a 不动）；同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b。判定看（乘坐 × 项目名）组合里全部点位对齐的个数。</div>
-  </div>
-
-  <!-- Excel 导入 -->
+  <!-- ② 导入 + 识别结果 -->
   <div class="card">
-    <h2><span class="dot"></span>Excel 文件导入 <span class="badge">每个 sheet 一个乘坐</span></h2>
+    <h2><span class="dot"></span>导入对样表 <span class="badge">每个 sheet 一个乘坐</span></h2>
     <div class="drop-hint" id="excelDropHint">
       <span class="drop-icon" aria-hidden="true">📁</span>
       拖拽 .xlsx 文件到这里，或点击选择文件
-      <span class="drop-sub">每个 sheet = 一个乘坐 · sheet 内 1#~10# = 10 个产品</span>
+      <span class="drop-sub">每个 sheet = 一个乘坐 · 1#~10# = 样品 · 块左侧为检测项目列（如 舌片TPY）</span>
     </div>
     <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none" />
-    <div id="excelFileInfo" class="file-info muted">未加载文件</div>
 
-    <div class="param-row">
+    <div class="recognize" id="recognizeBox" hidden></div>
+    <div class="err" id="multiErr"></div>
+
+    <div class="param-row param-row-1">
       <div>
         <label for="multiTolerance">容差（gap 上限）</label>
         <input type="number" id="multiTolerance" value="0.015" min="0" step="0.001" />
       </div>
-      <div>
-        <label for="multiTransformType">变换类型</label>
-        <select id="multiTransformType">
-          <option value="linear">线性拟合 y = ax + b（推荐）</option>
-          <option value="offset">固定 a=1（仅补偿 y = x + b）</option>
-          <option value="none">不变换（只看原始 gap）</option>
-        </select>
-      </div>
-      <div>
-        <label for="multiATol">分辨率缩放容差 |a−1|</label>
-        <input type="number" id="multiATol" value="0.1" min="0" step="0.001" />
-      </div>
-      <div>
-        <label for="multiCompTol">补偿值上限</label>
-        <input type="number" id="multiCompTol" value="0.03" min="0" step="0.001" />
-      </div>
     </div>
-    <div class="scope-note">每个乘坐共用一个变换函数（该乘坐 10 个产品同一套 y = ax + b）；a 表示分辨率缩放（最好趋近 1），b 表示补偿值（尽量 ≤0.03）</div>
 
-    <div class="err" id="multiErr"></div>
     <div class="btn-row">
       <button class="btn-primary" id="multiAnalyzeBtn">▶ 开始分析</button>
       <button class="btn-ghost" id="multiClearBtn">清空</button>
     </div>
+
+    <details class="adv">
+      <summary>高级参数</summary>
+      <div class="adv-body">
+        <div class="param-row">
+          <div>
+            <label for="multiAlignRate">通过门槛（%）</label>
+            <input type="number" id="multiAlignRate" value="50" min="1" max="100" step="1" />
+          </div>
+          <div>
+            <label for="multiCompTol">补偿值上限</label>
+            <input type="number" id="multiCompTol" value="0.03" min="0" step="0.001" />
+          </div>
+          <div>
+            <label for="multiATol">分辨率容差 |a−1|</label>
+            <input type="number" id="multiATol" value="0.1" min="0" step="0.001" />
+          </div>
+          <div>
+            <label for="multiCompGroup">补偿共用单位</label>
+            <select id="multiCompGroup">
+              <option value="item" selected>按检测项目共用（跨乘坐）</option>
+              <option value="seat">每个乘坐一套函数</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </details>
   </div>
 
-  <!-- 比对结果：每个乘坐一个表格 -->
-  <div class="card">
-    <h2><span class="dot"></span>比对结果 <span class="badge" id="multiSummaryBadge">—</span></h2>
-    <div class="btn-row" style="margin:0 0 10px">
+  <!-- ③ 照这个填 -->
+  <div class="card" id="planCard" hidden>
+    <h2><span class="dot"></span>照这个填 <span class="badge" id="planBadge">—</span></h2>
+    <div id="planBody"></div>
+  </div>
+
+  <!-- ④ 哪些没对上 -->
+  <div class="card" id="failCard" hidden>
+    <h2><span class="dot"></span>哪些没对上 <span class="badge" id="failBadge">—</span></h2>
+    <div id="failBody"></div>
+  </div>
+
+  <!-- ⑤ 明细与导出 -->
+  <div class="card" id="detailCard" hidden>
+    <h2><span class="dot"></span>明细与导出 <span class="badge">默认折叠</span></h2>
+    <div class="btn-row" style="margin:0 0 14px">
+      <button class="btn-ghost" id="multiExportXlsx">导出补偿后表格</button>
       <button class="btn-ghost" id="multiExportCsv">导出 CSV</button>
       <button class="btn-ghost" id="multiCopyTable">复制汇总表</button>
       <button class="btn-ghost btn-ghost-sm" id="multiExpandAll">展开全部点位</button>
       <button class="btn-ghost btn-ghost-sm" id="multiCollapseAll">收起全部点位</button>
     </div>
-    <div id="multiResultContainer"></div>
+    <div id="detailBody"></div>
   </div>
+
+  <!-- 口径说明：全部解释收在这里，页面上不再复述 -->
+  <details class="spec-note">
+    <summary>口径说明</summary>
+    <div class="spec-body">
+      <ul>
+        <li><b>对上</b>：一个组合（乘坐 × 样品）里<b>全部点位</b> |gap| ≤ 容差，才算这个组合对上。不是按比例。</li>
+        <li><b>门槛</b>：只作用在个数上——乘坐内对上样品数 ≥ 门槛、对上组合数 ≥ 门槛（默认 50%），方案才算可行。</li>
+        <li><b>群体补偿 b</b>：同一个分组内的所有点位共用一个值。默认分组 = <b>按检测项目共用</b>——左乘坐舌片与右乘坐舌片属于同一个检测项目（舌片TPY），因此只给<b>一个</b>补偿值，符合"一套测量程序只能填一个补偿"的现场约束。想省填数就用这个默认；仅在现场确实支持分乘坐设值时，才切到「每个乘坐一套函数」。</li>
+        <li><b>分辨率 a</b>：由稳健拟合（Theil-Sen + 内点 OLS）如实给出，不限制范围；「分辨率容差 |a−1|」只用于判断这个 a 能不能接受，超了标 ✗。修正关系为 y = a·x + b。</li>
+        <li><b>推荐顺序</b>：先只改补偿值 b（不动分辨率）→ 不行才动 a → 再不行降级到另一档共用单位。「只改 b」永远优先。</li>
+        <li><b>残差诊断</b>：分辨率固定时，存在补偿值使该组合全部点位对上，当且仅当残差跨度 ≤ 2×容差。跨度超了就是补偿救不了的组合，会单独列出。诊断只用于解释，不改变上面的判定结果。</li>
+      </ul>
+    </div>
+  </details>
 
   <!-- 散点图弹窗 -->
   <div class="modal-overlay" id="multiDetailCard">
@@ -359,22 +440,26 @@ details.advice-alt > summary:focus-visible { outline: 3px solid var(--orange); o
       <div class="charts">
         <div>
           <div class="chart-title">原始：测量值(CCD) → 标准值(QV)</div>
-          <div class="chart-box" id="multiChartRaw" style="height:340px"></div>
+          <div class="chart-box" id="multiChartRaw"></div>
         </div>
         <div>
-          <div class="chart-title">变换后：校准值 → 标准值(QV)</div>
-          <div class="chart-box" id="multiChartFit" style="height:340px"></div>
+          <div class="chart-title">补偿后：校准值 → 标准值(QV)</div>
+          <div class="chart-box" id="multiChartFit"></div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="footer">相关性判断 · 偏移校准 + 内点分析 · 数据不上传</div>
+  <div class="footer">相关性判断 · 数据不上传</div>
 </div>
 
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
+// 乘坐名 = Excel sheet 名，是外部提供的不受信字符串，会被拼进 innerHTML。
+// 04 工具全程用 esc()，这里此前完全没有转义 —— 构造 sheet 名为
+// `<img src=x onerror=...>` 的 xlsx 即可触发自 XSS。统一用同一个实现。
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* ==================== 算法 ==================== */
 
@@ -412,6 +497,32 @@ function theilSen(xs, ys) {
   return { a, b };
 }
 
+function median(arr) {
+  const a = [...arr].sort((p, q) => p - q);
+  return a.length ? a[Math.floor(a.length / 2)] : 0;
+}
+
+// 稳健线性拟合 y = ax + b（参考版 §7.2 原样恢复）：
+//   Theil-Sen 中位数斜率作抗离群初值 → 剔除离群点 → 在内点上做 OLS 细化。
+// **a 由数据拟合得出，不夹在「分辨率缩放容差」里**（参考版 §8.3「a 不强制=1，最好趋近 1（拟合，不做死）」）。
+// aTol 只用来**判断**算出来的 a 是否可接受，绝不参与拟合。
+// 历史教训：把 a 夹在 |a−1| ≤ aTol 内搜，会永远停在边界（实测 a 恒为 0.9000），
+// 那是个被夹出来的假值；而放开搜索又会挑出 a≈0.5 这种把点云压成常数的退化解。
+// 两个极端都不对 —— 正解是让稳健拟合如实给出 a，再**明确标注** |a−1| 是否超限。
+function robustFit(xs, ys, tol) {
+  const ts = theilSen(xs, ys);
+  const thresh = Math.max(tol * 2, 0.02);
+  const ix = [], iy = [];
+  for (let i = 0; i < xs.length; i++) {
+    if (Math.abs(ts.a * xs[i] + ts.b - ys[i]) <= thresh) { ix.push(xs[i]); iy.push(ys[i]); }
+  }
+  if (ix.length >= 3) {
+    const o = fitLinear(ix, iy);
+    if (isFinite(o.a) && isFinite(o.b)) return { a: o.a, b: o.b };
+  }
+  return { a: ts.a, b: ts.b };
+}
+
 function fmt(x) {
   if (!isFinite(x)) return '0';
   if (Math.abs(x) < 1e-10) return '0';
@@ -434,7 +545,7 @@ function renderAlignmentChart(el, xs, ys, tol) {
   const L = lo - pad, H = hi + pad;
   const pass = [], fail = [];
   for (let i = 0; i < xs.length; i++) {
-    if (Math.abs(xs[i]-ys[i]) <= tol) pass.push([xs[i], ys[i]]);
+    if (gapOk(Math.abs(xs[i]-ys[i]), tol)) pass.push([xs[i], ys[i]]);
     else fail.push([xs[i], ys[i]]);
   }
   const option = {
@@ -460,10 +571,13 @@ let multiChartRaw = null, multiChartFit = null;
 let multiSelectedIdx = -1;
 
 // 解析 Excel workbook → 乘坐列表
-// 真实结构：每个 sheet 一个乘坐；sheet 内 10 个产品（1#~10#）横向 3 个并排、纵向多块。
-// 每个产品块有表头行 "offest QV CCD CCD+ GAP"，只需 QV 列（标准值）和 CCD 列（测量值）。
+// 真实结构：每个 sheet 一个乘坐；sheet 内多处「产品块」，块标题是 1#~10#（10 个产品），
+// 每块 5 列 offest/QV/CCD/CCD+/GAP，块左侧两列是「检测项目名」（如 舌片TPY）+ 点位序号。
+// 例：[舌片TPY | 1 | offest | QV | CCD | CCD+ | GAP] × 4 块并排，纵向再铺多组。
+// 读 CCD（测量值）与 QV（标准值）；检测项目名随 CCD 一起带出来，供"同一检测项目共用一个补偿值"用。
 function parseWorkbook(wb) {
   const seats = [];
+  const warnings = [];
   wb.SheetNames.forEach(sheetName => {
     const ws = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
@@ -475,6 +589,7 @@ function parseWorkbook(wb) {
         const cell = row[c];
         if (cell != null && /^\d+#$/.test(String(cell).trim())) {
           const name = String(cell).trim();
+          let missing = 0;
           let qvCol = -1, ccdCol = -1, headerRow = -1;
 
           // 模式1：标签同一行右边找 QV/CCD（新表格：N# QV CCD GAP 横向并排）
@@ -500,78 +615,229 @@ function parseWorkbook(wb) {
           }
 
           if (headerRow < 0) continue;
-          // 数据从表头行 +1 开始，遇到空单元格即停止
-          const meas = [], qv = [];
+          // 检测项目名（如「舌片TPY」）与点位序号：在本块最左侧，即 offest 列再往左两列。
+          // 真实表形如 [舌片TPY | 1 | offest | QV | CCD | CCD+ | GAP] × 4 块并排。
+          // 项目名是纵向合并单元格（只有首行有值），所以逐行读并向后继承。
+          // 列位置对不对要验证：必须是"文字"且同一行有点位序号，否则说明这张表没有项目列，
+          // 退化为按产品标签（N#）分组，免得把隔壁块的 CCD 数字当成项目名。
+          const candItem = qvCol - 3, candPoint = qvCol - 2;
+          let itemCol = -1;
+          if (candItem >= 0 && candPoint >= 0) {
+            for (let h = headerRow + 1; h < Math.min(headerRow + 4, rows.length); h++) {
+              const hrow = rows[h] || [];
+              const itxt = String(hrow[candItem] ?? '').trim();
+              const ptxt = String(hrow[candPoint] ?? '').trim();
+              if (itxt && !isFinite(Number(itxt)) && /^\d+$/.test(ptxt)) { itemCol = candItem; break; }
+            }
+          }
+          // 数据从表头行 +1 开始。
+          // 历史实现在遇到第一个空单元格就 break，该产品后续所有点位被静默丢弃，
+          // 用户会看到"该产品全部达标"的假结论；而 04 工具遇到同类情况会抛
+          // incomplete_measurements —— 两个工具的数据完整度标准不一致。
+          // 现在改为：单点缺失跳过并计数；连续 3 行不可用才认为数据块已结束。
+          const meas = [], qv = [], items = [];
+          let curItem = '';
+          let blankRun = 0, pendingGaps = 0;
           for (let d = headerRow + 1; d < rows.length; d++) {
             const drow = rows[d] || [];
-            const rawM = drow[ccdCol], rawQ = drow[qvCol];
-            if (rawM == null || rawQ == null || rawM === '' || rawQ === '') break;
-            const m = Number(rawM), q = Number(rawQ);
-            if (isFinite(m) && isFinite(q)) { meas.push(m); qv.push(q); }
-            else break;
+            const mStr = String(drow[ccdCol] ?? '').trim();
+            const qStr = String(drow[qvCol] ?? '').trim();
+            const m = Number(mStr), q = Number(qStr);
+            if (mStr === '' || qStr === '' || !isFinite(m) || !isFinite(q)) {
+              blankRun++;
+              if (blankRun >= 3) break;   // 连续空行 => 本产品数据块结束
+              pendingGaps++;              // 单点缺失 => 先记着，确认后面还有数据才算
+              continue;
+            }
+            blankRun = 0;
+            // 这段缺失确实夹在有效数据中间，计入缺失计数
+            missing += pendingGaps;
+            pendingGaps = 0;
+            if (itemCol >= 0) {
+              const itxt = String(drow[itemCol] ?? '').trim();
+              if (itxt) curItem = itxt;   // 合并单元格：首行给值，后续行继承
+            }
+            meas.push(m); qv.push(q); items.push(curItem);
           }
-          if (meas.length >= 2) products.push({ name, meas, qv });
+          if (meas.length >= 2) products.push({ name, meas, qv, items, missing });
+          else if (meas.length) warnings.push(`${sheetName} · ${name}：仅解析到 ${meas.length} 个有效点位，已跳过（至少需要 2 点才能拟合）`);
+          if (missing) warnings.push(`${sheetName} · ${name}：数据区中有 ${missing} 个空/非数字点位已被跳过`);
         }
       }
     }
     seats.push({ name: sheetName, products });
   });
-  return seats;
+  // 表里到底有没有「检测项目」列：决定能不能按检测项目跨乘坐共用补偿；
+  // 没有就只能退回「每个乘坐一套函数」（**绝不**退化成每个产品一个 b）
+  const labelled = seats.some(s => s.products.some(p => (p.items || []).some(x => x)));
+  return { seats, warnings, labelled };
 }
 
-function median(arr) { const a = [...arr].sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; }
+/* ────────────────────────────────────────────────────────────────
+   「对上」判定口径（用户 2026-09-20 两轮明确）
+   1) 产品 / 组合内：**全部点位** |gap| ≤ 容差 → 才算这个产品「对上」
+      第二轮修正（2026-09-20 上午）：第一轮把这一层也做成了"≥50% 点位对上"，
+      结果一个产品只有 3 个点时，50% 只要 2 个点对上就算过 —— 明明有超差点
+      的产品也被算成"对上"（右乘坐显示 8 个，实际只有 2#、3#、8#、10# 全部
+      点位都在容差内）。所以这一层必须是 100%。
+   2) 乘坐内：对上产品数 ≥ 通过门槛 × 产品数（10 个 → ≥5 个）→ 该乘坐通过
+   3) 补偿方案：对上的组合（乘坐 × 产品）数 ≥ 门槛 × 组合总数 → 方案可行
+   门槛（默认 50%）只作用在「产品数 / 组合数」这一层，不作用在单个产品内部的点位上。
+   ──────────────────────────────────────────────────────────────── */
 
-// 稳健线性拟合 y = ax + b：Theil-Sen 初值 → 内点 OLS 细化
-function robustFit(xs, ys, tol) {
-  const ts = theilSen(xs, ys);
-  const thresh = Math.max(tol * 2, 0.02);
-  const ix = [], iy = [];
-  for (let i = 0; i < xs.length; i++) {
-    if (Math.abs(ts.a * xs[i] + ts.b - ys[i]) <= thresh) { ix.push(xs[i]); iy.push(ys[i]); }
+// 通过门槛作用在"个数"层：10 个产品要 ≥5 个对上、20 个组合要 ≥10 个对上
+function alignThreshold(n, rate) { return Math.max(1, Math.ceil(n * rate)); }
+
+// 浮点余量：b 取在"刚好让某点落在容差边界"的位置时，|gap| 会算出 tol+1e-16 这种值，
+// 若判严格 > tol 就会出现"拟合说能对上、判定说对不上"的自相矛盾。这里只吸收浮点
+// 误差，不放宽判据（相对量级 1e-9）。
+function gapOk(e, tol) { return e <= tol * (1 + 1e-9) + 1e-15; }
+
+// 点对 (x,y) 在给定 (a,b) 下有几个对上
+function alignCount(pairs, a, b, tol) {
+  let n = 0;
+  for (let i = 0; i < pairs.length; i++) {
+    if (gapOk(Math.abs(a * pairs[i][0] + b - pairs[i][1]), tol)) n++;
   }
-  if (ix.length >= 3) {
-    const o = fitLinear(ix, iy);
-    return { a: o.a, b: o.b };
-  }
-  return { a: ts.a, b: ts.b };
+  return n;
 }
 
+// 给一组残差挑 b，使落在 ±tol 内的点最多（"让多数点对上"）。
+// 等价于滑窗问题：长度 2·tol 的区间最多能装下几个残差，b 取该窗口中点。
+// 点数相同时取窗口更窄的那个（更贴数据中间）。两指针 O(n log n)。
+function bestWindowB(residuals, tol) {
+  const s = [...residuals].sort((p, q) => p - q);
+  const n = s.length;
+  if (!n) return { b: 0, count: 0, width: 0 };
+  let bestCount = 0, bestB = 0, bestWidth = Infinity;
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    if (j < i) j = i;
+    while (j + 1 < n && s[j + 1] - s[i] <= 2 * tol + 1e-12) j++;
+    const count = j - i + 1;
+    const width = s[j] - s[i];
+    if (count > bestCount || (count === bestCount && width < bestWidth)) {
+      bestCount = count; bestWidth = width; bestB = (s[i] + s[j]) / 2;
+    }
+  }
+  return { b: bestB, count: bestCount, width: bestWidth };
+}
+
+// 给一组"组合"挑一个补偿值 b：目标 = 让**整体对上**的组合最多。
+// 判据改成"整组合全部点位"后，挑 b 的目标必须跟着改：只按"窗口里装着几个点"
+// 来挑，会出现"每组都差一点点、没有一个组合整体对上"的假最优。
+//   组合 c 想整体对上 → b 必须落在 [max(rᵢ) − tol, min(rᵢ) + tol]，rᵢ = yᵢ − a·xᵢ
+//   于是问题变成"找一个 b 被最多区间覆盖" → 扫区间端点即可
+// 同覆盖数时取对上点数更多的，再同则取 |b| 更小的（补偿值越小越好）。
+function bestComboB(combos, a, tol) {
+  const ivs = [];
+  combos.forEach(c => {
+    let lo = -Infinity, hi = Infinity;
+    for (let i = 0; i < c.pts.length; i++) {
+      const r = c.pts[i][1] - a * c.pts[i][0];
+      if (r - tol > lo) lo = r - tol;
+      if (r + tol < hi) hi = r + tol;
+    }
+    if (lo <= hi) ivs.push({ lo, hi });
+  });
+
+  // 一个组合都整体对不上 → 退回"让最多点对上"（bestWindowB），保证补偿值仍有参考意义
+  if (!ivs.length) {
+    const res = [];
+    combos.forEach(c => c.pts.forEach(pt => res.push(pt[1] - a * pt[0])));
+    const w = bestWindowB(res, tol);
+    return { b: w.b, full: 0, pts: w.count };
+  }
+
+  const score = b => {
+    let full = 0, pts = 0;
+    for (let k = 0; k < combos.length; k++) {
+      const ps = combos[k].pts;
+      let all = true;
+      for (let i = 0; i < ps.length; i++) {
+        if (gapOk(Math.abs(a * ps[i][0] + b - ps[i][1]), tol)) pts++;
+        else all = false;
+      }
+      if (all) full++;
+    }
+    return { full, pts };
+  };
+
+  const cands = [];
+  ivs.forEach(v => { cands.push(v.lo); cands.push(v.hi); });
+  const allRes = [];
+  combos.forEach(c => c.pts.forEach(pt => allRes.push(pt[1] - a * pt[0])));
+  const resMed = median(allRes);
+  // 候选里补一个"残差中位数"：区间端点会让某个点正好压在 ±容差边界上，判定很脆
+  // （真实测量再加一点噪声就翻）。所以同分时优先取**靠近残差中位数**的 b。
+  cands.push(resMed);
+  let best = null;
+  cands.forEach(b => {
+    const s = score(b);
+    const dMed = Math.abs(b - resMed);
+    if (!best
+      || s.full > best.full
+      || (s.full === best.full && s.pts > best.pts)
+      || (s.full === best.full && s.pts === best.pts && dMed < best.dMed - 1e-15)
+      || (s.full === best.full && s.pts === best.pts && Math.abs(dMed - best.dMed) <= 1e-15 && Math.abs(b) < Math.abs(best.b))) {
+      best = { b, full: s.full, pts: s.pts, dMed };
+    }
+  });
+  return best;
+}
+
+// 注：这里曾有一个 fitProducts()，在 [1−aTol, 1+aTol] 内爬山搜 a、目标是"整体对上的产品最多"。
+// 已删除 —— 它有两个不可调和的毛病：① 夹紧后 a 恒停在边界（实测 0.9000），是个假值；
+// ② 判据（≥5/10 产品完全达标）与"压窄残差带"不是一回事，搜出来的 a 反而不等于真实斜率。
+// 参考版 §8.3 的原则是"a 不强制 =1，但最好趋近 1（拟合，不做死）"→ 恢复用 robustFit 如实拟合。
+// 乘坐层的 a/b 见 analyzeBySeat，方案层的 a/b 见 computePlan。
 
 // 分析：每个乘坐一个统一变换函数（该乘坐 10 个产品共用一个 y=ax+b）
 // 物理含义：a = 分辨率缩放系数（最好趋近 1，但不强制）；b = 补偿值（尽量小）。
 // transformType: 'linear' 线性拟合 y=ax+b | 'offset' 固定 a=1 | 'none' 不变换
-function analyzeBySeat(seats, tol, transformType, compTol, aTol) {
+// alignRate: 通过门槛，默认 0.5 —— 只作用在"个数"层（乘坐内对上产品数、方案对上组合数）；
+// 单个产品/组合必须**全部点位**对上才算对上（参考版 §7.4 / §8.2）
+// groupPref: 补偿共用单位，'item'（默认，按检测项目跨乘坐共用）| 'seat'（每个乘坐一套函数）
+function analyzeBySeat(seats, tol, transformType, compTol, aTol, alignRate, groupPref) {
+  const rate = (typeof alignRate === 'number' && alignRate > 0 && alignRate <= 1) ? alignRate : 0.5;
+
   seats.forEach(seat => {
     // 达标门槛按本乘坐自己的产品数算（≥半数），不沿用其它乘坐的产品数
     seat.nProds = seat.products.length;
-    seat.threshold = Math.ceil(seat.nProds * 0.5);
+    seat.threshold = alignThreshold(seat.nProds, rate);
 
-    // 该乘坐唯一的变换函数
+    // 该乘坐唯一的变换函数（参考版 §7.3）：
+    //   linear → robustFit 得 a,b（a 可以为任何值，由数据决定，**不夹在容差内**）
+    //   offset → a = 1，b = median(QV − CCD)
+    //   none   → a = 1, b = 0
     const allXs = [], allYs = [];
     seat.products.forEach(p => { allXs.push(...p.meas); allYs.push(...p.qv); });
     let a = 1, b = 0;
     if (transformType === 'linear') {
-      const fit = robustFit(allXs, allYs, tol);
-      a = fit.a; b = fit.b;
+      if (allXs.length >= 3) { const fit = robustFit(allXs, allYs, tol); a = fit.a; b = fit.b; }
     } else if (transformType === 'offset') {
-      const allD = [];
-      seat.products.forEach(p => p.meas.forEach((m, i) => allD.push(p.qv[i] - m)));
-      b = median(allD);
+      const diffs = [];
+      seat.products.forEach(p => p.meas.forEach((m, i) => diffs.push(p.qv[i] - m)));
+      b = median(diffs);
     }
     seat.a = a; seat.b = b;
     seat.aOk = Math.abs(a - 1) <= aTol;   // 分辨率缩放是否趋近 1
     seat.compOk = Math.abs(b) <= compTol; // 补偿值是否在 ±compTol 内
 
-    // 用这个唯一函数评估每个产品
+    // 用这个唯一函数评估每个产品：**全部点位对上**才算这个产品对上
     seat.products.forEach(p => {
-      const rawErrs = p.meas.map((m, i) => m - p.qv[i]);
-      p.rawFail = rawErrs.filter(e => Math.abs(e) > tol).length;
+      const n = p.meas.length;
+      const rawPts = p.meas.map((m, i) => [m, p.qv[i]]);
+      p.nPoints = n;
+      p.needAlign = n;                                // 需要几个点对上 = 全部
+      p.rawAlign = alignCount(rawPts, 1, 0, tol);
+      p.rawFail = n - p.rawAlign;
       p.rawPass = p.rawFail === 0;
       if (transformType === 'none') {
-        p.fitFail = p.rawFail; p.fitPass = p.rawPass;
+        p.fitAlign = p.rawAlign; p.fitFail = p.rawFail; p.fitPass = p.rawPass;
       } else {
-        const fitErrs = p.meas.map((m, i) => a * m + b - p.qv[i]);
-        p.fitFail = fitErrs.filter(e => Math.abs(e) > tol).length;
+        p.fitAlign = alignCount(rawPts, a, b, tol);
+        p.fitFail = n - p.fitAlign;
         p.fitPass = p.fitFail === 0;
       }
     });
@@ -588,423 +854,884 @@ function analyzeBySeat(seats, tol, transformType, compTol, aTol) {
   const thresholds = seats.map(s => s.threshold);
   const uniformThreshold = thresholds.length && thresholds.every(t => t === thresholds[0]) ? thresholds[0] : null;
 
-  // 跨乘坐补偿方案：a 全局一个 + b 按项目名（同名跨乘坐一致），P2 单补作退路
-  const global = buildGlobalPlans(seats, tol);
-  return { seats, tol, transformType, compTol, aTol, uniformThreshold, global };
+  // 补偿方案：见 buildGlobalPlans（2 档共用单位 × 动不动 a，共四个方案）
+  const global = buildGlobalPlans(seats, tol, rate, aTol, groupPref, compTol);
+  return { seats, tol, transformType, compTol, aTol, alignRate: rate, uniformThreshold, global };
 }
 
-/* ==================== 跨乘坐补偿（最终口径） ====================
-   现场规则（用户 2026-09-07 明确）：
-   1) 分辨率缩放 a 一个测量程序只能有一个，不能按乘坐分别标定
-   2) 补偿值按「项目名」给：同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b；不同项目名各用各的
-   3) 调试顺序：优先只改补偿值 b（分辨率 a 不动）；只改 b 补不过来时才允许动 a（缩放）；
-      最后才退到「每个 乘坐×项目名 单独补」
-   4) 判定口径：(乘坐 × 项目名) 组合里，≥半数全部点位对齐才算达标
+/* ==================== 补偿方案（最终口径） ====================
+   现场规则（用户 2026-09-20 明确；参考源码包《相关性判断器交接文档》§8 是底稿）：
+   1) **补偿按「检测项目」跨乘坐共用**（默认）：同一检测项目在所有乘坐、所有产品上只给
+      **一个**补偿值 b。理由：一套测量程序只能填一个补偿，而左乘坐舌片与右乘坐舌片
+      属于同一个检测项目（舌片TPY），必须共用同一个 b，不能各给一个。
+      —— 参考版 §8 规则 1 只规定了"同一乘坐内 10 个产品共用一套函数"（防的是
+         "每个产品一个 b"），既没说可以、也没说不可以跨乘坐取值不同；用户 2026-09-20
+         追加口径：跨乘坐必须一致。现场确实支持分乘坐设值时，页面可切到「每个乘坐一套函数」。
+      —— 表里没有检测项目列时，「按项目共用」无从谈起 → **退回每乘坐一套**，
+         绝不退化成"每个产品一个 b"（那正是用户报过的错）。
+   2) **10 个产品 ≥5 个完全达标即算成功**：「完全达标」= 该产品**全部点位** |gap| ≤ 容差；
+      通过门槛（默认 50%）作用在个数层，不作用在单个产品内部的点位上。
+   3) **a 不强制 = 1，但最好趋近 1**：a 由 robustFit 拟合得出，
+      aTol 只用于**判断/警示**（aOk = |a−1| ≤ aTol），绝不限制拟合范围。
+   4) **b 是补偿值，尽量 ≤ 0.03**：超限只标红提示，不改变判定。
+   5) 调试顺序：优先只改补偿值 b（a 不动）→ 只改 b 补不过来，才允许动 a。
    ============================================================= */
 
-// 给定分组（每组内部共用一个 b），求全局最优 a（aFixed 传数字则固定不动）：
-// 最小化「各组残差半带宽」的最大值。固定 a 时组内最优 b = 残差带中点。
-function fitGlobalA(groups, aFixed) {
-  const half = (pts, a) => {
-    let lo = Infinity, hi = -Infinity;
-    for (let i = 0; i < pts.length; i++) {
-      const r = pts[i][1] - a * pts[i][0];
-      if (r < lo) lo = r;
-      if (r > hi) hi = r;
-    }
-    return { mid: (lo + hi) / 2, half: (hi - lo) / 2 };
-  };
-  const obj = a => {
-    let w = 0;
-    for (let i = 0; i < groups.length; i++) {
-      const h = half(groups[i].pts, a).half;
-      if (h > w) w = h;
-    }
-    return w;
-  };
-  let a;
-  if (typeof aFixed === 'number') {
-    a = aFixed;
-  } else {
-    let bestA = 1, bestV = Infinity;
-    for (let x = 0.2; x <= 2.0001; x += 0.005) { const v = obj(x); if (v < bestV) { bestV = v; bestA = x; } }
-    let lo = bestA - 0.01, hi = bestA + 0.01;
-    for (let it = 0; it < 60; it++) {
-      const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3;
-      if (obj(m1) < obj(m2)) hi = m2; else lo = m1;
-    }
-    a = (lo + hi) / 2;
-  }
-  const bs = groups.map(g => {
-    const h = half(g.pts, a);
-    return { key: g.key, name: g.name, seat: g.seat, b: h.mid, half: h.half, n: g.pts.length };
-  });
-  return { a, bs, maxGap: obj(a) };
+// 一个点属于哪个「检测项目」：取表里的项目名列（如 舌片TPY），没有就返回空串
+function pointItem(c, pt) {
+  return pt[2] || '';
 }
 
-// 三级方案（按现场调试顺序，从"尽量不动 a"到"不得不动 a"）：
-//   plan1 只改补偿值：a 保持 1（不动分辨率），b 按项目名跨乘坐一致 —— 最省事，优先
-//   plan2 补偿 + 缩放：a 全局可调一个 + b 按项目名 —— 只改 b 补不过来时才需要
-//   plan3 单补：a 全局可调一个 + b 按 乘坐×项目名 分别给 —— 最后退路，填的数最多
-function buildGlobalPlans(seats, tol) {
-  const prodMap = new Map();
+// 一个点是在哪个「乘坐」上测的（pt = [CCD, QV, 检测项目, 乘坐名]）。
+// ★ 这件事必须是**点位级**的：同一个样品会在左右两个乘坐各测一组点位，
+//   分组（补偿共用单位）与判定都要按点所属乘坐去算，不能挂在样品上。
+function pointSeat(pt) {
+  return pt[3] || '';
+}
+
+/* 一个补偿方案 = 「分组 → (a, b)」+ 逐样品判定
+   groupMode 'item'（默认）→ 每个**检测项目**跨样品、跨乘坐共用一个 b（一套程序一个补偿）
+   groupMode 'seat'        → 每个 乘坐×检测项目 共用一个 b（现场支持分乘坐设值时才用）
+   useA  false → a 固定 = 1（只改补偿值 b，现场优先）
+         true  → a 由 robustFit 拟合（'seat' 时逐乘坐一个；'item' 时全局一个，一套程序只能一个 a）
+   ★ 组合 = **样品**（不是 乘坐×样品）：一个样品在左右两个乘坐各有一组点位，
+     组合「对上」= 该样品**在它出现过的每个乘坐上的全部点位** |gap| ≤ 容差。
+     两边各算各的再相加是错的（左 6/10、右 7/10 不代表 13 个样品对上，
+     要取交集）。用户 2026-09-21 明确：这是「一个产品」的两半，必须合起来判。
+   b 取该分组内"能让最多样品整体对上"的值（bestComboB） */
+function computePlan(combos, tol, opts) {
+  const { groupMode, useA, labelled } = opts;
+  const seatNames = opts.seatNames || new Set();
+  // 分组键（这里必须小心，改错就会退化成"每个样品一个 b"）：
+  //   'item'（默认）：**检测项目**跨乘坐共用；表里没有项目列时退回"整个乘坐一组"
+  //                   —— 绝不能退化成 每个样品一个 b（用户报过的错）
+  //   'seat'：优先 乘坐×检测项目；表里没有项目列时整个乘坐一组
+  // 键按**点位**算（点自带乘坐），因为一个样品横跨多个乘坐。
+  const keyOf = (c, pt) => {
+    const item = pointItem(c, pt);
+    const seat = pointSeat(pt);
+    if (groupMode === 'item') return item || seat || '（无乘坐信息）';
+    return item ? (seat + '@@' + item) : (seat || '（无乘坐信息）');
+  };
+  // 分组显示名：seat 档 key 形如 乘坐@@项目；item 档 key 本身就是项目名
+  const nameOf = key => {
+    const i = key.indexOf('@@');
+    if (i >= 0) return key.slice(i + 2);
+    if (!seatNames.has(key)) return key;
+    return '（无项目列·整乘坐一套）';
+  };
+  const seatOfKey = key => {
+    const i = key.indexOf('@@');
+    if (i >= 0) return key.slice(0, i);
+    return seatNames.has(key) ? key : '';
+  };
+
+  // ① 分组：gmap(key) → { key, name, seat, rawPts, units }
+  const gmap = new Map();
+  combos.forEach(c => {
+    const sub = new Map();
+    c.pts.forEach(pt => {
+      const key = keyOf(c, pt);
+      if (!sub.has(key)) sub.set(key, []);
+      sub.get(key).push(pt);
+    });
+    sub.forEach((pts, key) => {
+      if (!gmap.has(key)) {
+        gmap.set(key, {
+          key,
+          name: nameOf(key),
+          seat: seatOfKey(key),
+          rawPts: [], units: [],
+        });
+      }
+      const g = gmap.get(key);
+      g.rawPts.push(...pts);
+      // comboKey/comboName/seats 供渲染层把「逐点明细」「对齐矩阵」「散点图」定位回具体样品
+      // seats = 这一份点位落在了哪些乘坐上（item 档下一个样品常常横跨左右两个乘坐）
+      const seatsOfUnit = Array.from(new Set(pts.map(pointSeat).filter(Boolean)));
+      g.units.push({
+        pts, seats: seatsOfUnit,
+        seat: seatsOfUnit.length === 1 ? seatsOfUnit[0] : '',
+        ok: false, align: 0, maxGap: 0, comboKey: c.key, comboName: c.name,
+      });
+    });
+  });
+  if (!gmap.size) return null;
+
+  // ② 每个分组定 (a, b)。'item' 粒度下 a 必须全局同一个（一套程序一个分辨率缩放）
+  const allX = [], allY = [];
+  combos.forEach(c => c.pts.forEach(pt => { allX.push(pt[0]); allY.push(pt[1]); }));
+  const globalA = (useA && groupMode === 'item' && allX.length >= 3) ? robustFit(allX, allY, tol).a : 1;
+
+  gmap.forEach(g => {
+    if (!useA) { g.a = 1; }
+    else if (groupMode === 'item') { g.a = globalA; }
+    else { g.a = g.rawPts.length >= 3 ? robustFit(g.rawPts.map(p => p[0]), g.rawPts.map(p => p[1]), tol).a : 1; }
+    g.b = bestComboB(g.units.map(u => ({ pts: u.pts })), g.a, tol).b;
+  });
+
+  // ③ 逐（样品 × 分组）单元判定
+  gmap.forEach(g => g.units.forEach(u => {
+    let align = 0, maxg = 0;
+    // states 逐点保留 (乘坐, QV, CCD, 补偿后值, 补偿后 gap, 是否达标)，供渲染层直接使用。
+    // 判定值 align/maxGap/ok 的算法与原来完全一致，states 只是把中间量留下来。
+    // seat / a / b 也一并留下：渲染层（矩阵、逐点表、导出、散点图）按点位显示各自乘坐与所用补偿。
+    u.states = u.pts.map(pt => {
+      const y = g.a * pt[0] + g.b;
+      const e = Math.abs(y - pt[1]);
+      const ok = gapOk(e, tol);
+      if (ok) align++;
+      if (e > maxg) maxg = e;
+      return {
+        qv: pt[1], ccd: pt[0], item: pt[2] || '', seat: pt[3] || '',
+        y, gap: y - pt[1], ok, a: g.a, b: g.b,
+      };
+    });
+    u.align = align;
+    u.maxGap = maxg;
+    u.ok = align === u.pts.length;
+  }));
+
+  // ④ 逐样品判定（组合 = 样品，跨乘坐合并）：**所有乘坐的全部点位**都对上才算这个样品对上
+  //    ★ 这是 2026-09-21 修正的核心：以前把 (乘坐 × 样品) 当两个组合分别数，
+  //      左 6/10 + 右 7/10 = 13/20 看着很美，实际只有交集的样品才是真的全部达标。
+  const detail = combos.map(c => {
+    let align = 0, maxg = 0;
+    const seatMap = new Map();          // 各乘坐小计：仅供定位"哪个乘坐拖后腿"，不参与判定
+    c.pts.forEach(pt => {
+      const g = gmap.get(keyOf(c, pt));
+      const e = Math.abs(g.a * pt[0] + g.b - pt[1]);
+      const ok = gapOk(e, tol);
+      if (ok) align++;
+      if (e > maxg) maxg = e;
+      const sn = pointSeat(pt) || '';
+      if (!seatMap.has(sn)) seatMap.set(sn, { seat: sn, align: 0, n: 0, ok: true });
+      const rec = seatMap.get(sn);
+      rec.n++;
+      if (ok) rec.align++; else rec.ok = false;
+    });
+    const seats = Array.from(seatMap.values());
+    return {
+      key: c.key, name: c.name, seats: c.seats,
+      seat: c.seats.join('、'),
+      bySeat: seats,
+      align, n: c.pts.length, maxGap: maxg,
+      ok: align === c.pts.length,
+    };
+  });
+
+  // ⑤ 分组统计（对上样品数 / 该分组最大 gap）+ 展示顺序
+  const groups = Array.from(gmap.values()).map(g => {
+    let okCount = 0, maxg = 0;
+    g.units.forEach(u => { if (u.ok) okCount++; if (u.maxGap > maxg) maxg = u.maxGap; });
+    return {
+      key: g.key, name: g.name, seat: g.seat, a: g.a, b: g.b,
+      // 该分组覆盖了哪些乘坐（按乘坐顺序去重）：item 粒度下一个 b 常常跨多个乘坐，
+      // 渲染层要靠它把"左乘坐舌片 + 右乘坐舌片 共用一个补偿"这件事显示出来。
+      seats: Array.from(new Set(g.units.reduce((a, u) => a.concat(u.seats || []), []))),
+      n: g.rawPts.length, maxGap: maxg, okCount, total: g.units.length,
+      aOk: Math.abs(g.a - 1) <= (opts.aTol != null ? opts.aTol : 0.1),
+      units: g.units,
+    };
+  });
+  groups.sort((x, y) => (x.name === y.name
+    ? String(x.seat).localeCompare(String(y.seat))
+    : String(x.name).localeCompare(String(y.name))));
+
+  // 样品级的逐点结果（跨分组汇总）：对齐矩阵 / 逐点明细 / 导出 / 散点图都从这里取。
+  // 一个样品在 'seat' 档下会有 2 个单元（左右各一），states 合并后按乘坐排序，
+  // ok = 所有单元都 ok（= detail 里的判定），两处必须一致。
+  const byCombo = new Map();
+  gmap.forEach(g => g.units.forEach(u => {
+    let rec = byCombo.get(u.comboKey);
+    if (!rec) {
+      rec = { key: u.comboKey, name: u.comboName, states: [], ok: true, groups: [] };
+      byCombo.set(u.comboKey, rec);
+    }
+    rec.states.push(...u.states);
+    rec.groups.push(g);
+    if (!u.ok) rec.ok = false;
+  }));
+
+  const maxGap = detail.reduce((m, d) => Math.max(m, d.maxGap), 0);
+  return {
+    groupMode, useA, groups, detail, byCombo, maxGap,
+    pass: detail.filter(d => d.ok).length,
+  };
+}
+
+/* 四个方案 = 2（补偿共用单位）× 2（动不动 a）：
+     itemFix 按检测项目共用（跨乘坐）+ 只改 b   ← 默认，现场优先（一套程序只能填一个补偿）
+     itemFit 按检测项目共用（跨乘坐）+ 调 a
+     seatFix 每个乘坐一套函数 + 只改 b
+     seatFit 每个乘坐一套函数 + 调 a
+   推荐顺序：先按页面选的共用单位试（只改 b 优先于调 a）；该单位两条都不行，再自动降级到另一单位。
+   表里没有检测项目列时「按项目共用」无从谈起 → 只建 seat 两档，并把 pref 拉回 'seat'，
+   免得给出现场填不进去、或退化成"每个产品一个 b"的方案。
+   aTol 只用于判断 a 是否可接受（aOk），**不参与拟合**（见 robustFit 注释）。 */
+function buildGlobalPlans(seats, tol, alignRate, aTol, groupPref, compTol) {
+  const rate = (typeof alignRate === 'number' && alignRate > 0 && alignRate <= 1) ? alignRate : 0.5;
+  const cTol = (isFinite(compTol) && compTol >= 0) ? compTol : 0.03;
+
+  // 表里有没有检测项目列 —— 决定「按检测项目共用」这一档是否成立
+  const labelled = seats.some(s => s.products.some(p => (p.items || []).some(x => x)));
+  // 默认 item：用户 2026-09-20 明确「左右乘坐的补偿必须一致」（现场一套程序只填一个补偿）
+  const pref = (groupPref !== 'seat' && labelled) ? 'item' : 'seat';
+  const seatNames = new Set(seats.map(s => s.name));
+
+  // ★ 组合 = **样品**（跨乘坐合并），不是 乘坐×样品。
+  //   同一个样品名（如 1#）在左乘坐、右乘坐各有一组点位 → 合并成一个组合，
+  //   它「对上」意味着**两边所有点位都达标**。于是：
+  //     · 分母 = 样品数（不是乘坐数 × 样品数）
+  //     · 门槛 = ⌈样品数 × 门槛比例⌉（10 个样品 → ≥5 个，= 交接文档 §8.2）
+  //   用户 2026-09-21 报的正是旧口径的错：左 6/10、右 7/10 被当成 13 个对上，
+  //   而实际只有交集的样品才叫真的对上。
   const combos = [];
+  const items = new Set();
+  const byName = new Map();
   seats.forEach(seat => {
     seat.products.forEach(p => {
-      const pts = p.meas.map((m, i) => [m, p.qv[i]]);
-      combos.push({ key: seat.name + '||' + p.name, seat: seat.name, name: p.name, pts });
-      if (!prodMap.has(p.name)) prodMap.set(p.name, { key: p.name, name: p.name, seat: '', pts: [] });
-      prodMap.get(p.name).pts.push(...pts);
+      let c = byName.get(p.name);
+      if (!c) {
+        c = { key: p.name, name: p.name, seats: [], pts: [] };
+        byName.set(p.name, c);
+        combos.push(c);
+      }
+      if (c.seats.indexOf(seat.name) < 0) c.seats.push(seat.name);
+      // 点位带上自己的乘坐：分组（补偿共用单位）与判定都按点位所属乘坐算
+      p.meas.forEach((m, i) => c.pts.push([m, p.qv[i], (p.items && p.items[i]) || '', seat.name]));
+      (p.items || []).forEach(x => { if (x) items.add(x); });
     });
   });
   if (!combos.length) return null;
 
-  const groups = Array.from(prodMap.values());
-  const plan1raw = fitGlobalA(groups, 1.0);   // 不动分辨率
-  const plan2raw = fitGlobalA(groups);        // 全局调 a
-  const plan3raw = fitGlobalA(combos);        // 全局调 a + 单补
+  const total = combos.length;
+  const threshold = alignThreshold(total, rate);   // 方案可行 = 对上样品数 ≥ 这个数
 
-  const aligned = (a, bOf) => combos.filter(c => {
-    const b = bOf(c);
-    return c.pts.every(pt => Math.abs(a * pt[0] + b - pt[1]) <= tol);
-  }).length;
-  const passRaw = combos.filter(c => c.pts.every(pt => Math.abs(pt[0] - pt[1]) <= tol)).length;
+  const mk = (groupMode, useA) => {
+    const p = computePlan(combos, tol, { groupMode, useA, labelled, aTol, seatNames });
+    if (!p) return null;
+    p.total = total;
+    p.threshold = threshold;
+    p.ok = p.pass >= threshold;
+    p.groups.forEach(g => { g.compOk = Math.abs(g.b) <= cTol; });
+    return p;
+  };
 
-  const bByProd = m => new Map(m.bs.map(x => [x.name, x.b]));
-  const bByCombo = m => new Map(m.bs.map(x => [x.key, x.b]));
+  const plans = {
+    seatFix: mk('seat', false),
+    seatFit: mk('seat', true),
+    // 没有检测项目列时不建 item 两档：它的分组会退回"每乘坐一套"，与上面完全重复且标签误导
+    itemFix: labelled ? mk('item', false) : null,
+    itemFit: labelled ? mk('item', true) : null,
+  };
+  const itemKeys = labelled ? ['itemFix', 'itemFit'] : [];
+  const keys = pref === 'item'
+    ? [...itemKeys, 'seatFix', 'seatFit']
+    : ['seatFix', 'seatFit', ...itemKeys];
+  const recommend = keys.find(k => plans[k] && plans[k].ok) || null;
 
-  const mk = (raw, bMap, useName) => ({ a: raw.a, bs: raw.bs, maxGap: raw.maxGap,
-    ok: raw.maxGap <= tol, pass: aligned(raw.a, c => (useName ? bMap.get(c.name) : bMap.get(c.key))) });
-
-  const plan1 = mk(plan1raw, bByProd(plan1raw), true);
-  const plan2 = mk(plan2raw, bByProd(plan2raw), true);
-  const plan3 = mk(plan3raw, bByCombo(plan3raw), false);
-
-  // 按现场原则推荐：只改 b 可行就先推 plan1，否则才允许动 a 的 plan2，最后 plan3
-  const recommend = plan1.ok ? 'plan1' : (plan2.ok ? 'plan2' : (plan3.ok ? 'plan3' : null));
+  // 原始（a=1, b=0）就全部点位上对的样品数：同样按**样品**跨乘坐合并算
+  const passRaw = combos.filter(c => alignCount(c.pts, 1, 0, tol) === c.pts.length).length;
 
   return {
-    total: combos.length, threshold: Math.ceil(combos.length / 2), passRaw,
-    plan1, plan2, plan3, recommend
+    total, threshold, alignRate: rate, passRaw, labelled, groupPref: pref, aTol,
+    items: Array.from(items), plans, keys, recommend,
+    // combos 供渲染层（对齐矩阵 / 残差诊断）复用，避免重复实现 keyOf 的分组键规则。
+    // 每项 = 一个样品：{ key, name, seats:[乘坐…], pts:[[CCD,QV,项目,乘坐]…] }
+    combos,
   };
 }
 
-// 渲染补偿建议：现场原则「ax+b 里优先改 b，不要动 a」→ plan1 只补 b；plan2 补 b+调 a；plan3 单补+调 a
-function renderGlobalAdvice(g, result) {
-  const { tol } = result;
-  const num = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(4);
-  const times = v => (tol > 0 ? (v / tol).toFixed(1) : '—');
 
-  const META = {
-    plan1: {
-      t: '方案 1 · 只改补偿值 b',
-      d: '分辨率 a 不动（a = 1），只给补偿值；同一项目名（1#、端子TP）在所有乘坐上加同一个 b。现场优先试这个。',
-      aTxt: '',
-    },
-    plan2: {
-      t: '方案 2 · 补偿 b + 调分辨率 a',
-      d: '同一项目名跨乘坐加同一个 b；a 整套程序调成一个数。只改 b 补不过来时才需要动 a。',
-      aTxt: '',
-    },
-    plan3: {
-      t: '方案 3 · 单补 + 调分辨率 a',
-      d: '每个 乘坐×项目名 各给一个 b（现场填的数最多）；a 整套程序一个。最后的退路。',
-      aTxt: '',
-    },
-  };
-  const ORDER = ['plan1', 'plan2', 'plan3'];
+/* ==================== 残差诊断（纯诊断，不参与判定） ====================
+   数学依据：在分辨率 a 固定的前提下，存在补偿值 b 使某个组合内**全部点位**
+   都 |gap| ≤ 容差，当且仅当  span(r) = max(r) − min(r) ≤ 2·容差
+   —— 因为需要  max(r) − tol ≤ b ≤ min(r) + tol。
+   可行区间长度 = 2·tol − span，越宽越稳（b 稍微取偏一点也不会翻）。
+   于是「补偿救不了」不再是经验阈值，而是可证明的结论。
+   ★ 诊断只用于给推荐方案加理由、给未对上的组合加解释，**不回写任何判定结果**。
+     判定结果一律仍由 computePlan 的全点位 gapOk 逻辑产生。
+   ==================================================================== */
+// 返回 Map<样品名, 诊断>：一个样品可能有**多条**诊断（'seat' 档下左右各一条、
+// 或一个样品含多种检测项目），所以按"一个样品 → 若干片诊断"聚合，
+// 并给出汇总分类（取最难救的那片）与跨度/可行区间的最差值。
+function diagnoseCombos(plan, tol, aTol) {
+  const map = new Map();
+  if (!plan) return map;
+  plan.groups.forEach(gp => {
+    const aBad = Math.abs(gp.a - 1) > aTol;      // 该分组的分辨率是否超出容差
+    (gp.units || []).forEach(u => {
+      const rs = u.states.map(s => s.qv - gp.a * s.ccd);   // r = QV − a·CCD，gap = b − r
+      const mid = median(rs);
+      const span = Math.max.apply(null, rs) - Math.min.apply(null, rs);
+      const slack = 2 * tol - span;                        // 该（样品×分组）单元的可行补偿区间长度
+      // 补偿是整组统一平移，会牺牲掉原本压在容差边上的点位 —— 这件事必须显式报出来
+      const rawOk = u.states.every(s => gapOk(Math.abs(s.ccd - s.qv), tol));
+      let cls;
+      if (span <= 2 * tol + 1e-12) cls = u.ok ? 'fit' : 'offset';
+      else cls = aBad ? 'range' : 'scatter';
 
-  const bTable = (lv, withSeat) => {
-    let s = `<div class="advice-bwrap"><table class="advice-b"><thead><tr>`
-      + (withSeat ? `<th>乘坐</th>` : '') + `<th>项目名</th><th>补偿值 b</th><th>补偿后最大 gap</th><th>状态</th>`
-      + `</tr></thead><tbody>`;
-    lv.bs.forEach(x => {
-      const ok = x.half <= tol;
-      s += `<tr>` + (withSeat ? `<td class="sn">${x.seat}</td>` : '')
-        + `<td>${x.name}</td><td>${num(x.b)}</td><td>${x.half.toFixed(4)}</td>`
-        + `<td class="${ok ? 'pt-ok' : 'pt-fail'}">${ok ? '✓' : '✗'}</td></tr>`;
-    });
-    return s + `</tbody></table></div>`;
-  };
-
-  const card = (key, withSeat, opts) => {
-    const lv = g[key], meta = META[key];
-    const isRec = g.recommend === key;
-    const tag = lv.ok ? `<span class="tag ok">可行</span>` : `<span class="tag bad">无解</span>`;
-    const rec = isRec ? `<span class="tag ok">推荐</span>` : '';
-    let s = `<div class="advice-card ${lv.ok ? 'yes' : 'no'}">`;
-    s += `<div class="k">${meta.t}${tag}${rec}</div>`;
-    s += `<div class="advice-note" style="margin-top:6px">${meta.d}</div>`;
-    if (opts.showA !== false) {
-      s += `<div style="margin-top:8px"><span class="advice-val">a = ${lv.a.toFixed(4)}</span>`
-        + `<span class="muted" style="font-size:12px;margin-left:8px">${lv.a === 1 ? '分辨率不动' : '分辨率要按这个数改'}</span></div>`;
-    }
-    s += `<div class="advice-note">${lv.ok
-      ? `最大 gap <b>${lv.maxGap.toFixed(4)}</b> ≤ 容差 ${fmt(tol)}，对齐组合 <b>${lv.pass}/${g.total}</b>（门槛 ${g.threshold}）`
-      : `即使取最优值，最大 gap 仍有 <b>${lv.maxGap.toFixed(4)}</b>，是容差 ${fmt(tol)} 的 <b>${times(lv.maxGap)}</b> 倍`}</div>`;
-    s += bTable(lv, withSeat);
-    if (lv.ok) {
-      const all = lv.bs.map(x => (withSeat ? `${x.seat}\t` : '') + `${x.name}\t${x.b.toFixed(6)}`).join('\n');
-      s += `<div class="advice-actions">`;
-      if (opts.copyA) {
-        s += `<button type="button" class="btn-ghost advice-copy" data-copy="${encodeURIComponent(lv.a.toFixed(6))}">复制 a</button>`;
+      let rec = map.get(u.comboKey);
+      if (!rec) {
+        rec = {
+          key: u.comboKey, name: u.comboName || u.comboKey, ok: true, rawOk: true,
+          pieces: [], span: 0, slack: Infinity, cls: 'fit', mid: 0,
+        };
+        map.set(u.comboKey, rec);
       }
-      s += `<button type="button" class="btn-ghost advice-copy" data-copy="${encodeURIComponent(all)}">复制全部补偿值（${withSeat ? '乘坐、项目名、b' : '项目名、b'}）</button>`
-        + `</div>`;
-    }
-    return s + `</div>`;
-  };
-
-  const summaryTag = key => {
-    const lv = g[key];
-    return (lv.ok ? '<span class="tag ok">可行</span>' : '<span class="tag bad">无解</span>')
-      + (g.recommend === key ? '<span class="tag ok">推荐</span>' : '');
-  };
-
-  let html = `<div class="global-advice">`;
-  html += `<div class="advice-head">补偿建议 · 先改 b，不行再动 a`
-    + `<span class="muted">y = ax + b：现场优先只改补偿值 b（不动分辨率）；只改 b 补不过来，才去动 a（分辨率缩放）</span></div>`;
-  html += `<div class="advice-note">原始未补偿：<b>${g.passRaw}/${g.total}</b> 个（乘坐×项目名）组合全部点位对齐 · 达标门槛 <b>≥${g.threshold}</b>`
-    + `　同一项目名在所有乘坐上加同一个 b。</div>`;
-
-  // 方案 1 永远展开（最省事、优先）
-  html += `<div class="advice-grid">`;
-  html += card('plan1', false, { copyA: false });
-  html += `</div>`;
-
-  html += `<details class="advice-alt" ${(g.recommend === 'plan2' || (g.recommend === 'plan3' && !g.plan1.ok)) ? 'open' : ''}>`
-    + `<summary>${META.plan2.t}${summaryTag('plan2')}</summary>`;
-  html += card('plan2', false, { copyA: true });
-  html += `</details>`;
-
-  html += `<details class="advice-alt" ${(g.recommend === 'plan3' || !g.recommend) ? 'open' : ''}>`
-    + `<summary>${META.plan3.t}${summaryTag('plan3')}</summary>`;
-  html += card('plan3', true, { copyA: true });
-  html += `</details>`;
-
-  if (!g.recommend) {
-    html += `<div class="advice-bn">三个方案都对不上：即使每个乘坐、每个项目名单独给补偿值并允许调分辨率，最大 gap 仍有 `
-      + `<b>${g.plan3.maxGap.toFixed(4)}</b>（容差 ${fmt(tol)} 的 ${times(g.plan3.maxGap)} 倍）。`
-      + `这不是补偿能解决的，要排查测量系统本身：分辨率标定、镜头畸变、光源、装夹重复性。</div>`;
-  }
-  html += `</div>`;
-  return html;
-}
-
-// 汇总统计条
-function renderMultiSummaryBar(result) {
-  const { seats, tol, transformType, uniformThreshold } = result;
-  const bar = $('multiSummaryBar');
-  const verdict = s => s.rawOkCount >= s.threshold ? 'pass' : (s.fitOkCount >= s.threshold ? 'warn' : 'fail');
-  const pass = seats.filter(s => verdict(s) === 'pass').length;
-  const warn = seats.filter(s => verdict(s) === 'warn').length;
-  const fail = seats.filter(s => verdict(s) === 'fail').length;
-
-  const goal = uniformThreshold != null ? `≥${uniformThreshold} 个产品` : '≥半数产品';
-  let main, detail;
-  if (transformType === 'none') {
-    main = `${pass}/${seats.length} 个乘坐原始达标（每乘坐 ${goal} gap ≤ ${tol}）`;
-    detail = seats.map(s => `${s.name}：${s.rawOkCount}/${s.nProds} 个产品达标`).join('，');
-  } else {
-    main = `${pass + warn}/${seats.length} 个乘坐达标（${pass} 无需变换，${warn} 需变换，${fail} 不达标）`;
-    detail = `按乘坐单独拟合仅供诊断。现场补偿以「补偿建议」为准：同一项目名跨乘坐加同一个 b，a 只填一个。`;
-  }
-  const cls = fail > 0 ? (pass + warn > 0 ? 'warn' : 'fail') : (warn > 0 ? 'warn' : 'pass');
-  bar.className = 'conclusion ' + cls;
-  $('multiSummaryMain').textContent = main;
-  $('multiSummaryDetail').textContent = detail;
-  $('multiSummaryBadge').textContent = `${pass + warn} 达标 / ${seats.length} 乘坐`;
-
-  // 补偿口径（组合维度）：(乘坐 × 项目名) 组合里全部点位对齐的个数
-  const g = result.global;
-  if (g) {
-    const NAME = { plan1: '只改补偿值 b', plan2: '补偿 b + 调 a', plan3: '单补 + 调 a' };
-    const bestKey = g.recommend || 'plan3';
-    const best = g[bestKey];
-    const okAll = best.pass >= g.threshold && best.ok;
-    const bar2 = $('globalSummaryBar');
-    if (bar2) {
-      bar2.className = 'conclusion ' + (okAll ? 'pass' : 'fail');
-      $('globalSummaryMain').textContent = okAll
-        ? `补偿后：${best.pass}/${g.total} 个（乘坐×项目名）组合全部点位对齐（门槛 ≥${g.threshold}）`
-        : `补偿后最多只能对齐 ${Math.max(g.plan1.pass, g.plan2.pass, g.plan3.pass)}/${g.total} 个组合，未过门槛（≥${g.threshold}）`;
-      $('globalSummaryDetail').textContent = g.recommend
-        ? `推荐方案 ${g.recommend === 'plan1' ? '1（只改 b）' : g.recommend === 'plan2' ? '2（b + 调 a）' : '3（单补）'}`
-        + `：a=${best.a.toFixed(4)}，最大 gap ${best.maxGap.toFixed(4)}`
-        : `三个方案都对不上（单补 + 调 a 也需 ${g.plan3.maxGap.toFixed(4)} > ${fmt(result.tol)}），需排查测量系统本身`;
-    }
-  }
-}
-
-// 渲染：每个乘坐一个表格，逐点展开每个产品的明细
-function renderMultiSummary(result) {
-  const container = $('multiResultContainer');
-  container.innerHTML = '';
-  const { seats, transformType, tol, global } = result;
-
-  // 补偿建议放在最上面：这才是现场能照着填的方案
-  if (global) container.insertAdjacentHTML('beforeend', renderGlobalAdvice(global, result));
-
-  seats.forEach((seat, si) => {
-    const block = document.createElement('div');
-    block.className = 'seat-block';
-
-    // 是否需要变换：本乘坐原始已达自身门槛就无需变换（不显示变换函数）
-    const needTransform = seat.needTransform;
-    const nProds = seat.nProds;
-    const threshold = seat.threshold;
-
-    // 乘坐标题
-    let html = `<div class="seat-title">▎乘坐：${seat.name}<span class="sub">${nProds} 个产品</span></div>`;
-
-    // 结论条：无需变换就不给函数；需变换才给函数
-    const aTag = seat.aOk
-      ? `<span class="tag ok">缩放 a=${Number(seat.a.toFixed(4))}（|a−1|=${Number(Math.abs(seat.a - 1).toFixed(4))} ≤ ${fmt(result.aTol)} ✓）</span>`
-      : `<span class="tag bad">缩放 a=${Number(seat.a.toFixed(4))}（|a−1|=${Number(Math.abs(seat.a - 1).toFixed(4))} > ${fmt(result.aTol)} ✗）</span>`;
-    const compTag = seat.compOk
-      ? `<span class="tag ok">补偿 |b|=${Number(Math.abs(seat.b).toFixed(4))} ≤ ${fmt(result.compTol)} ✓</span>`
-      : `<span class="tag bad">补偿 |b|=${Number(Math.abs(seat.b).toFixed(4))} > ${fmt(result.compTol)} ✗</span>`;
-
-    if (needTransform) {
-      const verdict = seat.fitOkCount >= threshold
-        ? `<span class="tag warn">⚠️ 变换后 ${seat.fitOkCount}/${nProds} 达标（≥${threshold}）</span>`
-        : `<span class="tag bad">❌ 变换后仅 ${seat.fitOkCount}/${nProds} 达标（&lt;${threshold}）</span>`;
-      html += `<div class="seat-func">按乘坐拟合（仅供诊断）：<span class="formula-chip">${fmtFunc(seat.a, seat.b)}</span>${verdict}${aTag}${compTag}</div>`;
-    } else if (transformType === 'none') {
-      const verdict = seat.rawOkCount >= threshold
-        ? `<span class="tag ok">✅ 原始 ${seat.rawOkCount}/${nProds} 达标</span>`
-        : `<span class="tag bad">❌ 原始仅 ${seat.rawOkCount}/${nProds} 达标（&lt;${threshold}）</span>`;
-      html += `<div class="seat-func">${verdict}<span class="muted" style="font-size:12px">（未启用变换）</span></div>`;
-    } else {
-      html += `<div class="seat-func"><span class="tag ok">✅ 原始 ${seat.rawOkCount}/${nProds} 达标，无需变换</span>${aTag}${compTag}</div>`;
-    }
-
-    // 每乘坐的建议卡不再渲染：它给的是"每乘坐一个 b"，违反现场"同一产品跨乘坐一致"的约束，
-    // 会误导现场照着填。补偿值以页面顶部的「补偿建议」为准。
-
-    // 每个产品展开成逐点明细
-    seat.products.forEach((p, pi) => {
-      const rawGaps = p.meas.map((m, i) => m - p.qv[i]);
-      const rawMax = Math.max(...rawGaps.map(Math.abs));
-
-      // 产品状态
-      let statusText, statusCls;
-      if (p.rawPass) { statusText = '✅ 原始达标'; statusCls = 'ok'; }
-      else if (needTransform && p.fitPass) { statusText = '⚠️ 变换后达标'; statusCls = 'warn'; }
-      else { statusText = '❌ 不达标'; statusCls = 'bad'; }
-
-      const rawTag = p.rawPass
-        ? `<span class="tag ok">原始 0 点超差</span>`
-        : `<span class="tag bad">原始 ${p.rawFail} 点超差</span> <span class="muted">(最大 ${rawMax.toFixed(4)})</span>`;
-
-      let fitTag = '';
-      if (needTransform) {
-        const fitMax = Math.max(...p.meas.map((m, i) => Math.abs(seat.a * m + seat.b - p.qv[i])));
-        fitTag = p.fitPass
-          ? `<span class="tag ok">变换后 0 点超差</span>`
-          : `<span class="tag bad">变换后 ${p.fitFail} 点超差</span> <span class="muted">(最大 ${fitMax.toFixed(4)})</span>`;
-      }
-
-      html += `<div class="prod-block">`;
-      html += `<div class="prod-head" data-si="${si}" data-pi="${pi}">`;
-      html += `<span class="arrow">▼</span><span>产品 ${p.name}</span>${rawTag}${fitTag}`;
-      html += `<span class="tag ${statusCls}">${statusText}</span>`;
-      html += `<span class="link" data-chart="1" data-si="${si}" data-pi="${pi}">📊 查看散点图</span>`;
-      html += `</div>`;
-
-      // 逐点明细表
-      html += `<div class="prod-points"><table><thead><tr>`;
-      html += `<th>点#</th><th>标准值 QV</th><th>测量值 CCD</th><th>原始 gap</th><th>原始是否达标</th>`;
-      if (needTransform) html += `<th>变换后值</th><th>变换后 gap</th><th>变换后是否达标</th>`;
-      html += `</tr></thead><tbody>`;
-
-      for (let i = 0; i < p.meas.length; i++) {
-        const rawGap = p.meas[i] - p.qv[i];
-        const rawOk = Math.abs(rawGap) <= tol;
-        let row = `<tr>`;
-        row += `<td>${i + 1}</td>`;
-        row += `<td>${fmt(p.qv[i])}</td>`;
-        row += `<td>${fmt(p.meas[i])}</td>`;
-        row += `<td class="${rawOk ? 'pt-ok' : 'pt-fail-cell'}">${rawGap >= 0 ? '+' : ''}${fmt(rawGap)}</td>`;
-        row += `<td>${rawOk ? '<span class="pt-ok">✓</span>' : '<span class="pt-fail">✗</span>'}</td>`;
-        if (needTransform) {
-          const yh = seat.a * p.meas[i] + seat.b;
-          const fitGap = yh - p.qv[i];
-          const fitOk = Math.abs(fitGap) <= tol;
-          row += `<td>${fmt(yh)}</td>`;
-          row += `<td class="${fitOk ? 'pt-ok' : 'pt-fail-cell'}">${fitGap >= 0 ? '+' : ''}${fmt(fitGap)}</td>`;
-          row += `<td>${fitOk ? '<span class="pt-ok">✓</span>' : '<span class="pt-fail">✗</span>'}</td>`;
-        }
-        row += `</tr>`;
-        html += row;
-      }
-      html += `</tbody></table></div></div>`;
-    });
-
-    block.innerHTML = html;
-    container.appendChild(block);
-
-    // 折叠/展开产品块
-    block.querySelectorAll('.prod-head').forEach(head => {
-      head.addEventListener('click', (e) => {
-        if (e.target.closest('.link')) return; // 点"查看散点图"不折叠
-        head.classList.toggle('collapsed');
-        const points = head.nextElementSibling;
-        if (points) points.style.display = head.classList.contains('collapsed') ? 'none' : '';
+      rec.pieces.push({
+        groupName: gp.name, groupKey: gp.key, groupMode: plan.groupMode,
+        seats: u.seats || [], cls, span, mid, slack, rawOk, ok: u.ok,
+        a: gp.a, b: gp.b,
       });
-    });
-
-    // 查看散点图
-    block.querySelectorAll('.link[data-chart]').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showMultiDetail(Number(link.dataset.si), Number(link.dataset.pi));
-      });
-    });
-
-    // 复制补偿建议值（纯数字或"产品\tb"表格文本，可直接粘贴）
-    block.querySelectorAll('.advice-copy').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        copyText(decodeURIComponent(btn.dataset.copy)).then(() => flashBtn(btn, '已复制 ✓'));
-      });
+      rec.ok = rec.ok && u.ok;
+      rec.rawOk = rec.rawOk && rawOk;
+      if (span > rec.span) { rec.span = span; rec.mid = mid; }
+      if (slack < rec.slack) rec.slack = slack;
     });
   });
+  // 汇总分类：一个样品可能在多个乘坐/多个分组上各有一条诊断，取"最难救"的那条当代表。
+  // 展示顺序（lost → scatter → range → offset）与严重度一致。
+  const rank = { scatter: 3, range: 2, offset: 1, fit: 0 };
+  map.forEach(rec => {
+    const bad = rec.pieces.filter(p => p.cls !== 'fit');
+    rec.cls = bad.length
+      ? bad.reduce((m, p) => (rank[p.cls] > rank[m.cls] ? p : m), bad[0]).cls
+      : 'fit';
+    if (!isFinite(rec.slack)) rec.slack = 2 * tol;
+  });
+  return map;
+}
 
-  // 补偿建议卡里的复制按钮（它不在乘坐块内，单独绑）
-  container.querySelectorAll('.global-advice .advice-copy').forEach(btn => {
+const PLAN_META = {
+  itemFix: { name: '按检测项目共用 · 只改补偿值' },
+  itemFit: { name: '按检测项目共用 · 补偿 + 分辨率' },
+  seatFix: { name: '每个乘坐一套 · 只改补偿值' },
+  seatFit: { name: '每个乘坐一套 · 补偿 + 分辨率' },
+};
+
+function numTxt(v) {
+  const a = Math.abs(v);
+  if (!isFinite(v) || a < 5e-5) return '0.0000';
+  return (v >= 0 ? '+' : '−') + a.toFixed(4);
+}
+function rawNum(v) { const n = Number(v.toFixed(6)); return String(n === 0 ? 0 : n); }
+
+// 推荐方案不可行时，退而取「对上组合最多」的那个来展示（页面上会标「未过门槛」）
+function pickPlanKey(g) {
+  if (!g) return null;
+  if (g.recommend) return g.recommend;
+  let best = null;
+  g.keys.forEach(k => {
+    const p = g.plans[k];
+    if (p && (!best || p.pass > g.plans[best].pass)) best = k;
+  });
+  return best;
+}
+
+// 推荐方案的「样品级」逐点结果：comboKey（样品名）→ { combo, states, ok }
+// states 按乘坐顺序排好（sheet 顺序），供逐点明细 / 导出 / CSV / 散点图共用。
+// 样品跨乘坐：states 里同时含左乘坐和右乘坐的点位，"是否对上"看整体 ok。
+function sampleStatesOf(plan, result) {
+  const m = new Map();
+  const order = (result.seats || []).map(s => s.name);
+  ((result.global && result.global.combos) || []).forEach(c => {
+    const rec = (plan && plan.byCombo) ? plan.byCombo.get(c.key) : null;
+    const states = rec ? rec.states.slice() : c.pts.map(pt => {
+      const raw = pt[0] - pt[1];
+      return {
+        qv: pt[1], ccd: pt[0], item: pt[2] || '', seat: pt[3] || '',
+        y: pt[0], gap: raw, ok: gapOk(Math.abs(raw), result.tol), a: 1, b: 0,
+      };
+    });
+    states.sort((x, y) => order.indexOf(x.seat) - order.indexOf(y.seat));
+    m.set(c.key, { combo: c, states, ok: !!(rec && rec.ok) });
+  });
+  return m;
+}
+
+/* 推荐理由：由残差诊断的统计结果生成，而不是"四个方案轮流试"。
+   ★ 注意 fit 与 offset 的区别：offset 只是"存在某个 b 能覆盖它"，但补偿值是**分组共用**的，
+     同一个 b 未必能同时落进本组所有组合的可行区间。所以能说"当前值覆盖了 fit 个"，
+     不能说"平移一下就能覆盖 fit+offset 个"。 */
+function planWhy(plan, diag) {
+  let fit = 0, offset = 0, range = 0, scatter = 0, lost = 0;
+  diag.forEach(d => {
+    if (d.cls === 'fit') { fit++; return; }
+    if (d.rawOk) lost++;          // 原本对得上，被这个补偿值推出了容差
+    if (d.cls === 'offset') offset++;
+    else if (d.cls === 'range') range++;
+    else if (d.cls === 'scatter') scatter++;
+  });
+  const n = diag.size;               // 样品数（不是 乘坐×样品 的组合数）
+  const hard = range + scatter;      // span > 2·tol：在这个分辨率下，任何 b 都救不了
+  if (plan.useA) {
+    if (range > 0) return `当前覆盖 <b>${fit}/${n}</b> 个样品。有 <b>${range}</b> 个样品的残差随量程系统性变化，只改补偿值补不过来，所以这个方案同时动了分辨率 a。`;
+    return `当前覆盖 <b>${fit}/${n}</b> 个样品；在补偿值之外还动了分辨率 a，用压窄残差带的方式多覆盖几个样品。`;
+  }
+  if (hard === 0 && offset === 0 && lost === 0) {
+    return `全部 <b>${n}</b> 个样品都能被这一个补偿值覆盖 —— 不需要动分辨率。`;
+  }
+  const parts = [`当前补偿值覆盖 <b>${fit}/${n}</b> 个样品`];
+  if (lost > 0) parts.push(`<b>${lost}</b> 个原始本来能对上的被这个补偿值推出了容差`);
+  if (offset > 0) parts.push(`<b>${offset}</b> 个本身可补偿，但可行区间与本组其它样品不重合，同一个补偿值顾不过来`);
+  if (range > 0) parts.push(`<b>${range}</b> 个残差随量程变化，只改补偿值救不了`);
+  if (scatter > 0) parts.push(`<b>${scatter}</b> 个残差跨度超过 2×容差，任何补偿值都救不了`);
+  return parts.join('；') + (scatter > 0 ? ' —— 散乱的那几个建议排查装夹与重复性。' : '。');
+}
+
+// 分组展示顺序：按分组覆盖的**最早**那个乘坐的 sheet 顺序（左乘坐排在右乘坐前面），
+// 再按检测项目名。item 档下一个分组常跨左右两个乘坐，取最早的那个座位定序。
+function orderedGroups(plan) {
+  const list = (plan && plan.groups) ? plan.groups.slice() : [];
+  const order = new Map();
+  ((multiResult && multiResult.seats) || []).forEach((s, i) => order.set(s.name, i));
+  const idxOf = x => {
+    const ss = (x.seats && x.seats.length) ? x.seats : [x.seat];
+    return ss.reduce((m, s) => Math.min(m, order.has(s) ? order.get(s) : 999), 999);
+  };
+  return list.sort((x, y) => {
+    const sx = idxOf(x), sy = idxOf(y);
+    if (sx !== sy) return sx - sy;
+    return String(x.name).localeCompare(String(y.name));
+  });
+}
+
+/* ==================== 渲染 ==================== */
+
+// ① 结论条：整个页面的答案，不展开任何折叠就能看完
+function renderConclusion(result) {
+  const g = result.global;
+  const bar = $('conclusionBar');
+  const main = $('conclusionMain');
+  const sub = $('conclusionSub');
+  const acts = $('conclusionActions');
+  let cls = 'verdict', m = '', s = '', a = '';
+
+  if (!g) {
+    m = '没有可用的组合';
+    s = '请确认表格里有 CCD（测量值）与 QV（标准值）两列。';
+  } else {
+    const plan = g.plans[pickPlanKey(g)];
+    // 数字一律按**样品**口径（跨乘坐合并判定），与 ③ 的表、④ 的矩阵同源
+    if (g.passRaw >= g.threshold) {
+      cls = 'verdict pass';
+      m = '能对上 · 不需要补偿';
+      s = `${g.total} 个样品里已有 <b>${g.passRaw}</b> 个原始就全部对上（门槛 ≥${g.threshold}）。`;
+    } else if (g.recommend) {
+      cls = 'verdict warn';
+      m = plan.useA ? '需要补偿 + 调分辨率' : '需要补偿 · 有可行方案';
+      s = `${g.total} 个样品原始只对上 ${g.passRaw} 个；按下面「照这个填」的值补偿后对上 <b>${plan.pass}</b> 个（门槛 ≥${g.threshold}）。`;
+    } else {
+      cls = 'verdict fail';
+      m = '补偿救不了';
+      s = `所有方案里最好的也只对上 <b>${plan.pass}/${g.total}</b> 个（门槛 ≥${g.threshold}）。见下方「哪些没对上」。`;
+    }
+    a = '<button class="btn-primary" id="ctaExport">导出补偿后表格</button>'
+      + `<button class="btn-ghost" id="ctaFail">看没对上的 ${g.total - plan.pass} 个</button>`;
+  }
+
+  bar.className = cls;
+  main.textContent = m;
+  sub.innerHTML = s;
+  acts.innerHTML = a;
+  const ctaE = $('ctaExport');
+  if (ctaE) ctaE.addEventListener('click', exportCompensatedXlsx);
+  const ctaF = $('ctaFail');
+  if (ctaF) ctaF.addEventListener('click', () => {
+    const card = $('failCard');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+// ② 识别结果：解析后的第一手确认，异常集中在这里说
+function renderRecognize(info) {
+  const box = $('recognizeBox');
+  if (!box) return;
+  if (!info) { box.hidden = true; box.innerHTML = ''; return; }
+  const { fileName, seats, warnings, labelled } = info;
+  // ★ 样品数 = **去重后的样品名个数**（不是各乘坐相加）：左右乘坐装的是同一批样品，
+  //   一个 1# 在两边各有一组点位，它只是**一个**样品。
+  const nameList = [];
+  const nameSet = new Set();
+  seats.forEach(s => s.products.forEach(p => {
+    if (!nameSet.has(p.name)) { nameSet.add(p.name); nameList.push(p.name); }
+  }));
+  const nProds = nameSet.size;
+  const nPts = seats.reduce((a, s) => a + s.products.reduce((b, p) => b + p.meas.length, 0), 0);
+  const items = Array.from(new Set(seats.reduce(
+    (a, s) => a.concat(s.products.reduce((b, p) => b.concat((p.items || []).filter(x => x)), [])), [])));
+  // 多个乘坐是否装着同一批样品：是 → 判定按样品跨乘坐合并（一个样品要所有乘坐都达标）
+  const multiSeatSame = seats.length > 1 && seats.every(s => {
+    const ns = new Set(s.products.map(p => p.name));
+    return ns.size === nProds && nameList.every(n => ns.has(n));
+  });
+
+  const seatLines = seats.map(s => {
+    const counts = Array.from(new Set(s.products.map(p => p.meas.length)));
+    const ptTxt = counts.length === 1 ? `× ${counts[0]} 点位` : (counts.length ? `× ${counts.join('/')} 点位` : '');
+    return `${esc(s.name)}　<b>${s.products.length}</b> 个样品 ${ptTxt}`;
+  }).join('<br>');
+
+  const notes = warnings.slice();
+  if (!labelled) notes.push('没找到「检测项目」列（如 舌片TPY）：无法按检测项目跨乘坐共用补偿，已退回「每个乘坐一套函数」。');
+  const shown = notes.slice(0, 4);
+  const more = notes.length - shown.length;
+
+  const cell = (k, v) => `<div class="rec-item"><div class="rec-k">${k}</div><div class="rec-v">${v}</div></div>`;
+  // 把一个样品要跨几个乘坐判定这件事摆在识别卡里 —— 用户看不到这句就会把
+  // 「左 6/10、右 7/10」当成 13 个样品对上（2026-09-21 报的正是这个）。
+  const merge = multiSeatSame
+    ? `<div class="rec-merge">${seats.length} 个乘坐装的是同一批样品：一个样品要它<b>每个乘坐的点位全部对上</b>才算对上（不是各乘坐分别过半）。</div>`
+    : '';
+
+  box.innerHTML = `<div class="rec-head">识别到的数据<span class="file">${esc(fileName || '')}</span></div>`
+    + `<div class="rec-grid">`
+    + cell('乘坐', seats.length)
+    + cell('样品', nProds)
+    + cell('点位', nPts)
+    + cell('检测项目', items.length ? esc(items.join('、')) : '未识别到')
+    + `</div>`
+    + `<div class="rec-seat">${seatLines}</div>`
+    + merge
+    + (notes.length
+      ? `<div class="rec-warn">⚠ ${shown.map(esc).join('<br>⚠ ')}${more > 0 ? `<br>⚠ … 另有 ${more} 条同类提示` : ''}</div>`
+      : `<div class="rec-ok">结构与实测点位一致，无异常</div>`);
+  box.hidden = false;
+}
+
+// ③ 照这个填：推荐方案是唯一主角，其余三个压成对比表
+function renderPlanCard(result) {
+  const g = result.global;
+  const body = $('planBody');
+  const badge = $('planBadge');
+  if (!g) { body.innerHTML = ''; badge.textContent = '—'; return; }
+  const key = pickPlanKey(g);
+  const plan = g.plans[key];
+  if (!plan) { body.innerHTML = '<div class="fail-empty">没有可用的补偿方案。</div>'; badge.textContent = '无'; return; }
+
+  const withSeat = plan.groupMode === 'seat';
+  // item 粒度下「乘坐」列没有单值（一个分组常跨几个乘坐），改成「覆盖乘坐」把共用关系摆出来：
+  //   左乘坐舌片、右乘坐舌片 | 舌片TPY | −0.0096  ← 一眼看出这俩共用一个补偿
+  const seatLabelOf = x => withSeat ? x.seat : ((x.seats || []).join('、') || '—');
+  const diag = diagnoseCombos(plan, result.tol, g.aTol != null ? g.aTol : 0.1);
+  badge.textContent = g.recommend ? `推荐 · 对上 ${plan.pass}/${g.total}` : `最好 ${plan.pass}/${g.total} · 未过门槛`;
+
+  let html = '<div class="plan-head">' + PLAN_META[key].name
+    + `<span class="tag ${g.recommend ? 'ok' : 'bad'}">${g.recommend ? '可行' : '未过门槛'}</span>`
+    + (g.recommend ? '<span class="tag ok">推荐</span>' : '')
+    + '</div>';
+  html += `<div class="plan-why">${planWhy(plan, diag)}</div>`;
+
+  html += '<table class="plan-table"><thead><tr>';
+  html += `<th>${withSeat ? '乘坐' : '覆盖乘坐'}</th>`;
+  html += '<th>检测项目</th><th>群体补偿 b</th><th>分辨率 a</th><th>对上样品</th></tr></thead><tbody>';
+  orderedGroups(plan).forEach(x => {
+    const allOk = x.okCount === x.total;
+    html += '<tr>'
+      + `<td>${esc(seatLabelOf(x))}</td>`
+      + `<td>${esc(/^（无项目列/.test(x.name) ? '整乘坐一套' : x.name)}</td>`
+      + '<td class="num"><span class="val-chip"><b>' + numTxt(x.b) + '</b>'
+      + `<button type="button" class="copy-btn" data-copy="${encodeURIComponent(rawNum(x.b))}">复制</button></span></td>`
+      + '<td class="num">' + (plan.useA
+        ? `${x.a.toFixed(4)}${x.aOk ? '' : ' <span class="pt-fail">✗</span>'}`
+        : '<span class="muted">不动</span>') + '</td>'
+      + `<td class="num ${allOk ? 'pt-ok' : (x.okCount ? 'pt-warn' : 'pt-fail')}">${x.okCount}/${x.total}</td>`
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+
+  html += '<div class="btn-row" style="margin-top:14px">'
+    + '<button type="button" class="btn-ghost btn-ghost-sm" data-copyall="b">复制全部补偿值</button>'
+    + (plan.useA ? '<button type="button" class="btn-ghost btn-ghost-sm" data-copyall="a">复制全部分辨率</button>' : '')
+    + '</div>';
+
+  const others = g.keys.filter(k => k !== key && g.plans[k]).length;
+  if (others > 0) {
+    html += `<details class="alt-wrap"><summary>其它方案（${others}）</summary>`;
+    html += '<div class="mtx-note" style="margin-top:10px">推荐顺序：先只改补偿值（不动分辨率）→ 补不过来才动 a → 再不行降级到另一档共用单位。所以对上样品更多、但要动分辨率的方案排在后面。</div>';
+    html += '<table class="alt-table"><thead><tr><th>方案</th><th>补偿共用单位</th><th>分辨率</th><th>对上样品</th><th>结果</th></tr></thead><tbody>';
+    g.keys.forEach(k => {
+      const p = g.plans[k];
+      if (!p) return;
+      html += `<tr class="${k === key ? 'pick' : ''}">`
+        + `<td>${PLAN_META[k].name}</td>`
+        + `<td>${p.groupMode === 'seat' ? `每个乘坐一套（${p.groups.length} 组）` : `按检测项目共用（${p.groups.length} 组）`}</td>`
+        + `<td>${p.useA ? '动' : '不动'}</td>`
+        + `<td>${p.pass}/${g.total}</td>`
+        + `<td class="${p.ok ? 'pt-ok' : 'pt-fail'}">${p.ok ? '可行' : '未过门槛'}</td></tr>`;
+    });
+    html += '</tbody></table></details>';
+  }
+
+  body.innerHTML = html;
+
+  body.querySelectorAll('.copy-btn, [data-copyall]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      copyText(decodeURIComponent(btn.dataset.copy)).then(() => flashBtn(btn, '已复制 ✓'));
+      let text;
+      if (btn.dataset.copyall === 'b') {
+        text = orderedGroups(plan).map(x => seatLabelOf(x) + '\t' + x.name + '\t' + rawNum(x.b)).join('\n');
+      } else if (btn.dataset.copyall === 'a') {
+        text = orderedGroups(plan).map(x => seatLabelOf(x) + '\t' + x.name + '\t' + Number(x.a.toFixed(6))).join('\n');
+      } else {
+        text = decodeURIComponent(btn.dataset.copy || '');
+      }
+      copyText(text).then(() => flashBtn(btn, '已复制 ✓'));
     });
   });
 }
 
-// 详情：查看某产品在某乘坐的散点图 + 逐点明细
-function showMultiDetail(si, pi) {
-  const result = multiResult;
-  if (!result) return;
-  const seat = result.seats[si];
-  const p = seat && seat.products[pi];
-  if (!seat || !p) return;
-  multiSelectedIdx = pi;
+// ④ 哪些没对上：对齐矩阵 + 原因清单
+function renderFailCard(result) {
+  const g = result.global;
+  const body = $('failBody');
+  const badge = $('failBadge');
+  if (!g) { body.innerHTML = ''; badge.textContent = '—'; return; }
+  const key = pickPlanKey(g);
+  const plan = g.plans[key];
+  if (!plan) { body.innerHTML = '<div class="fail-empty">没有可用的方案。</div>'; badge.textContent = '—'; return; }
 
-  const needTransform = !!seat.needTransform;
-  $('multiDetailName').textContent = `${seat.name} · ${p.name}${needTransform ? `（函数 ${fmtFunc(seat.a, seat.b)}）` : '（无需变换）'}`;
+  const diag = diagnoseCombos(plan, result.tol, g.aTol != null ? g.aTol : 0.1);
+  const fails = plan.detail.filter(d => !d.ok);
+  badge.textContent = `${fails.length} 个未对上 / 共 ${g.total}`;
+
+  // 对齐矩阵：**一行一个样品**，列按乘坐分段。
+  // ★ 改版前是"每个乘坐一个块、各自数自己对上几个"，正好把用户报的错放大成
+  //   两张好看的 6/10、7/10；现在把同一个样品的左右乘坐点位摆在同一行，
+  //   "只有整行都是 ✓ 才算对上"这件事直接看得见。
+  const seatNames = result.seats.map(s => s.name);
+  const byCombo = plan.byCombo || new Map();
+  const rows = (g.combos || []).slice();
+  const statesOf = (c, sn) => {
+    const rec = byCombo.get(c.key);
+    return rec ? rec.states.filter(s => s.seat === sn) : [];
+  };
+  // 每个乘坐占几列 = 各样品在该乘坐点位数量的最大值（样品之间点数可以不一致）
+  const seatCols = seatNames.map(sn => Math.max(
+    1, rows.reduce((m, c) => Math.max(m, statesOf(c, sn).length), 0),
+  ));
+  const seatOkCount = sn => rows.reduce((n, c) => {
+    const sts = statesOf(c, sn);
+    return n + ((sts.length && sts.every(x => x.ok)) ? 1 : 0);
+  }, 0);
+
+  let html = '<div class="fail-layout">';
+  html += '<div class="mtx-block">';
+  html += '<div class="mtx-title">对齐矩阵<span class="sub">一行一个样品 · 全部乘坐的点位都 ✓ 才算这个样品对上</span></div>';
+  html += '<table class="mtx-table"><thead>';
+  html += '<tr><th class="mtx-th-lab"></th>';
+  seatNames.forEach((sn, si) => { html += `<th class="mtx-th-seat" colspan="${seatCols[si]}">${esc(sn)}</th>`; });
+  html += '<th class="mtx-th-v" rowspan="2">判定</th></tr><tr>';
+  seatNames.forEach((sn, si) => {
+    for (let i = 0; i < seatCols[si]; i++) html += `<th class="mtx-th-pt">${i + 1}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  rows.forEach(c => {
+    const rec = byCombo.get(c.key);
+    const ok = !!(rec && rec.ok);
+    html += '<tr>';
+    html += `<td class="mtx-lab" data-combo="${esc(c.key)}" title="查看散点图">${esc(c.name)}</td>`;
+    seatNames.forEach((sn, si) => {
+      const sts = statesOf(c, sn);
+      for (let i = 0; i < seatCols[si]; i++) {
+        const s = sts[i];
+        if (!s) { html += '<td class="mtx-cell mtx-na" title="该乘坐没有这个点位">·</td>'; continue; }
+        const tip = `${sn} 点 ${i + 1}｜检测项目 ${s.item || '-'}｜QV ${fmt(s.qv)}｜CCD ${fmt(s.ccd)}｜补偿后 gap ${numTxt(s.gap)}`;
+        html += `<td class="mtx-cell ${s.ok ? 'mtx-ok' : 'mtx-no'}" title="${esc(tip)}">${s.ok ? '✓' : '✗'}</td>`;
+      }
+    });
+    const marks = seatNames.map(sn => {
+      const sts = statesOf(c, sn);
+      return sts.length ? `${sn} ${sts.every(x => x.ok) ? '✓' : '✗'}` : '';
+    }).filter(Boolean).join(' · ');
+    html += `<td class="mtx-cell mtx-v ${ok ? 'mtx-ok' : 'mtx-no'}" title="${esc(marks)}">${ok ? '✓' : '✗'}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += `<div class="mtx-note">分乘坐对上：${seatNames.map(sn => `${esc(sn)} ${seatOkCount(sn)}/${rows.length}`).join(' · ')}`
+    + '（仅用于定位是哪个乘坐拖后腿）· 判定看最右列 · 点样品编号看散点图</div>';
+  html += '</div>';
+
+  html += '<div class="fail-list">';
+  if (!fails.length) {
+    html += `<div class="fail-empty">全部 ${g.total} 个样品都对上了。</div>`;
+  } else {
+    const LBL = {
+      lost: { t: '原始本来能对上，但这个补偿值把它推出了容差', a: '确认是否接受 · 或换更保守的 b' },
+      scatter: { t: '组内残差散乱（跨度超过 2×容差），任何补偿值都救不了', a: '排查装夹 / 光源 / 重复性' },
+      range: { t: '残差随量程变化，只改补偿值救不了', a: '需要动分辨率 a' },
+      offset: { t: '本身可补偿，但与本组其它样品的可行区间不重合', a: '同一个 b 顾不过来 · 可考虑拆组' },
+      other: { t: '未对上', a: '单独复测确认' },
+    };
+    const order = { lost: 0, scatter: 1, range: 2, offset: 3, other: 4 };
+    const items = fails.map(d => {
+      const info = diag.get(d.key);
+      const cls = info ? (info.rawOk ? 'lost' : (LBL[info.cls] ? info.cls : 'other')) : 'other';
+      return { d, info, cls };
+    }).sort((x, y) => order[x.cls] - order[y.cls]);
+
+    items.forEach(({ d, info, cls }) => {
+      const lb = LBL[cls];
+      // 哪个乘坐拖后腿，直接标在样品名后面，省得再去矩阵里找
+      const seatMark = (d.bySeat || [])
+        .map(s => `<span class="seatmk ${s.ok ? 'ok' : 'no'}">${esc(s.seat || '—')} ${s.align}/${s.n}</span>`)
+        .join('');
+      // 分组名只在它不等于乘坐名时才展示（item 档下是"舌片TPY"这类项目名，有信息量；
+      // seat 档下分组名就是乘坐名，已经由 seatMark 表达了）
+      const gpNames = Array.from(new Set((info ? info.pieces : [])
+        .filter(p => p.cls !== 'fit' && seatNames.indexOf(p.groupName) < 0)
+        .map(p => p.groupName)));
+      const extra = info
+        ? `（残差跨度 ${fmt(info.span)}，可行区间 ${info.slack >= 0 ? fmt(info.slack) : '无'}`
+          + (gpNames.length ? ` · ${esc(gpNames.join('、'))}` : '') + '）'
+        : '';
+      html += `<div class="fail-item cls-${cls}">`
+        + `<span class="who">样品 ${esc(d.name)}${seatMark}</span>`
+        + `<span class="why">${lb.t}${extra}</span>`
+        + `<span class="act">${lb.a}</span></div>`;
+    });
+  }
+  html += '</div>';
+  html += '</div>';
+
+  body.innerHTML = html;
+  body.querySelectorAll('.mtx-lab').forEach(el => {
+    el.addEventListener('click', () => showDetail(el.dataset.combo));
+  });
+}
+
+// ⑤ 明细：**一行一个样品**（跨乘坐合并），逐点表默认折叠，展开后按乘坐分段
+function renderDetail(result) {
+  const g = result.global;
+  const key = g ? pickPlanKey(g) : null;
+  const plan = key ? g.plans[key] : null;
+  const bySample = sampleStatesOf(plan, result);
+  const body = $('detailBody');
+  const seatOrder = result.seats.map(s => s.name);
+
+  if (!g || !(g.combos || []).length) {
+    body.innerHTML = '<div class="fail-empty">还没有可展示的明细。</div>';
+    return;
+  }
+
+  // 每个样品被跳过多少个空点位（跨乘坐汇总）
+  const missOf = new Map();
+  result.seats.forEach(s => s.products.forEach(p => {
+    missOf.set(p.name, (missOf.get(p.name) || 0) + (p.missing || 0));
+  }));
+
+  let html = '';
+  (g.combos || []).forEach(c => {
+    const info = bySample.get(c.key) || { states: [], ok: false };
+    const ok = info.ok;
+    const states = info.states;      // 已按乘坐分段排好（sheet 顺序）
+    const nOk = states.filter(s => s.ok).length;
+    const maxGap = states.reduce((m, s) => Math.max(m, Math.abs(s.gap)), 0);
+    // 各乘坐小计：一眼看出是哪个乘坐拖后腿（判定仍只看整体 ok）
+    const mark = seatOrder.filter(sn => states.some(s => s.seat === sn)).map(sn => {
+      const ss = states.filter(s => s.seat === sn);
+      return `<span class="seatmk ${ss.every(s => s.ok) ? 'ok' : 'no'}">${esc(sn)} ${ss.filter(s => s.ok).length}/${ss.length}</span>`;
+    }).join('');
+
+    html += '<div class="prod-block">';
+    html += `<div class="prod-head collapsed" data-combo="${esc(c.key)}">`;
+    html += `<span class="arrow">▼</span><span>样品 ${esc(c.name)}</span>`;
+    html += mark;
+    html += `<span class="tag ${ok ? 'ok' : 'bad'}">${ok ? '✓ 对上' : '✗ 未对上'}</span>`;
+    html += `<span class="muted" style="font-size:12px">补偿后 ${nOk}/${states.length} 点对上 · 最大 gap ${maxGap.toFixed(4)}</span>`;
+    const miss = missOf.get(c.name) || 0;
+    if (miss) html += `<span class="tag warn">⚠ 已跳过 ${miss} 个空点位</span>`;
+    html += `<span class="link" data-chart="1" data-combo="${esc(c.key)}">📊 散点图</span>`;
+    html += '</div>';
+
+    html += '<div class="prod-points" style="display:none"><table><thead><tr>'
+      + '<th>乘坐</th><th>点#</th><th>检测项目</th><th>标准值 QV</th><th>测量值 CCD</th><th>原始 gap</th>'
+      + '<th>补偿后值</th><th>补偿后 gap</th><th>本次补偿</th><th>是否达标</th></tr></thead><tbody>';
+    const counter = new Map();
+    states.forEach(s => {
+      const i = (counter.get(s.seat) || 0) + 1;   // 点# 在**本乘坐内**重新编号
+      counter.set(s.seat, i);
+      const rawGap = s.ccd - s.qv;
+      const rawOk = gapOk(Math.abs(rawGap), result.tol);
+      // 每个点位用的是哪个分组的补偿值 —— seat 档下左右乘坐各不同，摆出来最清楚
+      const comp = 'b ' + numTxt(s.b) + (Math.abs(s.a - 1) > 1e-9 ? ` · a ${s.a.toFixed(4)}` : '');
+      html += '<tr>'
+        + `<td>${esc(s.seat || '—')}</td><td>${i}</td>`
+        + `<td style="text-align:left">${esc(s.item || '—')}</td>`
+        + `<td>${fmt(s.qv)}</td><td>${fmt(s.ccd)}</td>`
+        + `<td class="${rawOk ? 'pt-ok' : 'pt-fail-cell'}">${numTxt(rawGap)}</td>`
+        + `<td>${fmt(s.y)}</td>`
+        + `<td class="${s.ok ? 'pt-ok' : 'pt-fail-cell'}">${numTxt(s.gap)}</td>`
+        + `<td style="text-align:right">${comp}</td>`
+        + `<td>${s.ok ? '<span class="pt-ok">✓</span>' : '<span class="pt-fail">✗</span>'}</td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  });
+
+  body.innerHTML = html;
+
+  body.querySelectorAll('.prod-head').forEach(head => {
+    head.addEventListener('click', (e) => {
+      if (e.target.closest('.link')) return;      // 点「散点图」不折叠
+      head.classList.toggle('collapsed');
+      const points = head.nextElementSibling;
+      if (points) points.style.display = head.classList.contains('collapsed') ? 'none' : '';
+    });
+  });
+  body.querySelectorAll('.link[data-chart]').forEach(link => {
+    link.addEventListener('click', (e) => { e.stopPropagation(); showDetail(link.dataset.combo); });
+  });
+}
+
+function renderAll(result) {
+  renderConclusion(result);
+  renderPlanCard(result);
+  renderFailCard(result);
+  renderDetail(result);
+  $('planCard').hidden = false;
+  $('failCard').hidden = false;
+  $('detailCard').hidden = false;
+}
+
+/* ==================== 散点图弹窗 ==================== */
+function showDetail(comboKey) {
+  if (!multiResult) return;
+  const c = multiIndex.get(comboKey);
+  if (!c) return;
+
+  const g = multiResult.global;
+  const key = g ? pickPlanKey(g) : null;
+  const plan = key ? g.plans[key] : null;
+  const tol = multiResult.tol;
+  // 样品跨乘坐：把左右两组点位拼在一张散点图里（判定本来就要求两边都达标）
+  const info = sampleStatesOf(plan, multiResult).get(comboKey);
+  const states = info ? info.states : [];
+  const xs = states.map(s => s.ccd);
+  const ys = states.map(s => s.qv);
+  const fits = states.map(s => s.y);
+  const seatTxt = Array.from(new Set(states.map(s => s.seat).filter(Boolean))).join('、');
+  // 各乘坐/各项目用的补偿可能不同（seat 档），一致时才显示成一个函数
+  const pairs = Array.from(new Set(states.map(s => s.a + '/' + s.b)));
+  const funcTxt = pairs.length === 1
+    ? fmtFunc(states[0].a, states[0].b)
+    : `按乘坐分别补偿（${pairs.length} 组）`;
+
+  $('multiDetailName').textContent = `样品 ${c.name}${seatTxt ? `（${seatTxt}）` : ''}　（${funcTxt}）`;
   $('multiDetailCard').classList.add('show');
 
-  const tol = result.tol;
   if (typeof echarts !== 'undefined') {
     try {
       if (!multiChartRaw) multiChartRaw = echarts.init($('multiChartRaw'));
       if (!multiChartFit) multiChartFit = echarts.init($('multiChartFit'));
-      renderAlignmentChart(multiChartRaw, p.meas, p.qv, tol);
-      renderAlignmentChart(multiChartFit, p.meas.map(x => seat.a * x + seat.b), p.qv, tol);
-      // 弹窗刚显示，布局完成后强制 resize，确保图表正确渲染
-      setTimeout(() => { multiChartRaw && multiChartRaw.resize(); multiChartFit && multiChartFit.resize(); }, 60);
-    } catch (e) {
-      console.warn('散点图渲染失败:', e);
-    }
+      renderAlignmentChart(multiChartRaw, xs, ys, tol);
+      renderAlignmentChart(multiChartFit, fits, ys, tol);
+      setTimeout(() => {
+        if (multiChartRaw) multiChartRaw.resize();
+        if (multiChartFit) multiChartFit.resize();
+      }, 60);
+    } catch (e) { console.warn('散点图渲染失败:', e); }
   } else {
     ['multiChartRaw', 'multiChartFit'].forEach(id => {
       const el = $(id);
@@ -1013,21 +1740,29 @@ function showMultiDetail(si, pi) {
   }
 }
 
-// 关闭散点图弹窗
-function closeMultiDetail() {
+function closeDetail() {
   const card = $('multiDetailCard');
   if (card) card.classList.remove('show');
 }
-$('multiModalClose').addEventListener('click', closeMultiDetail);
-$('multiDetailCard').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeMultiDetail(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMultiDetail(); });
+$('multiModalClose').addEventListener('click', closeDetail);
+$('multiDetailCard').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeDetail(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });
+
+/* ==================== 全局状态 ====================
+   multiSeats / multiResult / multiChartRaw / multiChartFit 已在中段（算法区）声明，
+   这里只补渲染层新增的两项。 */
+let multiIndex = new Map();   // comboKey（样品名）→ 样品对象 { key, name, seats, pts }，由「分析」时填充
+let multiFileName = '';
 
 function multiShowError(msg) { const el = $('multiErr'); el.textContent = '⚠ ' + msg; el.classList.add('show'); }
 function multiClearError() { $('multiErr').classList.remove('show'); }
 
-// 展开/收起全部点位
+// 展开/收起全部点位 —— 从容器出发查询，不要用 document.querySelectorAll：
+// 后者只在宿主把 document 代理进 Shadow DOM 时才成立，换个宿主就静默失效。
 function setAllPoints(collapsed) {
-  document.querySelectorAll('#multiResultContainer .prod-head').forEach(head => {
+  const container = $('detailBody');
+  if (!container) return;
+  container.querySelectorAll('.prod-head').forEach(head => {
     if (collapsed) head.classList.add('collapsed');
     else head.classList.remove('collapsed');
     const points = head.nextElementSibling;
@@ -1037,45 +1772,48 @@ function setAllPoints(collapsed) {
 $('multiExpandAll').addEventListener('click', () => setAllPoints(false));
 $('multiCollapseAll').addEventListener('click', () => setAllPoints(true));
 
-// 开始分析
+/* ==================== 开始分析 ==================== */
 $('multiAnalyzeBtn').addEventListener('click', () => {
   multiClearError();
   try {
     const tol = Number($('multiTolerance').value);
-    const transformType = $('multiTransformType').value;
     const compTol = Number($('multiCompTol').value);
     const aTol = Number($('multiATol').value);
+    const ratePct = Number($('multiAlignRate').value);
+    const groupPref = $('multiCompGroup') ? $('multiCompGroup').value : 'item';
     if (!isFinite(tol) || tol < 0) throw new Error('容差需为非负数字');
     if (!isFinite(compTol) || compTol < 0) throw new Error('补偿值上限需为非负数字');
-    if (!isFinite(aTol) || aTol < 0) throw new Error('分辨率缩放容差需为非负数字');
-    if (!multiSeats) throw new Error('请先导入 Excel 文件');
-    multiResult = analyzeBySeat(multiSeats, tol, transformType, compTol, aTol);
-    renderMultiSummaryBar(multiResult);
-    renderMultiSummary(multiResult);
-    closeMultiDetail();
-    multiSelectedIdx = -1;
+    if (!isFinite(aTol) || aTol < 0) throw new Error('分辨率容差需为非负数字');
+    if (!isFinite(ratePct) || ratePct <= 0 || ratePct > 100) throw new Error('通过门槛需为 1~100 之间的百分比（默认 50）');
+    if (!multiSeats) throw new Error('请先导入对样表');
+    // transformType 固定 'linear'：它只影响「每乘坐稳健拟合」那组诊断值，
+    // 页面展示与推荐一律以补偿方案（buildGlobalPlans）为准，不再暴露三档下拉。
+    multiResult = analyzeBySeat(multiSeats, tol, 'linear', compTol, aTol, ratePct / 100, groupPref);
+    // comboKey（= 样品名）→ 样品对象：散点图按**样品**取点，左右乘坐的点位拼在一起
+    multiIndex = new Map();
+    (multiResult.global ? multiResult.global.combos : []).forEach(c => multiIndex.set(c.key, c));
+    renderAll(multiResult);
+    closeDetail();
   } catch (e) { multiShowError(e.message); }
 });
 
-// Excel 文件导入
+/* ==================== 导入 ==================== */
 function loadExcelFile(file) {
   if (!file) return;
-  if (typeof XLSX === 'undefined') { alert('Excel 解析库加载失败，请检查网络后刷新重试'); return; }
+  if (typeof XLSX === 'undefined') { alert('Excel 解析库加载失败，请重新打开页面'); return; }
+  multiFileName = file.name || '';
   const reader = new FileReader();
   reader.onload = () => {
     try {
       const data = new Uint8Array(reader.result);
       const wb = XLSX.read(data, { type: 'array' });
-      const seats = parseWorkbook(wb);
-      const totalProds = seats.reduce((s, x) => s + x.products.length, 0);
-      if (totalProds === 0) throw new Error('未在 Excel 中找到 CCD/QV 列');
-      multiSeats = seats;
-      const seatInfo = seats.map(s => `${s.name}(${s.products.length}产品)`).join('、');
-      $('excelFileInfo').textContent = `已加载 ${file.name}：${seats.length} 个乘坐 → ${seatInfo}`;
-      $('excelFileInfo').style.color = 'var(--success)';
-    } catch (e) {
-      multiShowError(e.message);
-    }
+      const parsed = parseWorkbook(wb);
+      const totalProds = parsed.seats.reduce((s, x) => s + x.products.length, 0);
+      if (totalProds === 0) throw new Error('未在表格中找到 CCD / QV 列，请确认表格结构');
+      multiSeats = parsed.seats;
+      multiClearError();
+      renderRecognize({ fileName: multiFileName, seats: parsed.seats, warnings: parsed.warnings, labelled: parsed.labelled });
+    } catch (e) { multiShowError(e.message); }
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1090,144 +1828,198 @@ excelDrop.addEventListener('drop', (e) => {
 });
 $('excelFileInput').addEventListener('change', (e) => { loadExcelFile(e.target.files[0]); e.target.value = ''; });
 
-// 清空
 $('multiClearBtn').addEventListener('click', () => {
-  $('multiResultContainer').innerHTML = '';
-  $('multiSummaryBadge').textContent = '—';
-  closeMultiDetail();
-  $('excelFileInfo').textContent = '未加载文件';
-  $('excelFileInfo').style.color = '';
-  const bar = $('multiSummaryBar');
-  bar.className = 'conclusion';
-  $('multiSummaryMain').textContent = '导入 Excel 文件后点击 [开始分析]';
-  $('multiSummaryDetail').textContent = 'Excel 每个 sheet 是一个乘坐；sheet 内 1#~10# 是 10 个产品，读 CCD（测量值）和 QV（标准值）两列';
-  const gbar = $('globalSummaryBar');
-  gbar.className = 'conclusion';
-  $('globalSummaryMain').textContent = '补偿建议：等待分析';
-  $('globalSummaryDetail').textContent = '规则：y = ax + b，优先只改补偿值 b（分辨率 a 不动）；同一项目名（如 1#、端子TP）在所有乘坐上加同一个 b。判定看（乘坐 × 项目名）组合里全部点位对齐的个数。';
+  multiSeats = null; multiResult = null; multiIndex = new Map(); multiFileName = '';
+  ['planCard', 'failCard', 'detailCard'].forEach(id => { const el = $(id); if (el) el.hidden = true; });
+  ['planBody', 'failBody', 'detailBody'].forEach(id => { const el = $(id); if (el) el.innerHTML = ''; });
+  const pb = $('planBadge'); if (pb) pb.textContent = '—';
+  const fb = $('failBadge'); if (fb) fb.textContent = '—';
+  closeDetail();
+  renderRecognize(null);
+  const bar = $('conclusionBar');
+  if (bar) bar.className = 'verdict';
+  $('conclusionMain').textContent = '导入对样表，然后点「开始分析」';
+  $('conclusionSub').textContent = '每个 sheet 是一个乘坐；读 CCD（测量值）与 QV（标准值）两列。';
+  $('conclusionActions').innerHTML = '';
   multiClearError();
-  multiSeats = null; multiResult = null; multiSelectedIdx = -1;
 });
 
-// 导出 CSV（含每个产品的每个检测点明细）
-$('multiExportCsv').addEventListener('click', () => {
-  if (!multiResult) { alert('请先完成分析'); return; }
-  const { seats, tol, compTol, aTol } = multiResult;
-  const lines = ['乘坐,产品,变换函数,分辨率缩放a,缩放是否达标,补偿b,补偿是否达标,原始结果,变换后结果'];
-  seats.forEach(seat => {
-    const needTransform = seat.needTransform;
-    const func = needTransform ? fmtFunc(seat.a, seat.b) : '无需变换';
-    const aOk = seat.aOk ? '达标' : '超限';
-    const compOk = seat.compOk ? '达标' : '超限';
-    lines.push(`${seat.name},全部,${func},${fmt(seat.a)},${aOk},${fmt(seat.b)},${compOk},${seat.rawOkCount}/${seat.nProds} 产品达标,${seat.fitOkCount}/${seat.nProds} 产品达标`);
-    seat.products.forEach(p => {
-      const rawTxt = p.rawPass ? '✓全部达标' : `✗${p.rawFail}点超差`;
-      const fitTxt = needTransform ? (p.fitPass ? '✓全部达标' : `✗${p.fitFail}点超差`) : '—';
-      lines.push(`${seat.name},${p.name},${func},${fmt(seat.a)},${aOk},${fmt(seat.b)},${compOk},${rawTxt},${fitTxt}`);
+/* ==================== 导出 ==================== */
+// 补偿后 xlsx：省掉现场最容易出错的手工换算（符号方向）
+function exportCompensatedXlsx() {
+  if (!multiResult || !multiResult.global) { alert('请先完成分析'); return; }
+  if (typeof XLSX === 'undefined') { alert('Excel 库未加载，无法导出表格'); return; }
+  const g = multiResult.global;
+  const key = pickPlanKey(g);
+  const plan = g.plans[key];
+  if (!plan) { alert('没有可用的补偿方案'); return; }
+  const bySample = sampleStatesOf(plan, multiResult);
+  const tol = multiResult.tol;
+  const withSeat = plan.groupMode === 'seat';
+
+  // 明细按源表版式排（乘坐 → 样品 → 点位），每行标出该点位用的是哪个补偿值，
+  // 末尾带上"这个样品整体算不算对上"（跨乘坐合并判定）。
+  const s1 = [['乘坐', '样品', '点#', '检测项目', '标准值QV', '测量值CCD', '原始gap', '补偿后值', '补偿后gap', '本次补偿b', '是否达标', '样品判定']];
+  multiResult.seats.forEach(seat => seat.products.forEach(p => {
+    const info = bySample.get(p.name);
+    const sts = info ? info.states.filter(s => s.seat === seat.name) : [];
+    sts.forEach((s, i) => {
+      s1.push([
+        seat.name, p.name, i + 1, s.item || '', s.qv, s.ccd, s.ccd - s.qv, s.y, s.gap, s.b,
+        s.ok ? '达标' : '超差', info && info.ok ? '对上' : '未对上',
+      ]);
     });
+  }));
+
+  const s2 = [[withSeat ? '乘坐' : '覆盖乘坐', '检测项目', '群体补偿 b', '分辨率 a', '对上样品', '样品总数']];
+  orderedGroups(plan).forEach(x => s2.push([
+    withSeat ? x.seat : ((x.seats || []).join('、') || '—'),
+    x.name, x.b, x.a, x.okCount, x.total,
+  ]));
+
+  // 样品判定：这一张才是"对上几个"的答案（左 6/10、右 7/10 那类数字不能直接相加）
+  const s3 = [['样品', '覆盖乘坐', '各乘坐达标点位', '整体判定', '对上点数', '总点数']];
+  (g.combos || []).forEach(c => {
+    const info = bySample.get(c.key);
+    const sts = info ? info.states : [];
+    const per = (c.seats || []).map(sn => {
+      const ss = sts.filter(s => s.seat === sn);
+      return `${sn} ${ss.filter(x => x.ok).length}/${ss.length}`;
+    }).join(' | ');
+    s3.push([
+      c.name, (c.seats || []).join('、'), per,
+      (info && info.ok) ? '对上' : '未对上',
+      sts.filter(x => x.ok).length, sts.length,
+    ]);
   });
 
-  // 补偿建议（现场照填用）：三个方案摘要 + 推荐方案的值表
-  const g = multiResult.global;
-  if (g) {
-    const PNAME = { plan1: '只改补偿值 b', plan2: '补偿 b + 调分辨率 a', plan3: '单补 + 调分辨率 a' };
-    lines.push('');
-    lines.push('【补偿建议】y = ax + b：优先只改 b（不动分辨率）；同一项目名在所有乘坐上加同一个 b');
-    lines.push(`判定口径,${g.total} 个(乘坐×项目名)组合,达标门槛 ≥${g.threshold},原始对齐 ${g.passRaw}/${g.total}`);
-    ['plan1', 'plan2', 'plan3'].forEach(k => {
-      const lv = g[k];
-      lines.push(`方案${k === 'plan1' ? '1' : k === 'plan2' ? '2' : '3'} ${PNAME[k]},${lv.ok ? '可行' : '无解'},a=${fmt(lv.a)},最大gap=${lv.maxGap.toFixed(4)},对齐 ${lv.pass}/${g.total}`);
-    });
-    const rec = g.recommend;
-    if (rec) {
-      const lv = g[rec];
-      const n = rec === 'plan1' ? '1' : rec === 'plan2' ? '2' : '3';
-      lines.push('');
-      lines.push(`【推荐方案 ${n} · ${PNAME[rec]} 的值】`);
-      lines.push(`a,${fmt(lv.a)}`);
-      lines.push(rec === 'plan3' ? `乘坐,项目名,补偿值 b` : `项目名,补偿值 b`);
-      lv.bs.forEach(x => lines.push(rec === 'plan3' ? `${x.seat},${x.name},${fmt(x.b)}` : `${x.name},${fmt(x.b)}`));
-    }
-  }
+  const s4 = [
+    ['项目', '说明'],
+    ['修正关系', 'y = a·x + b（x = 测量值 CCD，y = 校准值）'],
+    ['判定口径', '一个样品在**它出现过的每个乘坐**上全部点位 |gap| ≤ 容差，才算这个样品对上（左右乘坐不分开数、也不能相加）'],
+    ['补偿共用单位', withSeat ? '每个乘坐一套函数（各乘坐分别填自己的 b）' : '按检测项目共用：同一检测项目跨乘坐共用一个 b（一套程序只填一个补偿）'],
+    ['容差', tol],
+    ['通过门槛', Number((multiResult.alignRate * 100).toFixed(1)) + '%'],
+    ['采纳方案', PLAN_META[key].name],
+    ['原始对上样品', g.passRaw + '/' + g.total],
+    ['补偿后对上样品', plan.pass + '/' + g.total + '（门槛 ≥' + g.threshold + '）'],
+  ];
 
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s1), '补偿后明细');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2), '补偿值');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s3), '样品判定');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s4), '说明');
+  const base = (multiFileName || '对样表').replace(/\.(xlsx|xls)$/i, '');
+  XLSX.writeFile(wb, base + '_补偿后_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+}
+
+$('multiExportXlsx').addEventListener('click', exportCompensatedXlsx);
+
+function planCsvLines(result) {
+  const g = result.global;
+  const key = pickPlanKey(g);
+  const plan = g.plans[key];
+  const bySample = sampleStatesOf(plan, result);
+  const withSeat = plan.groupMode === 'seat';
+  const lines = [];
+  lines.push(`方案,${PLAN_META[key].name}`);
+  lines.push(`原始对上,${g.passRaw}/${g.total}`);
+  lines.push(`补偿后对上,${plan.pass}/${g.total}（门槛 ≥${g.threshold}）`);
+  lines.push(`容差,${result.tol}`);
+  lines.push('');
+  lines.push('样品判定（跨乘坐合并）');
+  lines.push('样品,覆盖乘坐,各乘坐达标点位,整体判定,对上点数,总点数');
+  (g.combos || []).forEach(c => {
+    const info = bySample.get(c.key);
+    const sts = info ? info.states : [];
+    const per = (c.seats || []).map(sn => {
+      const ss = sts.filter(s => s.seat === sn);
+      return `${sn} ${ss.filter(x => x.ok).length}/${ss.length}`;
+    }).join(' | ');
+    lines.push(`${c.name},${(c.seats || []).join('、')},${per},${(info && info.ok) ? '对上' : '未对上'},${sts.filter(x => x.ok).length},${sts.length}`);
+  });
+  lines.push('');
+  lines.push('补偿值');
+  lines.push(withSeat ? '乘坐,检测项目,群体补偿b,分辨率a,对上样品,样品总数' : '覆盖乘坐,检测项目,群体补偿b,分辨率a,对上样品,样品总数');
+  orderedGroups(plan).forEach(x => lines.push((withSeat ? `${x.seat},` : `${(x.seats || []).join('、')},`) + `${x.name},${rawNum(x.b)},${Number(x.a.toFixed(6))},${x.okCount},${x.total}`));
   lines.push('');
   lines.push('逐点明细');
-  lines.push(`gap容差,${tol}`);
-  lines.push(`分辨率缩放容差|a-1|,${aTol}`);
-  lines.push(`补偿值上限,${compTol}`);
-  seats.forEach(seat => {
-    const needTransform = seat.needTransform;
-    // 每个乘坐单独一行表头：各乘坐是否启用变换可能不同，共用表头会导致列数错位
-    lines.push('');
-    lines.push(`乘坐,${seat.name},（${needTransform ? '含变换后列' : '未启用变换'}）`);
-    lines.push(pointDetailHeader(needTransform));
-    seat.products.forEach(p => {
-      p.meas.forEach((m, i) => {
-        const rawGap = m - p.qv[i];
-        const rawOk = Math.abs(rawGap) <= tol;
-        let row = `${seat.name},${p.name},${i + 1},${p.qv[i]},${m},${rawGap},${rawOk ? '达标' : '超差'}`;
-        if (needTransform) {
-          const yh = seat.a * m + seat.b;
-          const fitGap = yh - p.qv[i];
-          const fitOk = Math.abs(fitGap) <= tol;
-          row += `,${yh},${fitGap},${fitOk ? '达标' : '超差'}`;
-        }
-        lines.push(row);
-      });
+  lines.push('乘坐,样品,点#,检测项目,标准值QV,测量值CCD,原始gap,补偿后值,补偿后gap,本次补偿b,是否达标');
+  result.seats.forEach(seat => seat.products.forEach(p => {
+    const info = bySample.get(p.name);
+    const sts = info ? info.states.filter(s => s.seat === seat.name) : [];
+    sts.forEach((s, i) => {
+      lines.push(`${seat.name},${p.name},${i + 1},${s.item || ''},${s.qv},${s.ccd},${s.ccd - s.qv},${s.y},${s.gap},${s.b},${s.ok ? '达标' : '超差'}`);
     });
-  });
-  const csv = lines.join('\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  }));
+  return lines;
+}
+
+$('multiExportCsv').addEventListener('click', () => {
+  if (!multiResult || !multiResult.global) { alert('请先完成分析'); return; }
+  const csv = planCsvLines(multiResult).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const aEl = document.createElement('a');
   aEl.href = url;
-  aEl.download = `乘坐比对_${new Date().toISOString().slice(0, 10)}.csv`;
+  aEl.download = `相关性判断_${new Date().toISOString().slice(0, 10)}.csv`;
   aEl.click();
   URL.revokeObjectURL(url);
 });
 
-// 逐点明细表头：按该乘坐是否启用变换决定列数（各乘坐独立，避免列错位）
-function pointDetailHeader(needTransform) {
-  return needTransform
-    ? '乘坐,产品,点#,标准值QV,测量值CCD,原始gap,原始是否达标,变换后值,变换后gap,变换后是否达标'
-    : '乘坐,产品,点#,标准值QV,测量值CCD,原始gap,原始是否达标';
-}
-
-// 复制汇总表（每个乘坐一个函数）
 $('multiCopyTable').addEventListener('click', () => {
-  if (!multiResult) { alert('请先完成分析'); return; }
-  const { seats, compTol, aTol } = multiResult;
+  if (!multiResult || !multiResult.global) { alert('请先完成分析'); return; }
+  const g = multiResult.global;
+  const key = pickPlanKey(g);
+  const plan = g.plans[key];
+  const diag = diagnoseCombos(plan, multiResult.tol, g.aTol != null ? g.aTol : 0.1);
+  const withSeat = plan.groupMode === 'seat';
   const lines = [];
-  seats.forEach(seat => {
-    const needTransform = seat.needTransform;
-    const threshold = seat.threshold;
-    const func = needTransform ? fmtFunc(seat.a, seat.b) : '无需变换';
-    const aInfo = `缩放 a=${fmt(seat.a)}（|a−1|=${fmt(Math.abs(seat.a - 1))} ${seat.aOk ? '≤' : '>'}${fmt(aTol)} ${seat.aOk ? '✓' : '✗'}）`;
-    const compInfo = `补偿 b=${seat.b >= 0 ? '+' : ''}${fmt(seat.b)}（${seat.compOk ? '≤' : '>'}${fmt(compTol)} ${seat.compOk ? '✓' : '✗'}）`;
-    lines.push(`${seat.name}\t${needTransform ? '统一函数：' + func : '无需变换'}\t${aInfo}，${compInfo}\t原始 ${seat.rawOkCount}/${seat.nProds} 达标 → 变换后 ${seat.fitOkCount}/${seat.nProds}（目标≥${threshold}）`);
-    lines.push('产品\t原始 gap\t变换后 gap\t结果');
-    seat.products.forEach(p => {
-      const res = p.rawPass ? '原始达标' : (needTransform && p.fitPass ? '变换后达标' : '不达标');
-      lines.push(`${p.name}\t${p.rawPass ? '✓全部' : '✗' + p.rawFail + '点'}\t${needTransform ? (p.fitPass ? '✓全部' : '✗' + p.fitFail + '点') : '—'}\t${res}`);
-    });
+  lines.push(`相关性判断 · 方案：${PLAN_META[key].name}`);
+  lines.push(`补偿共用单位：${withSeat ? '每个乘坐一套函数（各乘坐分别填）' : '按检测项目共用（同一检测项目跨乘坐共用一个补偿）'}`);
+  lines.push(`判定口径：一个样品要它每个乘坐的点位全部达标才算对上（跨乘坐合并，不能按乘坐分别数）`);
+  lines.push(`原始对上 ${g.passRaw}/${g.total} → 补偿后 ${plan.pass}/${g.total}（门槛 ≥${g.threshold}）`);
+  lines.push('');
+  lines.push(withSeat ? '乘坐\t检测项目\t群体补偿b\t分辨率a\t对上样品' : '覆盖乘坐\t检测项目\t群体补偿b\t分辨率a\t对上样品');
+  orderedGroups(plan).forEach(x => lines.push((withSeat ? `${x.seat}\t` : `${(x.seats || []).join('、')}\t`) + `${x.name}\t${rawNum(x.b)}\t${Number(x.a.toFixed(6))}\t${x.okCount}/${x.total}`));
+  const fails = plan.detail.filter(d => !d.ok);
+  if (fails.length) {
+    const TXT = { lost: '原始能对上，被补偿值推出容差', scatter: '组内残差散乱，补偿救不了', range: '残差随量程变化，需动分辨率', offset: '整体偏移，当前补偿值未覆盖' };
     lines.push('');
-  });
+    lines.push('未对上：');
+    fails.forEach(d => {
+      const info = diag.get(d.key);
+      const tag = info ? (info.rawOk ? TXT.lost : (TXT[info.cls] || '')) : '';
+      const per = (d.bySeat || []).map(s => `${s.seat} ${s.align}/${s.n}`).join(' | ');
+      lines.push(`样品 ${d.name}\t${per}\t${d.align}/${d.n} 点\t${tag}`);
+    });
+  }
   copyText(lines.join('\n')).then(() => flashBtn($('multiCopyTable'), '已复制 ✓'));
 });
 
+// 复制到剪贴板：clipboard API 在 file:// / 无权限 / 内嵌浏览器里会被拒（NotAllowedError），
+// 必须接住 rejection 再退回 execCommand，否则按钮永远不闪"已复制"，控制台还留一条未处理拒绝。
 function copyText(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
-  const ta = document.createElement('textarea');
-  ta.value = text; document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); } catch(e) {}
-  document.body.removeChild(ta);
-  return Promise.resolve();
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* 环境不允许复制就静默失败 */ }
+    document.body.removeChild(ta);
+    return Promise.resolve();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(fallback);
+  }
+  return fallback();
 }
 
 function flashBtn(btn, txt) {
   const o = btn.textContent;
   btn.textContent = txt;
-  setTimeout(() => btn.textContent = o, 1500);
+  setTimeout(() => { btn.textContent = o; }, 1500);
 }
 </script>
 </body>

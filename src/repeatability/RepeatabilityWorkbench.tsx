@@ -8,6 +8,8 @@ type RepeatabilityWorkbenchProps = {
 type RepeatabilityBridgeWindow = Window & {
   __AOI_REPEATABILITY_ROOT__?: ShadowRoot;
   __AOI_REPEATABILITY_BACK__?: () => void;
+  /** 内嵌态标志：旧脚本据此关闭"抢宿主滚动"等独立页行为。 */
+  __AOI_EMBEDDED__?: boolean;
   AOI?: unknown;
 };
 
@@ -44,23 +46,28 @@ const EMBED_STYLE = `
 }
 `;
 
-function prepareLegacyScript(script: string): string {
-  let patched = script
-    .replace(
-      'const $=s=>document.querySelector(s);',
-      'const $=s=>(window.__AOI_REPEATABILITY_ROOT__||document).querySelector(s);',
-    )
-    .replace(
-      'const $$=s=>[...document.querySelectorAll(s)];',
-      () => 'const $$=s=>[...(window.__AOI_REPEATABILITY_ROOT__||document).querySelectorAll(s)];',
-    );
-
-  patched = patched.replace(
-    /\$\('#btnBack'\)\.addEventListener\('click',\(\)=>\{if\(history\.length>1\)history\.back\(\);else toast\('独立 HTML 模式下没有上一页；整合进 AOI LAB 后此按钮返回工具箱。'\);\}\);/,
-    "$('#btnBack').addEventListener('click',()=>{window.__AOI_REPEATABILITY_BACK__?.();});",
-  );
-
-  return patched;
+// 隔离脚本通过 document.getElementById / querySelector(All) 查找元素。
+// 用一个代理把这三类查询路由到 Shadow DOM，其余（createElement、body、
+// addEventListener 等）转发到真实 document —— 与 05 工具同策略。
+//
+// 历史实现用 String.replace 精确匹配旧 HTML 里定义 $ / $$ 选择器的那两行源码。
+// 只要旧 HTML 改动一个空格、引号或换行，替换就静默失配：$ 仍指向真实 document，
+// Shadow DOM 里所有 #id 都查不到，工具一打开就抛错，且运行时没有任何兜底。
+// 改为注入 document 参数后，旧脚本里基于 document.querySelector 的 $ / $$
+// 会自然绑定到这个代理，不再依赖源码的确切文本形态。
+function buildDocumentProxy(shadow: ShadowRoot): Document {
+  return new Proxy(document, {
+    get(target, prop) {
+      if (prop === 'getElementById') return (id: string) => shadow.getElementById(id);
+      if (prop === 'querySelector') return (sel: string) => shadow.querySelector(sel);
+      if (prop === 'querySelectorAll') return (sel: string) => shadow.querySelectorAll(sel);
+      // receiver 必须传 target（真实 document）而不是默认的代理：
+      // 否则 document.body / documentElement 这类**原生 getter** 会以代理为 this 调用，
+      // 抛 "TypeError: Illegal invocation" —— 隔离脚本一碰 document.body 就炸。
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as Document;
 }
 
 function mountLegacyPage(host: HTMLElement, onBack: () => void) {
@@ -94,14 +101,30 @@ function mountLegacyPage(host: HTMLElement, onBack: () => void) {
   shadow.append(style, wrapper);
   bridgeWindow.__AOI_REPEATABILITY_ROOT__ = shadow;
   bridgeWindow.__AOI_REPEATABILITY_BACK__ = onBack;
+  // 让旧脚本知道自己是内嵌态：它据此关闭 window.scrollTo 等会抢宿主滚动的独立页行为。
+  bridgeWindow.__AOI_EMBEDDED__ = true;
+
+  // 旧版返回按钮在嵌入态被 CSS 隐藏，但它的原生 handler 会调用 history.back()。
+  // 用捕获阶段拦截替代源码字符串替换，避免依赖旧 HTML 的确切写法。
+  const interceptBack = (event: Event) => {
+    if ((event.target as HTMLElement | null)?.closest?.('#btnBack')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onBack();
+    }
+  };
+  shadow.addEventListener('click', interceptBack, true);
 
   // Run the supplied V1.6 logic only after its markup is mounted inside the shadow tree.
-  // `new Function` keeps the legacy declarations isolated from the React module scope.
-  new Function(prepareLegacyScript(script))();
+  // `new Function` keeps the legacy declarations isolated from the React module scope,
+  // and injected `document` redirects its element lookups into the shadow root.
+  new Function('document', script)(buildDocumentProxy(shadow));
 
   return () => {
+    shadow.removeEventListener('click', interceptBack, true);
     if (bridgeWindow.__AOI_REPEATABILITY_ROOT__ === shadow) delete bridgeWindow.__AOI_REPEATABILITY_ROOT__;
     if (bridgeWindow.__AOI_REPEATABILITY_BACK__ === onBack) delete bridgeWindow.__AOI_REPEATABILITY_BACK__;
+    delete bridgeWindow.__AOI_EMBEDDED__;
     shadow.replaceChildren();
   };
 }

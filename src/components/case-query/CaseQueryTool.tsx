@@ -10,7 +10,7 @@ interface Props {
 }
 
 // 小组成员：置顶显示并高亮，方便快速查询。
-const TEAM_MEMBERS = ['黄卓平', '张琳馨', '莫海凌', '张柳庆', '罗颖华'];
+const TEAM_MEMBERS = ['黄卓平', '张琳馨', '莫海凌', '张柳庆', '罗颖华', '谢小亮', '应志结', '侯亮', '杨志红'];
 
 // 名单比对统一走一遍繁→简，周报里的繁体人名（如「羅穎華」）也能匹配名单并高亮。
 function isTeamMember(name: string): boolean {

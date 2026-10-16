@@ -79,6 +79,20 @@ export function CorrelationIcon() {
   );
 }
 
+export function ReportIcon() {
+  return (
+    <svg viewBox="0 0 220 148" aria-hidden="true">
+      {/* 三个页签叠成的报告 */}
+      <path d="M62 20h108v112H62z" />
+      <path className="icon-fill" d="M74 38h84v12H74z" />
+      <path d="M74 60h84M74 74h64M74 88h72" />
+      {/* 光路：光源 → 工件 → 镜头 */}
+      <path className="bolt" d="M74 114h72" />
+      <circle className="icon-fill" cx="152" cy="114" r="7" />
+    </svg>
+  );
+}
+
 export function ArrowIcon() {
   return (
     <svg viewBox="0 0 42 28" aria-hidden="true">

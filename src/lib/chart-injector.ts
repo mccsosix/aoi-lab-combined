@@ -108,18 +108,41 @@ export async function injectCharts(xlsxBuffer: ArrayBuffer, charts: ChartDef[]):
   return await zip.generateAsync({ type: 'arraybuffer' });
 }
 
+/**
+ * sheet 名 → `sheetN.xml` 里的那个 N（0-based）。
+ *
+ * 历史实现直接拿 `<sheet>` 在 workbook.xml 里的出现顺序当编号，等于赌 ExcelJS
+ * 一定按 sheet1..sheetN 的顺序写出。一旦中间插入或删除工作表，编号就会错位，
+ * 图表要么挂到别的工作表上、要么引用不存在的关系（文件在 Excel 里报修复）。
+ * 这里改走官方路径：workbook.xml 的 `r:id` → workbook.xml.rels 的 `Target`。
+ */
 async function buildSheetIndex(zip: JSZip): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   try {
     const wbXml = await zip.file('xl/workbook.xml')?.async('string');
     if (!wbXml) return map;
-    const sheetTags = wbXml.match(/<sheet\b[^>]*>/g);
-    if (!sheetTags) return map;
-    let idx = 0;
+
+    const relsXml = await zip.file('xl/_rels/workbook.xml.rels')?.async('string') ?? '';
+    const relTarget = new Map<string, string>();
+    for (const [tag] of relsXml.matchAll(/<Relationship\b[^>]*>/g)) {
+      const id = tag.match(/\bId="([^"]*)"/)?.[1];
+      const target = tag.match(/\bTarget="([^"]*)"/)?.[1];
+      if (id && target) relTarget.set(id, target);
+    }
+
+    const sheetTags = wbXml.match(/<sheet\b[^>]*>/g) ?? [];
+    let position = 0;
     for (const tag of sheetTags) {
-      const nameM = tag.match(/name="([^"]*)"/);
-      if (nameM) map.set(nameM[1], idx);
-      idx++;
+      const name = tag.match(/\bname="([^"]*)"/)?.[1];
+      const rid = tag.match(/\br:id="([^"]*)"/)?.[1];
+      if (name) {
+        // Target 形如 "worksheets/sheet3.xml" 或 "/xl/worksheets/sheet3.xml"
+        const target = rid ? relTarget.get(rid) : undefined;
+        const fileNumber = target?.match(/worksheets\/[^/]*?(\d+)\.xml$/i)?.[1];
+        // 关系表缺失/异常时退回旧的位置推断，保证行为不倒退
+        map.set(name, fileNumber ? Number(fileNumber) - 1 : position);
+      }
+      position++;
     }
   } catch (_) { /* ignore */ }
   return map;

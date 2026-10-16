@@ -140,6 +140,29 @@ for (const [k, v] of Object.entries(MAP)) {
   cleanMap[k] = v;
 }
 
+/**
+ * 反查表：简体 → 繁体，取第一个出现的繁体字。
+ *
+ * ⚠️ 这是**有损**的：多个繁体字可能映射到同一个简体字（如 發/髮 → 发），
+ * 反查只能任选一个。所以它只用于「帮用户把手打的简体换成繁体再去对照」，
+ * **不能用来做任何判定**。调用方必须让用户看到结果并允许手改。
+ */
+const reverseMap: Record<string, string> = {};
+for (const [trad, simp] of Object.entries(MAP)) {
+  if (trad.length === 1 && simp.length === 1 && reverseMap[simp] === undefined) reverseMap[simp] = trad;
+}
+export const TRADITIONAL_LOOKUP: Readonly<Record<string, string>> = Object.freeze(reverseMap);
+
+/**
+ * 尽力把简体字转成繁体（逐字反查，未收录的字原样保留）。
+ * 用于打光报告这类「正文必须是繁体」的录入框给一个「转繁体」按钮。
+ */
+export function toTraditional(text: string): string {
+  let result = "";
+  for (const ch of text) result += reverseMap[ch] ?? ch;
+  return result;
+}
+
 export function toSimplified(text: string): string {
   let result = "";
   for (let i = 0; i < text.length; i++) {
@@ -155,4 +178,15 @@ export function toSimplified(text: string): string {
     result += (cleanMap[ch] && cleanMap[ch] !== ch) ? cleanMap[ch] : ch;
   }
   return result;
+}
+
+/**
+ * 把任意字符串转义为可安全嵌入 RegExp 的字面量。
+ *
+ * 用于「把用户/Excel 里的文本当成字面量去匹配」的场景。不做转义时，
+ * 含 `(` `[` `*` `\` 等元字符的输入会让 `new RegExp(...)` 抛 SyntaxError——
+ * 在 React 渲染期（useMemo）抛出会直接白屏。
+ */
+export function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

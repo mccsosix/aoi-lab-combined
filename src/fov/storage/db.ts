@@ -87,6 +87,17 @@ export function createIndexedDbRepository(databaseName = "aoi-lab-fov"): DeviceR
   return {
     async initializeDefaults(data, dataVersion) {
       const db = await database();
+
+      // 版本号此前只写不读，导致每次打开 03 工具都会把 1147+426 条默认记录全量 put 一遍。
+      // 这里先读一次：一致就直接返回，不再做任何写入。
+      const metaTx = db.transaction("meta", "readonly");
+      const metaDone = transactionDone(metaTx);
+      const versionRecord = await requestResult(
+        metaTx.objectStore("meta").get("defaultDataVersion"),
+      ) as { key: string; value: string } | undefined;
+      await metaDone;
+      if (versionRecord?.value === dataVersion) return;
+
       const [existingCameras, existingLenses] = await Promise.all([
         getAll<Camera>(db, "cameras"),
         getAll<Lens>(db, "lenses"),
@@ -108,6 +119,19 @@ export function createIndexedDbRepository(databaseName = "aoi-lab-fov"): DeviceR
         if (!existing) lensStore.put(item);
         else if (!existing.customized) lensStore.put({ ...item, hidden: existing.hidden });
       }
+
+      // 标记-清除：数据集更新后，旧默认记录如果已从 data/*.json 移除就会永久残留在
+      // 用户库里（上面的循环只做增量 upsert，从不删除）。只清 source === 'default'
+      // 且用户没改过的记录；用户自建/改过的记录一律保留。
+      const cameraIds = new Set(data.cameras.map((item) => item.id));
+      const lensIds = new Set(data.lenses.map((item) => item.id));
+      for (const item of existingCameras) {
+        if (item.source === "default" && !item.customized && !cameraIds.has(item.id)) cameraStore.delete(item.id);
+      }
+      for (const item of existingLenses) {
+        if (item.source === "default" && !item.customized && !lensIds.has(item.id)) lensStore.delete(item.id);
+      }
+
       tx.objectStore("meta").put({ key: "defaultDataVersion", value: dataVersion });
       await done;
     },

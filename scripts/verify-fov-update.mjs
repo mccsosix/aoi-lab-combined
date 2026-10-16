@@ -35,7 +35,13 @@ const required = new Map([
   ['OPT-CC2-C250-UG4-00', { brand: 'OPT', fps: 14.8, w: 5120, h: 5120 }],
 ]);
 
-assert.equal(cameras.length, 1147, `expected 1147 default cameras, got ${cameras.length}`);
+// 用 >= 而不是 ===：数据集只增不减，硬编码计数会在每次补充机型时误报失败，
+// 反而让这个脚本被忽略。这里只守住"不能比基线更少"。
+const CAMERA_BASELINE = 1147;
+assert.ok(
+  cameras.length >= CAMERA_BASELINE,
+  `expected at least ${CAMERA_BASELINE} default cameras, got ${cameras.length}`,
+);
 for (const [model, expected] of required) {
   const matches = cameras.filter((item) => item.model === model);
   assert.equal(matches.length, 1, `${model} must appear exactly once`);

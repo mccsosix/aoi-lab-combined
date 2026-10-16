@@ -1,0 +1,263 @@
+{
+  "version": 4,
+  "builtFrom": "液冷入料密封圈AI檢測評估報告X4-20260724 (1).pptx",
+  "builtFromSha256": "888b8958b51ab65995015d11f594a24aaf06972c4d57e163d0273ab85deaa305",
+  "slideSize": {
+    "cx": 9144000,
+    "cy": 6858000
+  },
+  "notesSlidesRemoved": 26,
+  "layout": {
+    "cover": "ppt/slides/slide1.xml",
+    "requirement": "ppt/slides/slide2.xml",
+    "station": "ppt/slides/slide3.xml",
+    "imagePlain": "ppt/slides/slide5.xml",
+    "imageSpecial": "ppt/slides/slide8.xml",
+    "conclusion": "ppt/slides/slide12.xml"
+  },
+  "shells": [
+    "ppt/slides/slide1.xml",
+    "ppt/slides/slide2.xml",
+    "ppt/slides/slide3.xml",
+    "ppt/slides/slide5.xml",
+    "ppt/slides/slide8.xml",
+    "ppt/slides/slide12.xml"
+  ],
+  "droppedParts": [
+    "ppt/slides/slide4.xml",
+    "ppt/slides/slide6.xml",
+    "ppt/slides/slide7.xml",
+    "ppt/slides/slide9.xml",
+    "ppt/slides/slide10.xml",
+    "ppt/slides/slide11.xml"
+  ],
+  "unexpectedParts": [],
+  "stationPage": {
+    "part": "ppt/slides/slide3.xml",
+    "sldIdLstIndex": 2
+  },
+  "imageShells": [
+    {
+      "part": 5,
+      "kind": "plain",
+      "removedShapes": 8
+    },
+    {
+      "part": 8,
+      "kind": "special",
+      "removedShapes": 3
+    }
+  ],
+  "requireShell": {
+    "part": 2,
+    "removedShapes": 19,
+    "keepIds": [
+      "8194",
+      "8195"
+    ]
+  },
+  "media": {
+    "removed": [
+      "ppt/media/image10.png",
+      "ppt/media/image11.png",
+      "ppt/media/image12.png",
+      "ppt/media/image13.png",
+      "ppt/media/image14.png",
+      "ppt/media/image15.png",
+      "ppt/media/image16.png",
+      "ppt/media/image17.png",
+      "ppt/media/image18.png",
+      "ppt/media/image19.png",
+      "ppt/media/image2.png",
+      "ppt/media/image20.png",
+      "ppt/media/image21.png",
+      "ppt/media/image22.png",
+      "ppt/media/image23.png",
+      "ppt/media/image24.png",
+      "ppt/media/image25.png",
+      "ppt/media/image26.png",
+      "ppt/media/image27.png",
+      "ppt/media/image28.png",
+      "ppt/media/image3.png",
+      "ppt/media/image4.png",
+      "ppt/media/image5.png"
+    ],
+    "kept": 5,
+    "orphanImageRels": 9
+  },
+  "slideOrder": [
+    "ppt/slides/slide1.xml",
+    "ppt/slides/slide2.xml",
+    "ppt/slides/slide3.xml",
+    "ppt/slides/slide5.xml",
+    "ppt/slides/slide8.xml",
+    "ppt/slides/slide12.xml"
+  ],
+  "placeholders": [
+    {
+      "key": "cover.title",
+      "part": 1,
+      "shapeId": "6146",
+      "slideIndex": 0,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "封面标题（第一行项目名，第二行常为「評估報告」）",
+      "sample": "液冷入料密封圈新增AI檢測 / 評估報告",
+      "baseRunProps": "<a:rPr lang=\"zh-TW\" altLang=\"en-US\" sz=\"4200\" b=\"1\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"000000\"/></a:solidFill><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/><a:cs typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/></a:rPr>"
+    },
+    {
+      "key": "req.lines",
+      "part": 2,
+      "shapeId": "8195",
+      "slideIndex": 1,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "【1.檢測需求】页文字（一行一段）；贴图走几何写入，不用 token",
+      "sample": "密封圈內徑/厚度",
+      "baseRunProps": "<a:rPr lang=\"zh-TW\" altLang=\"en-US\" dirty=\"0\"><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/></a:rPr>"
+    },
+    {
+      "key": "st.header",
+      "part": 3,
+      "shapeId": "10241",
+      "slideIndex": 2,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "章节标题条",
+      "sample": "2.硬體設定-CCD1",
+      "baseRunProps": "<a:rPr lang=\"en-GB\" altLang=\"zh-TW\" sz=\"2400\" b=\"1\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"FFFFFF\"/></a:solidFill><a:latin typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/></a:rPr>"
+    },
+    {
+      "key": "st.require",
+      "part": 3,
+      "shapeId": "10244",
+      "slideIndex": 2,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "需求推导（4 行，可由产品尺寸算）",
+      "sample": "最大值徑53.3mm，最大厚度6.7mm | 最小公差±0.08mm，公差帶=0.16 | 理想系統解析度=1/8~1/10 → 0.016~0.02mm | 選用25M Camera彩色相機 + 0.208x 遠心鏡頭可符合產品需求",
+      "baseRunProps": "<a:rPr lang=\"zh-TW\" altLang=\"en-US\" sz=\"1600\" dirty=\"0\"><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/></a:rPr>"
+    },
+    {
+      "key": "st.spec",
+      "part": 3,
+      "shapeId": "10243",
+      "slideIndex": 2,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "硬件规格（10 行，前 7 行可由设备库算）",
+      "sample": "CCD / Sensor Size / Lens / FOV / DOF / Resolution / Lens Resolution / 光源1 / 光源2 / 檢測項目（共 10 行）",
+      "baseRunProps": "<a:rPr lang=\"en-US\" altLang=\"zh-TW\" sz=\"1600\" dirty=\"0\"><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/><a:cs typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/></a:rPr>"
+    },
+    {
+      "key": "st.mark228",
+      "part": 3,
+      "shapeId": "10254",
+      "slideIndex": 2,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "光路图尺寸标注 1（= 镜头工作距离）",
+      "sample": "228",
+      "baseRunProps": "<a:rPr lang=\"en-US\" altLang=\"zh-TW\" sz=\"1400\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"00B0F0\"/></a:solidFill></a:rPr>"
+    },
+    {
+      "key": "st.mark100",
+      "part": 3,
+      "shapeId": "16",
+      "slideIndex": 2,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "光路图尺寸标注 2",
+      "sample": "100",
+      "baseRunProps": "<a:rPr lang=\"en-US\" altLang=\"zh-TW\" sz=\"1400\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"00B0F0\"/></a:solidFill></a:rPr>"
+    },
+    {
+      "key": "st.mark80",
+      "part": 3,
+      "shapeId": "11",
+      "slideIndex": 2,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "光路图尺寸标注 3",
+      "sample": "80",
+      "baseRunProps": "<a:rPr lang=\"en-US\" altLang=\"zh-TW\" sz=\"1400\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"00B0F0\"/></a:solidFill></a:rPr>"
+    },
+    {
+      "key": "st.mark30_100",
+      "part": 3,
+      "shapeId": "24",
+      "slideIndex": 2,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "光路图尺寸标注 4",
+      "sample": "30-100",
+      "baseRunProps": "<a:rPr lang=\"en-US\" altLang=\"zh-TW\" sz=\"1400\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"00B0F0\"/></a:solidFill></a:rPr>"
+    },
+    {
+      "key": "img.header",
+      "part": 5,
+      "shapeId": "4",
+      "slideIndex": 4,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "影像页标题条 = `3.打光影像-{缺陷}`（特殊页也用基础缺陷名）",
+      "sample": "3.打光影像-破損",
+      "baseRunProps": "<a:rPr lang=\"en-US\" altLang=\"en-GB\" sz=\"2400\" b=\"1\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"FFFFFF\"/></a:solidFill><a:latin typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/></a:rPr>"
+    },
+    {
+      "key": "img.caption",
+      "part": 5,
+      "shapeId": "12295",
+      "slideIndex": 4,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "第 1 段＝名称行；第 2 段起＝说明行",
+      "sample": "打光影像-破損 | QE提供不良樣品*4 | 紅色標示即為不良位置 | 目前破損形態較為明顯可以檢出",
+      "baseRunProps": "<a:rPr lang=\"zh-TW\" altLang=\"en-US\" sz=\"1600\" dirty=\"0\"><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/></a:rPr>"
+    },
+    {
+      "key": "img.desc",
+      "part": 5,
+      "shapeId": "12295",
+      "slideIndex": 4,
+      "paragraphIndex": 1,
+      "mode": "lines",
+      "hint": "第 1 段＝名称行；第 2 段起＝说明行",
+      "sample": "打光影像-破損 | QE提供不良樣品*4 | 紅色標示即為不良位置 | 目前破損形態較為明顯可以檢出",
+      "baseRunProps": "<a:rPr kumimoji=\"1\" lang=\"en-US\" altLang=\"zh-CN\" sz=\"1600\" dirty=\"0\"><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/><a:cs typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:sym typeface=\"+mn-ea\"/></a:rPr>"
+    },
+    {
+      "key": "img.header",
+      "part": 8,
+      "shapeId": "4",
+      "slideIndex": 7,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "影像页标题条（特殊页仍是基础缺陷名）",
+      "sample": "3.打光影像-破損",
+      "baseRunProps": "<a:rPr lang=\"en-US\" altLang=\"en-GB\" sz=\"2400\" b=\"1\" dirty=\"0\"><a:solidFill><a:srgbClr val=\"FFFFFF\"/></a:solidFill><a:latin typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/></a:rPr>"
+    },
+    {
+      "key": "img.caption",
+      "part": 8,
+      "shapeId": "12295",
+      "slideIndex": 7,
+      "paragraphIndex": 0,
+      "mode": "lines",
+      "hint": "第 1 段＝名称行（特殊页通常带「-特殊」）；第 2 段起＝说明行",
+      "sample": "打光影像-破損-特殊 | 端面密封圈結構特殊，內壁有兩處弧度区域 | 正光下弧度區域發黑，相機無法清楚看清內壁，若有輕微NG無法看出",
+      "baseRunProps": "<a:rPr lang=\"zh-TW\" altLang=\"en-US\" sz=\"1600\" dirty=\"0\"><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/></a:rPr>"
+    },
+    {
+      "key": "img.desc",
+      "part": 8,
+      "shapeId": "12295",
+      "slideIndex": 7,
+      "paragraphIndex": 1,
+      "mode": "lines",
+      "hint": "第 1 段＝名称行（特殊页通常带「-特殊」）；第 2 段起＝说明行",
+      "sample": "打光影像-破損-特殊 | 端面密封圈結構特殊，內壁有兩處弧度区域 | 正光下弧度區域發黑，相機無法清楚看清內壁，若有輕微NG無法看出",
+      "baseRunProps": "<a:rPr lang=\"zh-CN\" altLang=\"en-US\" sz=\"1600\" dirty=\"0\"><a:latin typeface=\"Times New Roman\" panose=\"02020603050405020304\" pitchFamily=\"18\" charset=\"0\"/><a:ea typeface=\"標楷體\" panose=\"03000509000000000000\" pitchFamily=\"65\" charset=\"-120\"/><a:sym typeface=\"+mn-ea\"/></a:rPr>"
+    }
+  ]
+}

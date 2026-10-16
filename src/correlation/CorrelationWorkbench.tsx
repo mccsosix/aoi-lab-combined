@@ -30,11 +30,14 @@ const EMBED_STYLE = `
 // 用一个代理把这三类查询路由到 Shadow DOM，其余（createElement、body、addEventListener 等）转发到真实 document。
 function buildDocumentProxy(shadow: ShadowRoot): Document {
   return new Proxy(document, {
-    get(target, prop, receiver) {
+    get(target, prop) {
       if (prop === 'getElementById') return (id: string) => shadow.getElementById(id);
       if (prop === 'querySelector') return (sel: string) => shadow.querySelector(sel);
       if (prop === 'querySelectorAll') return (sel: string) => shadow.querySelectorAll(sel);
-      const value = Reflect.get(target, prop, receiver);
+      // receiver 必须传 target（真实 document）而不是默认的代理：
+      // 否则 document.body / documentElement 这类**原生 getter** 会以代理为 this 调用，
+      // 抛 "TypeError: Illegal invocation" —— 隔离脚本一碰 document.body 就炸。
+      const value = Reflect.get(target, prop, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as Document;
