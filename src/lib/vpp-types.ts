@@ -97,10 +97,3 @@ export interface VppToolNode {
 
 /** 导入模式 */
 export type ImportMode = 'append' | 'replace' | 'skip-existing';
-
-/** VPP 导入配置 */
-export interface VppImportConfig {
-  mode: ImportMode;
-  /** 用户编辑后的项目列表 */
-  items: VppDetectionItem[];
-}

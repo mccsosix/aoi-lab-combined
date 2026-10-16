@@ -50,7 +50,6 @@ export function FovWorkbench({
   // 公差筛选默认会把"没有解析度资料"的镜头一并排除（实测 63/426）。给用户一个显式开关，
   // 而不是让它们静默消失。
   const [includeUnknownRes, setIncludeUnknownRes] = useState(false);
-  const [computing, setComputing] = useState(false);
   const [toleranceEnabled, setToleranceEnabled] = useState(false);
   const [toleranceMm, setToleranceMm] = useState("");
   const [showIncompatible, setShowIncompatible] = useState(false);
@@ -115,20 +114,15 @@ export function FovWorkbench({
     // 全品牌时是 1147×426 ≈ 48.8 万组合同的同步枚举（实测简化内层循环就要约 190 ms，
     // 浏览器里加上 toFixed/排序约 0.3–1 s）。先渲染"计算中"，再让出主线程执行，
     // 否则点击后会有一段完全无反馈的卡死。
-    setComputing(true);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    try {
-      setRecommendations(
-        recommendCombinations(
-          cameras,
-          lenses,
-          { widthMm: widthMm + margin, heightMm: heightMm + margin },
-          { allowRotate, includeReview, limit: 100, toleranceMm: tolerance && tolerance > 0 ? tolerance : null, includeUnknownResolution: includeUnknownRes },
-        ),
-      );
-    } finally {
-      setComputing(false);
-    }
+    setRecommendations(
+      recommendCombinations(
+        cameras,
+        lenses,
+        { widthMm: widthMm + margin, heightMm: heightMm + margin },
+        { allowRotate, includeReview, limit: 100, toleranceMm: tolerance && tolerance > 0 ? tolerance : null, includeUnknownResolution: includeUnknownRes },
+      ),
+    );
   };
 
   const inspect = (item: Recommendation) => {

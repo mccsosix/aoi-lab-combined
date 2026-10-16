@@ -173,9 +173,6 @@ function parseAllScripts(
     // Root bindings in this script
     const bindings = extractRootBindings(block);
 
-    // Also parse DataBindings text for cross-toolblock references
-    parseDataBindings(block, bindings);
-
     const items: OutputItemDef[] = [];
     for (const [rootTerm, oiVar] of bindings) {
       const oi = oiMap.get(oiVar);
@@ -249,14 +246,6 @@ function extractRootBindings(block: string): Map<string, string> {
   return b;
 }
 
-function parseDataBindings(block: string, bindings: Map<string, string>): void {
-  // CogDataBindings often appear as text in NRBF
-  // Pattern: "OutputTerminalName" -> value binding reference
-  // Also parse CogDataBindingCollection text if present
-  const dbR = /"(\w+)"\s*[,\]]|(\w+)\s*\|\s*Outputs\.Item\[/g;
-  // Simplified: just ensure we captured all bindings from script
-}
-
 function findArraySizeForVar(block: string, varName: string, inputDefaults: Map<string, number>): number | null {
   if (!varName) return null;
   // Pattern A: varName = new double[N] (numeric literal)
@@ -326,7 +315,7 @@ function buildItems(
   const usedSB = new Set<number>();
   const scripts = [...outputItemsByScript.entries()].sort((a, b) => a[0] - b[0]);
 
-  for (const [scriptOff, oiList] of scripts) {
+  for (const [, oiList] of scripts) {
     for (const oi of oiList) {
       // Match spec block: prefer by name (if OutputItem[0] is a literal), else by order
       let sb: SpecBlock | null = null;

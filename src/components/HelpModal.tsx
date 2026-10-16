@@ -9,14 +9,6 @@ export type HelpContent = {
   note?: string;
 };
 
-export function HelpButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button type="button" className="help-btn" onClick={onClick} aria-haspopup="dialog" aria-label={label}>
-      ?
-    </button>
-  );
-}
-
 export function HelpModal({ open, onClose, content }: { open: boolean; onClose: () => void; content: HelpContent }) {
   const panel = useRef<HTMLDivElement>(null);
 

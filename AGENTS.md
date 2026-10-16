@@ -49,7 +49,6 @@
 - `scripts/`：`verify-*.mjs` 自检脚本（9 个：8 个 `verify:*` + `smoke-browser.mjs`，全部已登记进 `package.json`）
 - `scripts/lighting-report/`：06 的 PPTX 管线。`build-template.mjs` = 一次性模板预处理（按 `cNvPr id` 定位 → txBody 压成「单段单 run + 占位符」→ **12 页归一化成 6 个壳**：封面/需求/工站/影像-普通/影像-特殊/結論；影像壳只留骨架 + 回收孤儿媒体 → 注销 notesSlides）；`source-images.mjs` = 从源报告读回「图片位置 + 红圈」（circle→图片归属）；`make-samples.mjs` = 产出 5 份样张到 `../outputs/`（replica 用源报告真实照片与真实坐标）。**运行时填充逻辑不在 `scripts/` 里，已整体移植进 `src/lighting-report/domain/`，不要在这里另写一份实现**
 - `docs/`：`CODE_REVIEW_2026-09-11.md`（代码审查报告）、`CORRELATION_UI_REDESIGN_SPEC.md`（05 改版方案，做 05 的 UI 改动前先读它）、`LIGHTING-REPORT-GENERATOR-SPEC.md`（**06 方案 + P0/P1/P2a 结果，做 06 前必读**，§9.5 是 P1 交付地图、§12 是报告结构口径、§13 是 P2a 结果）、`repeatability-msa-improvement-plan.md`、`reference/`
-- `deck/`：演示用 bento HTML 与生成器（非应用产物）
 - `dist/`（GH Pages 多文件产物）、`offline/`（单文件离线产物）—— 均已 gitignore，不入库
 - **样式前缀规范**：按功能命名（`generator-*`、`cq-*`、`vpp-*`、`fov-*`），全局样式集中在 `src/index.css`，FOV 样式独立放 `src/fov/fov.css`
 - **设计规范（强制）**：开发前先读 `SUBPAGE_DESIGN_GUIDELINES.md` 与 `FRONTEND_DESIGN_GUIDELINES.md`
@@ -68,7 +67,7 @@
 - `dist/`、`offline/`、`*.tsbuildinfo`、`.playwright-mcp/`、`.claude/settings.local.json` 均已 gitignore（见 `.gitignore`）；`dist/`、`offline/` 为本地构建产物，**可能滞后于源码，使用前重新构建**（判断方法：比对 `dist/assets/` 与 `src/` 的 mtime）。
 - 三个出口**互不通用**：`dist/` 因 `vite.config.ts` 设 `base:'/aoi-lab-combined/'` 而使用绝对路径，`file://` 双击必然白屏，只能部署到 GH Pages 子路径；`offline/index.html`（`base:'./'` + singlefile）才能双击即用。
 - `index.html` 仍含 Google Fonts 外链，所以离线版并非严格"零外部请求"（无网时静默回落到系统字体）。
-- `deck/`（3 版 bento 演示 HTML + 截图 + `gen_deck.py` + `reports/`，约 3.7 MB）与根目录部分图片已入库，属非应用产物，清理需人工确认。
+- **仓库清理（2026-10-16）**：`deck/`（3 版 bento 演示 HTML + 截图 + `gen_deck.py` + `reports/`，约 3.7 MB）、根目录 `cover.jpg` / `present_slide1_cover.png`、`src/fov/data/lens-extraction-report.json`（一次性提取报告，零引用）已从工作树移除，内容仍保留在 git 历史里。
 - 历次合并/导入的一次性记录（根目录 `INTEGRATION_NOTES.md`、`REPEATABILITY_INTEGRATION_NOTES.md`、`docs/FOV_CAMERA_IMPORT_NOTES.md`、`docs/superpowers/` 等）已在 2026-08-14 收尾中删除，内容保留在 git 历史里，不再维护；权威文档以本文件 + README + 代码为准。
 
 ## 验证 04/05 这类「隔离 HTML 工具」的改动

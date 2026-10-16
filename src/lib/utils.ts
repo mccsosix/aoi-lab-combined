@@ -151,7 +151,6 @@ const reverseMap: Record<string, string> = {};
 for (const [trad, simp] of Object.entries(MAP)) {
   if (trad.length === 1 && simp.length === 1 && reverseMap[simp] === undefined) reverseMap[simp] = trad;
 }
-export const TRADITIONAL_LOOKUP: Readonly<Record<string, string>> = Object.freeze(reverseMap);
 
 /**
  * 尽力把简体字转成繁体（逐字反查，未收录的字原样保留）。

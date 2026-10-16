@@ -108,12 +108,3 @@ export function CloseIcon() {
     </svg>
   );
 }
-
-export function UploadIcon() {
-  return (
-    <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M24 32V16M16 24l8-8 8 8" />
-      <path d="M8 36h32" />
-    </svg>
-  );
-}

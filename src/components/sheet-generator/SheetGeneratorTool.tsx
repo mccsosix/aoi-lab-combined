@@ -24,8 +24,6 @@ const DEFAULT_COLORS = ['#00B0F0', '#FFC000', '#92D050', '#FF6B6B', '#B4A7D6', '
 const MAX_PRODUCT_COUNT = 50;
 const MAX_SEATING_COUNT = 20;
 const MAX_TOTAL_ROWS = 50_000;
-/** 公差下限。公差为 0 会让 `=6*STDEV(...)/公差` 整列写出 #DIV/0!。 */
-const MIN_TOLERANCE = 0.0001;
 /** 相关性「测量数据行数」输入框的 max，与 JSX 里的 max={20} 保持一致。 */
 const MAX_CORR_DATA_ROWS = 20;
 
